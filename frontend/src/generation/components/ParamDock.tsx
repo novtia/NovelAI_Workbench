@@ -1,7 +1,7 @@
 import { SAMPLER_LABEL } from "@/data/studio";
 import { accountLabel, costLabel, genLabel, formatTokenStatus } from "@/data";
 import { openStudioPop, useStudio } from "@/state";
-import { IconBolt, IconCollapse, IconPlay, IconReset, IconSeed, IconX } from "./icons";
+import { IconBolt, IconCollapse, IconExpand, IconReset, IconSeed, IconX } from "./icons";
 
 export function ParamDock() {
   const {
@@ -72,7 +72,7 @@ export function ParamDock() {
               </div>
             </div>
             <button className={`play${aiOpen ? " on" : ""}`} type="button" title="展开参数设置" onClick={() => setAiOpen(true)}>
-              <IconPlay />
+              <IconExpand />
             </button>
           </div>
         </div>
@@ -111,6 +111,7 @@ export function ParamDock() {
                     min={0}
                     step={1}
                     value={random ? "" : form.seed}
+                    placeholder="随机"
                     onChange={(e) => {
                       if (e.target.value === "") return;
                       const n = Number(e.target.value);

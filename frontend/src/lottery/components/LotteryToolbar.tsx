@@ -1,6 +1,6 @@
-import { Sparkles } from "lucide-react";
 import { jobProgressText } from "@/data";
 import { useLottery } from "@/state";
+import { IconSparkles } from "@/generation/components/icons";
 
 export function LotteryToolbar() {
   const { generateAll, copyAll, lotteryJobs } = useLottery();
@@ -13,9 +13,10 @@ export function LotteryToolbar() {
 
   return (
     <div className="l-toolbar">
+      <span className="kicker">LOTTERY</span>
       <h2>抽奖控制台</h2>
       <button className="btn btn-primary" type="button" onClick={() => void generateAll()}>
-        {!label && <Sparkles strokeWidth={1.8} />}
+        {!label && <IconSparkles />}
         {label || "全部生图"}
       </button>
       <button className="btn" type="button" onClick={() => void copyAll()}>

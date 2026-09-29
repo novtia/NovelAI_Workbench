@@ -1,6 +1,6 @@
 import type { KeyboardEvent } from "react";
-import { Dices } from "lucide-react";
 import { useLottery } from "@/state";
+import { IconDices } from "@/generation/components/icons";
 import { ConsoleField } from "./ConsoleField";
 
 export function LotteryConsole() {
@@ -37,7 +37,7 @@ export function LotteryConsole() {
         </div>
       </div>
       <button className="btn btn-primary l-run" type="button" onClick={() => void roll()}>
-        <Dices strokeWidth={2} />
+        <IconDices />
         开始抽奖
       </button>
     </div>

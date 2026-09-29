@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
-import { Plus } from "lucide-react";
 import { placeLotPop } from "@/data";
 import { useLottery } from "@/state";
+import { IconPlus } from "@/generation/components/icons";
 
 export function AlbumSavePop() {
   const { lotSave, albums, albumId, closeLotSave, savePreviewTo, createAlbumForSave, moveLotSave } = useLottery();
@@ -55,7 +55,7 @@ export function AlbumSavePop() {
         ))}
       </div>
       <button type="button" className="album-pop-new" id="lot-album-pop-new" onClick={createAlbumForSave}>
-        <Plus strokeWidth={1.8} />
+        <IconPlus />
         新建收藏夹
       </button>
     </div>

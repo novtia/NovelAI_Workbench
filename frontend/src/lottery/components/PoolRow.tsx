@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { Pin } from "lucide-react";
 import { isListed } from "@/data";
 import type { PoolArtist } from "@/data/types";
 import { useLottery } from "@/state";
 import { ArtistHoverTrigger } from "@/ui/ArtistHover";
+import { IconPin } from "@/generation/components/icons";
 
 export function PoolRow({ artist }: { artist: PoolArtist }) {
   const { pinned, excluded, weightCaps, controls, togglePin, toggleExclude, applyCap } = useLottery();
@@ -29,7 +29,7 @@ export function PoolRow({ artist }: { artist: PoolArtist }) {
         title={pin ? "取消固定基底" : "固定为基底，每条抽奖必出并占名额"}
         onClick={() => togglePin(artist.key)}
       >
-        <Pin strokeWidth={1.8} />
+        <IconPin />
       </button>
       <button
         type="button"

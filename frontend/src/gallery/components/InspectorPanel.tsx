@@ -1,6 +1,7 @@
-import { Copy, X } from "lucide-react";
 import { asMeta, charCaptions, negativeText, promptText, sourceLabel } from "@/data";
 import { useCommands, useCollection } from "@/state";
+import { ArtistHoverTrigger } from "@/ui/ArtistHover";
+import { IconCopy, IconX } from "@/generation/components/icons";
 
 export function InspectorPanel() {
   const { openItem, albums } = useCollection();
@@ -21,10 +22,10 @@ export function InspectorPanel() {
         <div className="insp-head">
           <span className="pane-title">图片详情</span>
           <button className="icon-btn" type="button" title="复制画师串" aria-label="复制画师串" onClick={() => void copyArtists(item)}>
-            <Copy strokeWidth={1.8} />
+            <IconCopy />
           </button>
           <button className="icon-btn" type="button" title="关闭" aria-label="关闭" onClick={closeInspector}>
-            <X strokeWidth={1.8} />
+            <IconX />
           </button>
         </div>
         <div className="insp-body">
@@ -36,9 +37,9 @@ export function InspectorPanel() {
               <div className="artist-row">
                 {(item.artists || []).length
                   ? item.artists.map((n) => (
-                      <span className="chip" key={n}>
+                      <ArtistHoverTrigger className="chip" name={n} key={n}>
                         artist:{n}
-                      </span>
+                      </ArtistHoverTrigger>
                     ))
                   : <span className="chip">未识别画师</span>}
               </div>

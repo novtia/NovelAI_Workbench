@@ -1,7 +1,7 @@
 import { copyText } from "@/data";
 import { QUALITY_LABEL, UC } from "@/data/studio";
 import { pushToast, useStudio } from "@/state";
-import { IconChevron, IconCopy, IconSpark, IconX } from "./icons";
+import { IconChevron, IconCopy, IconX } from "./icons";
 import { PromptWell, TokenBar } from "./PromptWell";
 
 export function PromptCard() {

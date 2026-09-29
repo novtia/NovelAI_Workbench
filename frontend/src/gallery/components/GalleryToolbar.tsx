@@ -1,18 +1,22 @@
-import { Plus } from "lucide-react";
 import { useCommands, useCollection, useSession } from "@/state";
+import { IconPlus } from "@/generation/components/icons";
+
+const VOLUME = ["〇", "壹", "贰", "叁", "肆", "伍", "陆", "柒", "捌", "玖", "拾"];
 
 export function GalleryToolbar() {
-  const { album, items, filtered, query } = useCollection();
+  const { album, albums, items, filtered, query } = useCollection();
   const compact = useSession((s) => s.compact);
   const setQuery = useSession((s) => s.setQuery);
   const toggleCompact = useSession((s) => s.toggleCompact);
   const { pickFiles, clearCurrentAlbum } = useCommands();
   const has = items.length > 0;
   const count = query.trim() ? `${filtered.length} / ${items.length} 张` : `${items.length} 张`;
+  const volume = VOLUME[albums.findIndex((a) => a.id === album?.id) + 1] || "〇";
 
   return (
     <div className="g-toolbar">
       <div className="g-title">
+        <span className="kicker">卷{volume} · GALLERY</span>
         <h2 className="album-title">{album?.name || "收藏夹"}</h2>
         <span className="count">{has ? count : "0 张"}</span>
       </div>
@@ -33,7 +37,7 @@ export function GalleryToolbar() {
         </button>
       )}
       <button className="btn btn-primary" type="button" onClick={pickFiles}>
-        <Plus strokeWidth={2} />
+        <IconPlus />
         导入图片
       </button>
     </div>

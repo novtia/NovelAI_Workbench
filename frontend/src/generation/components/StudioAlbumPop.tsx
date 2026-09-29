@@ -1,5 +1,5 @@
-import { Plus } from "lucide-react";
 import { closeStudioMenus, useSession, useStudio } from "@/state";
+import { IconPlus } from "./icons";
 
 export function StudioAlbumPop() {
   const { pop, popPos, albums, albumId, saveTo, setPendingSave } = useStudio();
@@ -31,7 +31,7 @@ export function StudioAlbumPop() {
           openCreateDialog();
         }}
       >
-        <Plus strokeWidth={1.8} />
+        <IconPlus />
         新建收藏夹
       </button>
     </div>

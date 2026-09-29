@@ -1,44 +1,7 @@
-.album-item {
-  border: 0;
-  background: transparent;
-}
-.card {
-  font: inherit;
-}
-.act-jobs-btn svg {
-  width: 13px;
-  height: 13px;
-  flex: none;
-}
-.pop-panel[style*="display: block"] {
-  z-index: 40;
-}
-.job-row {
-  display: flex;
-  gap: 8px;
-  justify-content: space-between;
-  padding: 6px 0;
-  font-size: 12px;
-}
-.view {
-  display: none;
-}
-.view.active {
-  display: flex;
-}
-#root, .workbench {
+#root {
   height: 100%;
 }
+
 .toast.error {
-  color: var(--danger);
-  border-left-color: var(--danger);
-}
-.pool-pin svg {
-  width: 13px;
-  height: 13px;
-}
-.l-toolbar .btn svg,
-.l-run svg {
-  width: 15px;
-  height: 15px;
+  background: var(--zhu);
 }

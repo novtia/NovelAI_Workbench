@@ -41,10 +41,7 @@ export function StudioStage() {
       className={`stage${directing ? " directing" : ""}${directing && hasPreview ? " has-preview" : ""}`}
       id="st-stage"
     >
-      <div className="deco deco-a" />
-      <div className="deco deco-b" />
-      <div className="deco deco-c" />
-      <div className="canvas-tools">
+      <div className="canvas-tools" id="canvas-tools">
         <button className="tbtn" type="button" title="增强" onClick={() => soon()}>
           <IconEnhance />
         </button>
@@ -66,7 +63,7 @@ export function StudioStage() {
           <IconOutpaint />
         </button>
       </div>
-      <div className="dir-chips">
+      <div className="dir-chips" id="dir-chips">
         {directing &&
           form.characters.map((ch, i) =>
             ch.enabled === false ? null : (
@@ -79,15 +76,21 @@ export function StudioStage() {
           )}
       </div>
       <div className="frame-wrap">
-        <div className={`frame-box${w > h ? " landscape" : w === h ? " square" : ""}`} id="frame-box">
-          {previewUrl ? <img src={previewUrl} alt="生成预览" /> : null}
-          {showDots ? (
-            <div className="load-dots" aria-label="生成中">
-              <i />
-              <i />
-              <i />
-            </div>
-          ) : null}
+        <div
+          className={`frame-box${w > h ? " landscape" : w === h ? " square" : ""}${!previewUrl && !showDots ? " empty" : ""}`}
+          id="frame-box"
+          style={{ ["--ar" as string]: `${Math.max(1, w)} / ${Math.max(1, h)}` }}
+        >
+          <div className="frame-img" id="frame-img">
+            {previewUrl ? <img src={previewUrl} alt="生成预览" /> : null}
+            {showDots ? (
+              <div className="load-dots" aria-label="生成中">
+                <i />
+                <i />
+                <i />
+              </div>
+            ) : null}
+          </div>
           <div className="dir-mask" />
           <div className="dir-pins">
             {directing &&

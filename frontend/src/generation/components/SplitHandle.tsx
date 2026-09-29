@@ -1,12 +1,13 @@
 import { useStudio } from "@/state";
 import { PANEL, clampPanel } from "@/data/studio";
+import { ACTIVITY_RAIL } from "@/ui/inkBackdrop";
 
 export function SplitHandle({ side }: { side: "left" | "hist" }) {
   const { leftW, histW, setLeftW, setHistW } = useStudio();
 
   function studioW() {
     const root = document.getElementById("view-studio");
-    return root?.clientWidth || Math.max(0, window.innerWidth - 64);
+    return root?.clientWidth || Math.max(0, window.innerWidth - ACTIVITY_RAIL);
   }
 
   return (

@@ -1,7 +1,7 @@
-import { Copy, Sparkles } from "lucide-react";
 import { asMeta } from "@/data";
 import type { Artwork } from "@/data/types";
 import { useCommands, useSession } from "@/state";
+import { IconCopy, IconSparkles } from "@/generation/components/icons";
 
 export function ArtworkCard({ item, index }: { item: Artwork; index: number }) {
   const openId = useSession((s) => s.openId);
@@ -44,7 +44,7 @@ export function ArtworkCard({ item, index }: { item: Artwork; index: number }) {
                 void copyArtists(item);
               }}
             >
-              <Copy strokeWidth={2} />
+              <IconCopy />
               复制串
             </button>
             <button
@@ -55,7 +55,7 @@ export function ArtworkCard({ item, index }: { item: Artwork; index: number }) {
                 generateFrom(item);
               }}
             >
-              <Sparkles strokeWidth={1.8} />
+              <IconSparkles />
               生图
             </button>
           </div>

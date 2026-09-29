@@ -1,6 +1,6 @@
-import { Plus } from "lucide-react";
 import { isSingleArtistAlbum } from "@/data";
 import { useCommands, useCollection } from "@/state";
+import { IconPlus } from "@/generation/components/icons";
 
 export function EmptyDropzone() {
   const { album } = useCollection();
@@ -10,7 +10,7 @@ export function EmptyDropzone() {
     <section className="empty visible">
       <div className="dropzone" onClick={pickFiles}>
         <div className="drop-mark">
-          <Plus strokeWidth={1.6} />
+          <IconPlus />
         </div>
         <h2>拖入图片即可收藏</h2>
         <p>

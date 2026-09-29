@@ -1,13 +1,13 @@
 import { accountLabel } from "@/data";
 import { openStudioPop, pushToast, useStudio } from "@/state";
-import { IconBolt, IconBrand, IconMenu, IconPlus } from "./icons";
+import { IconBolt, IconMenu, IconPlus } from "./icons";
 
 export function StudioHeader() {
   const { status, clearSession } = useStudio();
   return (
     <header className="left-head">
       <span className="brand" title="生图室">
-        <IconBrand />
+        绘
       </span>
       <div className="account-wrap">
         <button

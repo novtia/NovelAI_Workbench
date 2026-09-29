@@ -1,6 +1,6 @@
-import { Pencil, Plus, Trash2 } from "lucide-react";
 import { isSingleArtistAlbum } from "@/data";
 import { useCommands, useCollection, useSession } from "@/state";
+import { IconPencil, IconPlus, IconTrash } from "@/generation/components/icons";
 
 export function AlbumSidebar() {
   const { albums, album, albumId, items, totalCount } = useCollection();
@@ -13,6 +13,7 @@ export function AlbumSidebar() {
     <aside className="g-side">
       <div className="g-side-head">
         <span className="pane-title">收藏夹</span>
+        <span className="pane-no">卷帙</span>
       </div>
       <div className="album-list">
         {albums.map((a) => {
@@ -45,7 +46,7 @@ export function AlbumSidebar() {
                       openRenameDialog(a.id, a.name);
                     }}
                   >
-                    <Pencil strokeWidth={1.8} />
+                    <IconPencil />
                   </button>
                   <button
                     type="button"
@@ -57,7 +58,7 @@ export function AlbumSidebar() {
                       void deleteAlbumById(a.id);
                     }}
                   >
-                    <Trash2 strokeWidth={1.8} />
+                    <IconTrash />
                   </button>
                 </span>
               )}
@@ -66,7 +67,7 @@ export function AlbumSidebar() {
         })}
       </div>
       <button className="album-add" type="button" onClick={openCreateDialog}>
-        <Plus strokeWidth={1.7} />
+        <IconPlus />
         新建收藏夹
       </button>
       <div className="g-side-foot">

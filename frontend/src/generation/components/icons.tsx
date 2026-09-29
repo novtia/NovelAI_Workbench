@@ -1,293 +1,347 @@
+import type { ReactNode } from "react";
 import type { GenderId } from "@/data/types";
+
+function InkSvg({
+  children,
+  sw = 1.8,
+  className,
+}: {
+  children: ReactNode;
+  sw?: number;
+  className?: string;
+}) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+      {children}
+    </svg>
+  );
+}
 
 export function IconChevron() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+    <InkSvg sw={2.2}>
       <path d="m6 9 6 6 6-6" />
-    </svg>
+    </InkSvg>
   );
 }
 
 export function IconBolt() {
   return (
-    <svg className="bolt" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M13 2 4 14h7l-1 8 10-14h-7l0-6z" />
-    </svg>
+    <InkSvg className="bolt" sw={1.6}>
+      <path d="M13 2 4 14h7l-1 8 9-12h-7Z" />
+    </InkSvg>
   );
 }
 
 export function IconSpark() {
   return (
-    <svg className="spark" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M12 2.5 13.2 8 18.5 9.2 13.2 10.4 12 16l-1.2-5.6L5.5 9.2 10.8 8Z" />
-    </svg>
+    <InkSvg className="spark">
+      <path d="M12 3v5M12 16v5M3 12h5M16 12h5" />
+      <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+    </InkSvg>
+  );
+}
+
+export function IconSparkles() {
+  return (
+    <InkSvg>
+      <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8Z" />
+      <path d="M19 16v5M16.5 18.5h5" />
+    </InkSvg>
   );
 }
 
 export function IconPlus() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <InkSvg sw={2}>
       <path d="M12 5v14M5 12h14" />
-    </svg>
+    </InkSvg>
   );
 }
 
 export function IconMenu() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-      <path d="M5 7h14M5 12h14M5 17h14" />
-    </svg>
+    <InkSvg>
+      <path d="M4 7h16M4 12h10M4 17h16" />
+    </InkSvg>
   );
 }
 
 export function IconCopy() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <rect x="9" y="9" width="11" height="11" rx="2" />
-      <path d="M5 15V5a2 2 0 0 1 2-2h10" />
-    </svg>
+    <InkSvg>
+      <rect x="9" y="9" width="12" height="12" rx="1" />
+      <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+    </InkSvg>
   );
 }
 
 export function IconX() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-      <path d="M6 6l12 12M18 6 6 18" />
-    </svg>
+    <InkSvg sw={2}>
+      <path d="M18 6 6 18M6 6l12 12" />
+    </InkSvg>
   );
 }
 
 export function IconGrid() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-      <rect x="4" y="4" width="6" height="6" rx="1" />
-      <rect x="14" y="4" width="6" height="6" rx="1" />
-      <rect x="4" y="14" width="6" height="6" rx="1" />
-      <rect x="14" y="14" width="6" height="6" rx="1" />
-    </svg>
+    <InkSvg sw={1.4}>
+      <rect x="3" y="3" width="18" height="18" />
+      <path d="M9 3v18M15 3v18M3 9h18M3 15h18" />
+    </InkSvg>
   );
 }
 
 export function IconImage() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-      <rect x="4" y="5" width="16" height="14" rx="2" />
-      <circle cx="9" cy="10" r="1.4" />
-      <path d="m20 16-4.2-4.2L8 20" />
-    </svg>
+    <InkSvg>
+      <rect x="3" y="3" width="18" height="18" rx="1" />
+      <circle cx="9" cy="9" r="2" />
+      <path d="m21 15-5-5L5 21" />
+    </InkSvg>
   );
 }
 
 export function IconCrop() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M7 3v14h14M3 7h14v14" />
-    </svg>
+    <InkSvg>
+      <path d="M6 2v14a2 2 0 0 0 2 2h14M18 22V8a2 2 0 0 0-2-2H2" />
+    </InkSvg>
   );
 }
 
 export function IconPencil() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M4 20h4L19 9l-4-4L4 16v4z" />
-    </svg>
+    <InkSvg>
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </InkSvg>
   );
 }
 
 export function IconLand() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <rect x="3" y="7" width="18" height="10" rx="2" />
-    </svg>
+    <InkSvg>
+      <rect x="2" y="6" width="20" height="12" rx="1" />
+    </InkSvg>
   );
 }
 
 export function IconPort() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <rect x="7" y="3" width="10" height="18" rx="2" />
-    </svg>
+    <InkSvg>
+      <rect x="6" y="2" width="12" height="20" rx="1" />
+    </InkSvg>
   );
 }
 
 export function IconSquare() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <rect x="5" y="5" width="14" height="14" rx="2" />
-    </svg>
+    <InkSvg>
+      <rect x="4" y="4" width="16" height="16" rx="1" />
+    </InkSvg>
   );
 }
 
 export function IconPlay() {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor">
-      <path d="M8 6.82v10.36c0 .79.87 1.27 1.54.84l8.14-5.18c.62-.39.62-1.29 0-1.69L9.54 5.98C8.87 5.55 8 6.03 8 6.82z" />
-    </svg>
+    <InkSvg>
+      <path d="M8 5v14l11-7Z" />
+    </InkSvg>
+  );
+}
+
+export function IconExpand() {
+  return (
+    <InkSvg sw={2.2}>
+      <path d="m6 15 6-6 6 6" />
+    </InkSvg>
   );
 }
 
 export function IconCollapse() {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor">
-      <path d="M6.82 8h10.36c.79 0 1.27.87.84 1.54l-5.18 8.14c-.39.62-1.29.62-1.69 0L5.98 9.54C5.55 8.87 6.03 8 6.82 8z" />
-    </svg>
+    <InkSvg sw={2.2}>
+      <path d="m6 9 6 6 6-6" />
+    </InkSvg>
   );
 }
 
 export function IconReset() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M4.5 12a7.5 7.5 0 0 1 12.7-5.4M19.5 12a7.5 7.5 0 0 1-12.7 5.4" />
-      <path d="M17 4.5v4h-4M7 19.5v-4h4" />
-    </svg>
+    <InkSvg>
+      <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+      <path d="M3 3v5h5" />
+    </InkSvg>
   );
 }
 
 export function IconSeed() {
   return (
-    <svg className="seed-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-      <path d="M12 20V11" />
-      <path d="M12 14c-3.5-.8-5.5-4.2-4.6-8 3.6.8 5.5 4.2 4.6 8z" />
-      <path d="M12 13.5c3.5-.8 5.5-4.2 4.6-8-3.6.8-5.5 4.2-4.6 8z" />
-    </svg>
+    <InkSvg className="seed-ico">
+      <path d="M12 21c-4-2.5-7-6.5-7-10.5a7 7 0 0 1 14 0c0 4-3 8-7 10.5Z" />
+      <path d="M12 21v-9" />
+    </InkSvg>
   );
 }
 
 export function IconHeart() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-      <path d="M12 20c4-3 6-6.2 6-9.2A6 6 0 0 0 6 10.8C6 13.8 8 17 12 20z" />
-      <circle cx="12" cy="11" r="1.6" />
-    </svg>
+    <InkSvg>
+      <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z" />
+    </InkSvg>
   );
 }
 
 export function IconCheck() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="m5 12 5 5 9-10" />
-    </svg>
+    <InkSvg sw={2}>
+      <path d="M20 6 9 17l-5-5" />
+    </InkSvg>
   );
 }
 
 export function IconFolderPlus() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <rect x="3" y="5" width="14" height="14" rx="2" />
-      <path d="M21 9v10a2 2 0 0 1-2 2H9" />
-      <path d="M8 12h4M10 10v4" />
-    </svg>
+    <InkSvg>
+      <path d="M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z" />
+      <path d="M12 10v6M9 13h6" />
+    </InkSvg>
   );
 }
 
 export function IconDownload() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M12 4v10m0 0 4-4m-4 4-4-4M5 18h14" />
-    </svg>
+    <InkSvg>
+      <path d="M12 3v12M7 10l5 5 5-5M4 21h16" />
+    </InkSvg>
   );
 }
 
 export function IconTrash() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M5 7h14M10 7V5h4v2m-7 0 1 13h8l1-13" />
-    </svg>
+    <InkSvg>
+      <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" />
+    </InkSvg>
   );
 }
 
 export function IconHistPlay() {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor">
-      <path d="M9 6v12l9-6z" />
-    </svg>
+    <InkSvg>
+      <path d="M8 5v14l11-7Z" />
+    </InkSvg>
   );
 }
 
 export function IconEnhance() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-      <path d="M8 4h-3v3M16 4h3v3M5 16v3h3M19 16v3h-3" />
-      <path d="M9 12h6M12 9v6" />
-    </svg>
+    <InkSvg>
+      <path d="M5 3v4M3 5h4M6 17v4M4 19h4M14 3l2.2 5.8L22 11l-5.8 2.2L14 19l-2.2-5.8L6 11l5.8-2.2Z" />
+    </InkSvg>
   );
 }
 
 export function Icon4x() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-      <rect x="4" y="4" width="7" height="7" rx="1" />
-      <rect x="13" y="4" width="7" height="7" rx="1" />
-      <rect x="4" y="13" width="7" height="7" rx="1" />
-      <rect x="13" y="13" width="7" height="7" rx="1" />
-    </svg>
+    <InkSvg>
+      <rect x="3" y="3" width="18" height="18" />
+      <path d="M3 12h9V3" />
+    </InkSvg>
   );
 }
 
 export function Icon1x() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-      <rect x="4" y="5" width="16" height="14" rx="2" />
-      <path d="m8 15 2.5-3 2 2.2L16 10l4 5" />
-    </svg>
+    <InkSvg>
+      <rect x="5" y="5" width="14" height="14" />
+    </InkSvg>
   );
 }
 
 export function IconDirector() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-      <path d="M8 4.5 4.5 8l11 11L19 19l.5-3.5z" />
-      <path d="m13.5 6.5 4 4" />
-    </svg>
+    <InkSvg>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+    </InkSvg>
   );
 }
 
 export function IconOutpaint() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-      <path d="M9 4H4v5M15 4h5v5M4 15v5h5M20 15v5h-5" />
-    </svg>
+    <InkSvg>
+      <rect x="8" y="8" width="8" height="8" />
+      <path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5" />
+    </InkSvg>
   );
 }
 
 export function IconUp() {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor">
-      <path d="M12 7 6 15h12z" />
-    </svg>
+    <InkSvg sw={2}>
+      <path d="m18 15-6-6-6 6" />
+    </InkSvg>
   );
 }
 
 export function IconDown() {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor">
-      <path d="m12 17 6-8H6z" />
-    </svg>
+    <InkSvg sw={2}>
+      <path d="m6 9 6 6 6-6" />
+    </InkSvg>
+  );
+}
+
+export function IconPin() {
+  return (
+    <InkSvg>
+      <path d="M12 17v5M9 10.8V4h6v6.8l3 3.2H6Z" />
+    </InkSvg>
+  );
+}
+
+export function IconDices() {
+  return (
+    <InkSvg sw={2}>
+      <rect x="3" y="3" width="12" height="12" rx="2" />
+      <path d="M9 21h9a3 3 0 0 0 3-3V9" />
+      <circle cx="7" cy="7" r=".9" fill="currentColor" />
+      <circle cx="11" cy="11" r=".9" fill="currentColor" />
+    </InkSvg>
+  );
+}
+
+export function IconCopyPlus() {
+  return (
+    <InkSvg>
+      <rect x="8" y="8" width="13" height="13" rx="1" />
+      <path d="M4 16V4h12M14.5 11.5v6M11.5 14.5h6" />
+    </InkSvg>
   );
 }
 
 export function GenderSvg({ g }: { g: GenderId | string }) {
   if (g === "m") {
     return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <InkSvg sw={2}>
         <circle cx="10" cy="14" r="5" />
-        <path d="M13.6 10.4 19 5M15 5h4v4" />
-      </svg>
+        <path d="M14 10l6-6M15 4h5v5" />
+      </InkSvg>
     );
   }
   if (g === "o") {
     return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-        <circle cx="12" cy="12" r="6" />
-      </svg>
+      <InkSvg sw={2}>
+        <circle cx="12" cy="12" r="5" />
+        <path d="M12 2v5M12 17v5M9 4.5h6" />
+      </InkSvg>
     );
   }
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+    <InkSvg sw={2}>
       <circle cx="12" cy="9" r="5" />
-      <path d="M12 14v7M9 18h6" />
-    </svg>
+      <path d="M12 14v8M9 19h6" />
+    </InkSvg>
   );
 }
-
-export { BrandLogo as IconBrand } from "@/app/activityIcons";

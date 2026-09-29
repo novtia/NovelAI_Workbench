@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { PANEL, clampPanel } from "@/data/studio";
+import { ACTIVITY_RAIL } from "@/ui/inkBackdrop";
 import { closeStudioMenus, useSession, useStudio } from "@/state";
 import { CharacterList } from "../components/CharacterList";
 import { GenderPop } from "../components/GenderPop";
@@ -25,7 +26,7 @@ export function StudioSkeleton() {
   useEffect(() => {
     function clamp() {
       const root = document.getElementById("view-studio");
-      const w = root?.clientWidth || Math.max(0, window.innerWidth - 64);
+      const w = root?.clientWidth || Math.max(0, window.innerWidth - ACTIVITY_RAIL);
       const s = { leftW, histW };
       const maxLeft = Math.min(PANEL.leftMax, w - s.histW - PANEL.split - PANEL.centerMin);
       const maxHist = Math.min(PANEL.histMax, w - s.leftW - PANEL.split - PANEL.centerMin);

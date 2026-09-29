@@ -20,7 +20,7 @@ export function CharacterCard({ ch, index }: { ch: Character; index: number }) {
   }
 
   return (
-    <article className="char-card" data-i={index}>
+    <article className={`char-card${enabled ? "" : " disabled"}`} data-g={gender} data-i={index}>
       <div className="char-bar">
         <span className={`gender${gender === "m" ? " male" : gender === "o" ? " other" : ""}`} title={gender === "m" ? "boy" : gender === "o" ? "other" : "girl"}>
           <GenderSvg g={gender} />

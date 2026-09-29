@@ -1,7 +1,7 @@
-import { Check, CopyPlus } from "lucide-react";
 import { previewUrl } from "@/data";
 import type { LotShot } from "@/data/types";
 import { useLottery } from "@/state";
+import { IconCheck, IconCopyPlus } from "@/generation/components/icons";
 
 export function DrawShot({
   batchId,
@@ -17,13 +17,14 @@ export function DrawShot({
   const { openSave, savedShots } = useLottery();
   const url = previewUrl(item);
   const thumb = item.thumbUrl || url;
+  const src = url || thumb;
   const hash = item.blobHash || item.id || "";
   const saved = Boolean(item.savedId || item.albumId || (hash && savedShots[hash]));
 
   return (
     <div className="draw-shot">
-      <a href={url || thumb} target="_blank" rel="noopener noreferrer" title={saved ? "点击查看原图" : "点击查看原图（未入库）"}>
-        <img src={thumb || url} alt="" loading="lazy" decoding="async" />
+      <a href={src} target="_blank" rel="noopener noreferrer" title={saved ? "点击查看原图" : "点击查看原图（未入库）"}>
+        <img src={src} alt="" decoding="async" />
       </a>
       <button
         type="button"
@@ -36,7 +37,7 @@ export function DrawShot({
           openSave(e.currentTarget, { batchId, drawId, shotIndex, item });
         }}
       >
-        {saved ? <Check strokeWidth={1.8} /> : <CopyPlus strokeWidth={1.8} />}
+        {saved ? <IconCheck /> : <IconCopyPlus />}
       </button>
     </div>
   );
