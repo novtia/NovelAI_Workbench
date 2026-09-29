@@ -191,13 +191,36 @@ export function clipPrompt(s: string, n = 16) {
   return t.length > n ? `${t.slice(0, n)}…` : t;
 }
 
+function withoutCleanTags(chunk: string, drop: Set<string>) {
+  const bits = chunk.split(",");
+  const kept: string[] = [];
+  let droppedBefore = false;
+  for (const bit of bits) {
+    const tag = bit.trim().toLowerCase();
+    if (tag && drop.has(tag)) {
+      droppedBefore = true;
+      continue;
+    }
+    kept.push(!kept.length && droppedBefore ? bit.replace(/^[ \t]+/, "") : bit);
+    droppedBefore = false;
+  }
+  return kept.join(",");
+}
+
 export function cleanPromptText(text: string) {
   const drop = new Set(CLEAN_TAGS.map((t) => t.toLowerCase()));
-  return String(text || "")
-    .split(/,\s*/)
-    .map((p) => p.trim())
-    .filter((p) => p && !drop.has(p.toLowerCase()))
-    .join(", ");
+  const src = String(text ?? "");
+  const weight = /(-?\d*\.?\d+)::([\s\S]*?)::/g;
+  let out = "";
+  let last = 0;
+  let match: RegExpExecArray | null;
+  while ((match = weight.exec(src))) {
+    out += withoutCleanTags(src.slice(last, match.index), drop);
+    out += match[0];
+    last = match.index + match[0].length;
+  }
+  out += withoutCleanTags(src.slice(last), drop);
+  return out;
 }
 
 export function defaultImportOpts(): StudioImportOpts {
@@ -516,9 +539,16 @@ export function genLabel(nSamples: number, busy: boolean, progress: string) {
   return nSamples === 1 ? "生成 1 张" : `生成 ${nSamples} 张`;
 }
 
-export function studioDownloadName(name?: string, id?: string, kind: StudioDownloadKind = "original") {
-  const raw = String(name || "").trim();
-  const base = (raw || `nai-${id || "preview"}`).replace(/\.(png|webp|jpe?g)$/i, "");
+export function studioDownloadName(name?: string, id?: string, kind: StudioDownloadKind = "original", seed?: number | null) {
+  const raw = String(name || "")
+    .trim()
+    .replace(/\.(png|webp|jpe?g)$/i, "");
+  const label = raw && raw !== "nai" && raw !== "生成中" ? raw : "nai";
+  const seedPart = seed != null && Number.isFinite(Number(seed)) && Number(seed) >= 0 ? `s${Math.trunc(Number(seed))}` : "";
+  const mark = String(id || "")
+    .replace(/[^a-z0-9]/gi, "")
+    .slice(0, 8);
+  const base = [label, seedPart, mark].filter(Boolean).join("-");
   return kind === "clean" ? `${base}-nodata.png` : `${base}.png`;
 }
 

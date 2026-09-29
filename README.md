@@ -12,7 +12,15 @@ workbench/
 
 ## 启动
 
-需要 Python 3.12+（不要用系统里的 3.8）。推荐 uv：
+在 `workbench` 目录双击 `start.bat`，或执行：
+
+```powershell
+.\start.ps1
+```
+
+会打开两个窗口：后端 `http://127.0.0.1:8766`，前端 `http://127.0.0.1:5173`。在启动脚本窗口按 Ctrl+C，或关掉任一服务窗口，两边都会停。浏览器打开 `http://127.0.0.1:5173`。
+
+首次使用需要 Python 3.12+（不要用系统里的 3.8）和 Node.js。后端虚拟环境推荐 uv：
 
 ```bash
 cd workbench/backend

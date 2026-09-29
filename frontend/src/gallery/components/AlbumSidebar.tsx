@@ -1,11 +1,13 @@
 import { Pencil, Plus, Trash2 } from "lucide-react";
+import { isSingleArtistAlbum } from "@/data";
 import { useCommands, useCollection, useSession } from "@/state";
 
 export function AlbumSidebar() {
-  const { albums, albumId, items, totalCount } = useCollection();
+  const { albums, album, albumId, items, totalCount } = useCollection();
   const { selectAlbum, deleteAlbumById } = useCommands();
   const openCreateDialog = useSession((s) => s.openCreateDialog);
   const openRenameDialog = useSession((s) => s.openRenameDialog);
+  const single = isSingleArtistAlbum(album);
 
   return (
     <aside className="g-side">
@@ -15,6 +17,7 @@ export function AlbumSidebar() {
       <div className="album-list">
         {albums.map((a) => {
           const active = a.id === albumId;
+          const locked = isSingleArtistAlbum(a);
           return (
             <div
               key={a.id}
@@ -31,31 +34,33 @@ export function AlbumSidebar() {
             >
               <span className="name">{a.name}</span>
               <span className="n">{a.count ?? 0}</span>
-              <span className="ops">
-                <button
-                  type="button"
-                  title="重命名"
-                  aria-label="重命名"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openRenameDialog(a.id, a.name);
-                  }}
-                >
-                  <Pencil strokeWidth={1.8} />
-                </button>
-                <button
-                  type="button"
-                  className="del"
-                  title="删除"
-                  aria-label="删除"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void deleteAlbumById(a.id);
-                  }}
-                >
-                  <Trash2 strokeWidth={1.8} />
-                </button>
-              </span>
+              {!locked && (
+                <span className="ops">
+                  <button
+                    type="button"
+                    title="重命名"
+                    aria-label="重命名"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openRenameDialog(a.id, a.name);
+                    }}
+                  >
+                    <Pencil strokeWidth={1.8} />
+                  </button>
+                  <button
+                    type="button"
+                    className="del"
+                    title="删除"
+                    aria-label="删除"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void deleteAlbumById(a.id);
+                    }}
+                  >
+                    <Trash2 strokeWidth={1.8} />
+                  </button>
+                </span>
+              )}
             </div>
           );
         })}
@@ -67,7 +72,7 @@ export function AlbumSidebar() {
       <div className="g-side-foot">
         共 {albums.length} 个收藏夹 · {totalCount || items.length} 张
         <br />
-        拖入图片即可导入
+        {single ? "仅支持导入单个画师串的测试图" : "拖入图片即可导入"}
       </div>
     </aside>
   );

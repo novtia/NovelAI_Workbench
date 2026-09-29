@@ -6,6 +6,7 @@ export type Album = {
   count?: number;
   deleted?: boolean;
   version?: number;
+  kind?: "singleArtist";
 };
 
 export type Artwork = {
@@ -194,6 +195,9 @@ export type StudioShot = {
   name?: string;
   meta: Record<string, unknown>;
   savedId?: string;
+  pending?: boolean;
+  jobId?: string;
+  sample?: number;
 };
 
 export type StudioImportOpts = {

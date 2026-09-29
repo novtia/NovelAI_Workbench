@@ -3,6 +3,7 @@ import { Pin } from "lucide-react";
 import { isListed } from "@/data";
 import type { PoolArtist } from "@/data/types";
 import { useLottery } from "@/state";
+import { ArtistHoverTrigger } from "@/ui/ArtistHover";
 
 export function PoolRow({ artist }: { artist: PoolArtist }) {
   const { pinned, excluded, weightCaps, controls, togglePin, toggleExclude, applyCap } = useLottery();
@@ -36,7 +37,9 @@ export function PoolRow({ artist }: { artist: PoolArtist }) {
         title={off ? "点击移回抽奖池" : "点击从抽奖池排除"}
         onClick={() => toggleExclude(artist.key)}
       >
-        <span className="pname">{artist.name}</span>
+        <span className="pname">
+          <ArtistHoverTrigger name={artist.name}>{artist.name}</ArtistHoverTrigger>
+        </span>
         {pin && <span className="base">基底</span>}
         {off && <span className="ban">已排除</span>}
         {artist.weight !== 1 && <span className="pmeta">w{artist.weight}</span>}

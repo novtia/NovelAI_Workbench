@@ -1,11 +1,17 @@
 from __future__ import annotations
 
-import json
 import re
 from typing import Any
 
 from contexts.gallery.domain import Album, Artwork
 from contexts.gallery.projectors import album_row, artwork_row
+from contexts.gallery.rules import (
+    SINGLE_ARTIST_ALBUM_ID,
+    SINGLE_ARTIST_ALBUM_NAME,
+    SINGLE_ARTIST_IMPORT_ERROR,
+    is_single_artist_album,
+    unique_artist_keys,
+)
 from kernel.blobs import BlobStore, make_thumb, png_size, sniff_mime
 from kernel.bus import UnitOfWork
 from kernel.clock import now_ms, new_id
@@ -50,10 +56,29 @@ class GalleryService:
                 "SELECT COUNT(*) FROM projections_albums WHERE deleted=0"
             ).fetchone()[0]
 
-    def create_album(self, name: str, album_id: str | None = None) -> dict[str, Any]:
+    def find_single_artist_album(self, *, include_deleted: bool = False) -> dict[str, Any] | None:
+        live: dict[str, Any] | None = None
+        dead: dict[str, Any] | None = None
+        for album in self.list_albums(include_deleted=include_deleted):
+            if not is_single_artist_album(album):
+                continue
+            if album.get("deleted"):
+                dead = dead or album
+            else:
+                live = album
+                break
+        return live or dead
+
+    def create_album(self, name: str, album_id: str | None = None, *, system: bool = False) -> dict[str, Any]:
+        name = (name or "").strip()
         album_id = album_id or new_id()
         if not ID_RE.fullmatch(album_id):
             raise DomainError("无效的收藏夹 id")
+        reserved = name == SINGLE_ARTIST_ALBUM_NAME or album_id == SINGLE_ARTIST_ALBUM_ID
+        if reserved and not system:
+            raise DomainError("「单画师」为系统收藏夹")
+        if reserved and self.find_single_artist_album():
+            raise DomainError("「单画师」收藏夹已存在", 409)
         created = now_ms()
         album = self.uow.load(Album, album_id)
         album.register(name, created, created)
@@ -65,6 +90,14 @@ class GalleryService:
         return found
 
     def rename_album(self, album_id: str, name: str) -> dict[str, Any]:
+        current = self.get_album(album_id)
+        if not current or current.get("deleted"):
+            raise DomainError("收藏夹不存在", 404)
+        if is_single_artist_album(current):
+            raise DomainError("系统收藏夹不可重命名")
+        name = (name or "").strip()
+        if name == SINGLE_ARTIST_ALBUM_NAME:
+            raise DomainError("「单画师」为系统收藏夹名称")
         album = self.uow.load(Album, album_id)
         album.rename(name)
         self.uow.commit(album)
@@ -74,6 +107,9 @@ class GalleryService:
         return found
 
     def delete_album(self, album_id: str) -> None:
+        current = self.get_album(album_id)
+        if is_single_artist_album(current):
+            raise DomainError("系统收藏夹不可删除")
         if self.active_album_count() <= 1:
             raise DomainError("至少保留一个收藏夹")
         album = self.uow.load(Album, album_id)
@@ -139,6 +175,8 @@ class GalleryService:
         album = self.get_album(album_id)
         if not album or album["deleted"]:
             raise DomainError("收藏夹不存在", 404)
+        artists = meta.get("artists") if isinstance(meta.get("artists"), list) else []
+        self._assert_single_artist_meta(album, artists)
         digest = sha256_bytes(data)
         if self.has_hash(album_id, digest):
             raise DomainError("重复", 409)
@@ -156,7 +194,6 @@ class GalleryService:
         item_id = item_id or str(meta.get("id") or "") or new_id()
         if not ID_RE.fullmatch(item_id):
             raise DomainError("无效的图片 id")
-        artists = meta.get("artists") if isinstance(meta.get("artists"), list) else []
         params = meta.get("params") if isinstance(meta.get("params"), dict) else {}
         payload = {
             "albumId": album_id,
@@ -187,6 +224,7 @@ class GalleryService:
         item = self.get_item(item_id)
         if not item:
             raise DomainError("图片不存在", 404)
+        self._assert_single_artist_meta(album, item.get("artists") or [])
         if item["albumId"] != album_id and self.has_hash(album_id, item["hash"]):
             raise DomainError("目标收藏夹已有这张图", 409)
         art = self.uow.load(Artwork, item_id)
@@ -250,8 +288,23 @@ class GalleryService:
             ).fetchall()
         return [r["id"] for r in rows]
 
+    def _assert_single_artist_meta(self, album: dict[str, Any], artists: Any) -> None:
+        if not is_single_artist_album(album):
+            return
+        if len(unique_artist_keys(artists)) != 1:
+            raise DomainError(SINGLE_ARTIST_IMPORT_ERROR)
+
 
 def ensure_default_album(service: GalleryService) -> None:
     if service.list_albums():
         return
     service.create_album("默认收藏夹", "default")
+
+
+def ensure_single_artist_album(service: GalleryService) -> None:
+    found = service.find_single_artist_album(include_deleted=True)
+    if found:
+        if found.get("deleted"):
+            service.restore_album(found["id"])
+        return
+    service.create_album(SINGLE_ARTIST_ALBUM_NAME, SINGLE_ARTIST_ALBUM_ID, system=True)

@@ -1,5 +1,20 @@
 export type * from "./types";
 export { stripArtist, tagKey } from "./hashKey";
+export {
+  ARTIST_RE,
+  SINGLE_ARTIST_ALBUM_ID,
+  SINGLE_ARTIST_ALBUM_NAME,
+  SINGLE_ARTIST_IMPORT_ERROR,
+  findArtistAt,
+  findArtistSpans,
+  splitSingleArtistSections,
+  indexArtistPreviews,
+  isSingleArtistAlbum,
+  singleArtistImportError,
+  splitArtistTokens,
+  uniqueArtistKeys,
+} from "./singleArtist";
+export type { ArtistColumn, ArtistSections, ArtistSpan, ArtistToken } from "./singleArtist";
 export { isImageFile, makeThumb, parseImageMeta, reencodePngClean, sha256Hex, triggerBlobDownload } from "./png";
 export type { CharCaption, ImageMeta } from "./png";
 export {

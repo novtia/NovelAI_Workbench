@@ -1,8 +1,7 @@
 import { tagKey } from "./hashKey";
+import { ARTIST_RE } from "./singleArtist";
 
-const PNG_SIG = [137, 80, 78, 71, 13, 10, 26, 10];
-const ARTIST_RE =
-  /(\d+(?:\.\d+)?::)?\s*(?:\[artist:\s*([^\]]+?)\]|artist:\s*([^,\]\n]+?))(?:\s*::|(?=\s*,)|\s*$)/gi;
+export const PNG_SIG = [137, 80, 78, 71, 13, 10, 26, 10];
 
 export type CharCaption = {
   char_caption?: string;

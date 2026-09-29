@@ -4,6 +4,7 @@ import json
 import sqlite3
 from typing import Any
 
+from contexts.gallery.rules import album_kind
 from kernel.events import StoredEvent
 from kernel.bus import Projector
 
@@ -87,6 +88,7 @@ class GalleryProjector(Projector):
 
 
 def album_row(row: sqlite3.Row, count: int | None = None) -> dict[str, Any]:
+    kind = album_kind(row["id"], row["name"])
     out = {
         "id": row["id"],
         "name": row["name"],
@@ -95,6 +97,8 @@ def album_row(row: sqlite3.Row, count: int | None = None) -> dict[str, Any]:
         "deleted": bool(row["deleted"]),
         "version": row["version"],
     }
+    if kind:
+        out["kind"] = kind
     if count is not None:
         out["count"] = count
     return out

@@ -1,5 +1,6 @@
 import { BAR_COLORS, drawSum, rowName, sortedDrawRows } from "@/data";
 import type { DrawResult } from "@/data/types";
+import { ArtistHoverTrigger } from "@/ui/ArtistHover";
 
 export function WeightBar({ draw }: { draw: DrawResult }) {
   const rows = sortedDrawRows(draw);
@@ -16,7 +17,7 @@ export function WeightBar({ draw }: { draw: DrawResult }) {
         {rows.map((r, j) => (
           <span key={j}>
             <i style={{ background: BAR_COLORS[j % BAR_COLORS.length] }} />
-            {rowName(r)} {(r.cents / 100).toFixed(2)}
+            <ArtistHoverTrigger name={rowName(r)}>{rowName(r)}</ArtistHoverTrigger> {(r.cents / 100).toFixed(2)}
           </span>
         ))}
       </div>

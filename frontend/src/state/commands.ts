@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { galleryApi } from "@/api";
 import { ApiError } from "@/api/client";
-import { artistText, copyText, fileFromShotRef, importImageFiles, promptText, queryKeys } from "@/data";
+import { artistText, copyText, fileFromShotRef, importImageFiles, isSingleArtistAlbum, promptText, queryKeys, SINGLE_ARTIST_ALBUM_NAME, singleArtistImportError } from "@/data";
 import type { Artwork } from "@/data/types";
 import type { StudioShotDrag } from "@/data/files";
 import { emit } from "./bus";
@@ -33,11 +33,14 @@ export function useCommands() {
       return;
     }
     session.setProgress(true, 0, list.length);
-    const result = await importImageFiles(list, albumId, (done, total) => session.setProgress(true, done, total));
+    const result = await importImageFiles(list, albumId, (done, total) => session.setProgress(true, done, total), {
+      singleArtist: isSingleArtistAlbum(album),
+    });
     session.setProgress(false);
     await refresh();
     const bits = [`导入 ${result.added} 张`];
     if (result.dup) bits.push(`跳过 ${result.dup} 张重复`);
+    if (result.rejected) bits.push(`跳过 ${result.rejected} 张（需单个画师串）`);
     if (result.noMeta) bits.push(`${result.noMeta} 张无参数`);
     pushToast(bits.join("，"), result.added ? "ok" : "warn");
   }
@@ -82,6 +85,12 @@ export function useCommands() {
 
   async function moveOpenItem(targetAlbumId: string) {
     if (!openItem || !targetAlbumId || targetAlbumId === openItem.albumId) return;
+    const target = albums.find((a) => a.id === targetAlbumId);
+    const blocked = isSingleArtistAlbum(target) ? singleArtistImportError(openItem.artists) : null;
+    if (blocked) {
+      pushToast(blocked, "warn");
+      return;
+    }
     try {
       if (await galleryApi.hashExists(targetAlbumId, openItem.hash)) {
         pushToast("目标收藏夹已有这张图", "warn");
@@ -122,6 +131,10 @@ export function useCommands() {
     }
     const target = albums.find((a) => a.id === id);
     if (!target) return;
+    if (isSingleArtistAlbum(target)) {
+      pushToast("系统收藏夹不可删除", "warn");
+      return;
+    }
     const n = target.count ?? 0;
     const msg = n ? `删除「${target.name}」以及其中 ${n} 张图片？` : `删除收藏夹「${target.name}」？`;
     if (!confirm(msg)) return;
@@ -138,6 +151,14 @@ export function useCommands() {
     const dialog = useSession.getState().dialog;
     const trimmed = dialog?.name.trim() || "";
     if (!dialog || !trimmed) return;
+    if (trimmed === SINGLE_ARTIST_ALBUM_NAME) {
+      pushToast("「单画师」为系统收藏夹名称", "warn");
+      return;
+    }
+    if (dialog.mode === "rename" && dialog.albumId && isSingleArtistAlbum(albums.find((a) => a.id === dialog.albumId))) {
+      pushToast("系统收藏夹不可重命名", "warn");
+      return;
+    }
     try {
       if (dialog.mode === "rename" && dialog.albumId) {
         await galleryApi.renameAlbum(dialog.albumId, trimmed);

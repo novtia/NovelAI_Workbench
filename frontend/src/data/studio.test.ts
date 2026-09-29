@@ -88,15 +88,19 @@ describe("studio data", () => {
 
   it("cleans quality tags and detects importable meta", () => {
     expect(cleanPromptText("cat, masterpiece, best quality")).toBe("cat");
+    expect(cleanPromptText("0.8::artist:foo ::, 1girl, masterpiece")).toBe("0.8::artist:foo ::, 1girl");
+    expect(cleanPromptText("1girl,  solo")).toBe("1girl,  solo");
+    expect(cleanPromptText("1.5::a,  b ::, best quality")).toBe("1.5::a,  b ::");
     expect(hasImportableMeta({ prompt: "a" })).toBe(true);
     expect(hasImportableMeta({})).toBe(false);
     expect(tokenFillPercent("abc")).toBeGreaterThan(0);
   });
 
   it("names original and clean studio downloads", () => {
-    expect(studioDownloadName("nai.png", "abc", "original")).toBe("nai.png");
-    expect(studioDownloadName("nai.png", "abc", "clean")).toBe("nai-nodata.png");
-    expect(studioDownloadName("", "shot-1", "original")).toBe("nai-shot-1.png");
+    expect(studioDownloadName("nai.png", "abc", "original", 42)).toBe("nai-s42-abc.png");
+    expect(studioDownloadName("nai.png", "abc", "clean", 42)).toBe("nai-s42-abc-nodata.png");
+    expect(studioDownloadName("", "shot-1", "original")).toBe("nai-shot1.png");
+    expect(studioDownloadName("scene.png", "deadbeef99", "original", -1)).toBe("scene-deadbeef.png");
   });
 
   it("builds a form from job-shaped shot meta", () => {

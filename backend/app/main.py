@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from contexts.gallery.api import router as gallery_router
-from contexts.gallery.application import GalleryService, ensure_default_album
+from contexts.gallery.application import GalleryService, ensure_default_album, ensure_single_artist_album
 from contexts.gallery.migrate import migrate_legacy
 from contexts.gallery.projectors import GalleryProjector
 from contexts.generation.api import router as generation_router
@@ -57,6 +57,7 @@ def create_app() -> FastAPI:
     if not store.load_all() and (LEGACY / "gallery.db").is_file():
         migrate_legacy(gallery, LEGACY)
     ensure_default_album(gallery)
+    ensure_single_artist_album(gallery)
 
     start_worker(generation)
 

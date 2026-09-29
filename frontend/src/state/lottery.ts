@@ -17,6 +17,8 @@ import {
   parseCapInput,
   placeLotPop,
   queryKeys,
+  singleArtistImportError,
+  isSingleArtistAlbum,
   storedDrawShots,
   triggerRect,
 } from "@/data";
@@ -82,6 +84,12 @@ export async function saveLotteryPreview(qc: QueryClient, targetAlbumId: string,
   const job = matchDrawJob(jobs, ctx.batchId, ctx.drawId);
   const form = extras?.form || ((job?.client?.form || {}) as Partial<StudioForm>);
   const prompt = lotteryPrompt(draw?.outputText || "", String(form.prompt || ""));
+  const artists = extras?.draw?.artists || draw?.artists || [];
+  const blocked = isSingleArtistAlbum(albums.find((a) => a.id === targetAlbumId)) ? singleArtistImportError(artists) : null;
+  if (blocked) {
+    pushToast(blocked, "warn");
+    return;
+  }
   useLotteryStore.getState().closeLotSave();
   try {
     const saved = (await generationApi.promoteItems(targetAlbumId, [hash], {
@@ -184,8 +192,6 @@ export function useLottery() {
         const key = drawKey(b.id, id);
         const job = matchDrawJob(jobs, b.id, id);
         if (store.enqueuing.includes(key) || jobIsActive(job)) return;
-        if (storedDrawShots(draw).length) return;
-        if (job?.status === "done" && job.items?.length) return;
         out.push({ batch: b, i, draw });
       });
     }
@@ -355,8 +361,8 @@ export function useLottery() {
       }
     },
     pendingDraws,
-    generateAll: () => generateDraws(pendingDraws()),
-    generateBatch: (batch: DrawBatch) => generateDraws(pendingDraws(batch)),
+    generateAll: () => generateDraws(pendingDraws(), true),
+    generateBatch: (batch: DrawBatch) => generateDraws(pendingDraws(batch), true),
     generateOne: (batch: DrawBatch, draw: DrawResult, i?: number) => {
       const index = i ?? batch.draws.findIndex((d) => drawIdOf(batch.id, d) === drawIdOf(batch.id, draw));
       return generateDraws([{ batch, i: index < 0 ? 0 : index, draw }], true);

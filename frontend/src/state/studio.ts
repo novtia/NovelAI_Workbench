@@ -23,10 +23,11 @@ import {
   persistImportOpts,
   persistSelectedSet,
   placePop,
-  previewUrl,
   queryKeys,
   reencodePngClean,
   shotFromJobItem,
+  singleArtistImportError,
+  isSingleArtistAlbum,
   studioDownloadName,
   triggerBlobDownload,
   fileFromShotRef,
@@ -54,7 +55,63 @@ function currentShot(): StudioShot | null {
 function showShot(item: StudioShot | null) {
   const s = useStudioStore.getState();
   s.setCurrentId(item?.id || null);
-  s.setLiveUrl(item ? item.url || item.thumbUrl : "");
+  s.setLiveUrl(item && !item.pending ? item.url || item.thumbUrl : "");
+}
+
+function pendingId(jobId: string, sample: number) {
+  return `pending:${jobId}:${sample}`;
+}
+
+function makePending(jobId: string, sample: number, width: number, height: number): StudioShot {
+  return {
+    id: pendingId(jobId, sample),
+    url: "",
+    thumbUrl: "",
+    width,
+    height,
+    name: "生成中",
+    meta: {},
+    pending: true,
+    jobId,
+    sample,
+  };
+}
+
+function ensurePending(job: Job) {
+  const s = useStudioStore.getState();
+  const n = Math.max(1, Math.min(4, Number(job.progress?.nSamples || s.form.nSamples || 1)));
+  const existing = s.session.filter((shot) => shot.pending && shot.jobId === job.id);
+  if (existing.length === n && Array.from({ length: n }, (_, i) => i).every((i) => existing.some((shot) => shot.sample === i))) return;
+  const slots = Array.from({ length: n }, (_, i) => {
+    return existing.find((shot) => shot.sample === i) || makePending(job.id, i, s.form.width, s.form.height);
+  });
+  const rest = s.session.filter((shot) => !(shot.pending && shot.jobId === job.id));
+  s.setSession([...slots, ...rest]);
+}
+
+function paintPending(job: Job) {
+  const url = job.previewUrl || "";
+  if (!url) return;
+  const sample = Number(job.progress?.sample ?? 0);
+  const s = useStudioStore.getState();
+  let changed = false;
+  const next = s.session.map((shot) => {
+    if (!shot.pending || shot.jobId !== job.id || shot.sample !== sample || shot.url === url) return shot;
+    changed = true;
+    return { ...shot, url, thumbUrl: url };
+  });
+  if (changed) s.setSession(next);
+}
+
+function dropPending(jobId: string) {
+  if (!jobId) return;
+  const s = useStudioStore.getState();
+  const pending = s.session.filter((shot) => shot.pending && shot.jobId === jobId);
+  if (!pending.length) return;
+  const watching = pending.some((shot) => shot.id === s.currentId);
+  const rest = s.session.filter((shot) => !(shot.pending && shot.jobId === jobId));
+  s.setSession(rest);
+  if (watching) showShot(rest.find((shot) => !shot.pending) || null);
 }
 
 export function closeStudioMenus(keep?: StudioPop | "quota" | "jobs") {
@@ -90,8 +147,6 @@ function startBusy(job?: Job | null) {
   const s = useStudioStore.getState();
   const text = job?.progress?.text || (job?.status === "queued" ? "排队中" : "生成中");
   s.setBusy(true, job?.id || s.studioJobId, text);
-  const live = job?.previewUrl || "";
-  if (live) s.setLiveUrl(live);
 }
 
 function endBusy() {
@@ -99,19 +154,21 @@ function endBusy() {
   s.setBusy(false, "", "");
 }
 
-function pushSessionItems(items: Job["items"], meta: Record<string, unknown>) {
+function pushSessionItems(job: Job) {
   const s = useStudioStore.getState();
+  const pending = s.session.filter((shot) => shot.pending && shot.jobId === job.id);
+  const watch = pending.find((shot) => shot.id === s.currentId);
+  const rest = s.session.filter((shot) => !(shot.pending && shot.jobId === job.id));
   const added: StudioShot[] = [];
-  const next = [...s.session];
-  for (const item of items || []) {
-    const rec = shotFromJobItem(item, meta);
-    if (!rec || next.some((x) => x.id === rec.id)) continue;
-    next.unshift(rec);
+  for (const item of job.items || []) {
+    const rec = shotFromJobItem(item, job.meta || {});
+    if (!rec || rest.some((shot) => shot.id === rec.id) || added.some((shot) => shot.id === rec.id)) continue;
     added.push(rec);
   }
-  if (!added.length) return;
-  s.setSession(next);
-  showShot(next[0]);
+  s.setSession([...added, ...rest]);
+  if (!watch) return;
+  const index = Math.min(watch.sample ?? 0, Math.max(0, added.length - 1));
+  showShot(added[index] || added[0] || rest.find((shot) => !shot.pending) || null);
 }
 
 function applyStudioJob(job: Job) {
@@ -126,15 +183,17 @@ function applyStudioJob(job: Job) {
   if (notified.has(job.id)) return;
   notified.add(job.id);
   if (job.status === "done") {
-    pushSessionItems(job.items, job.meta || {});
+    pushSessionItems(job);
     pushToast(`已生成 ${(job.items || []).length} 张`, "ok");
   } else if (job.status === "error") {
+    dropPending(job.id);
     pushToast(job.error || "生图失败", "warn");
     if (/Token|401|未配置/.test(job.error || "")) {
       const trig = document.getElementById("st-account");
       if (trig) openStudioPop("token", trig);
     }
   } else if (job.status === "cancelled") {
+    dropPending(job.id);
     pushToast("已取消后台生图");
   }
 }
@@ -153,6 +212,13 @@ export async function saveStudioCurrent(qc: ReturnType<typeof useQueryClient>, a
   const hash = cur.blobHash || cur.id;
   if (!hash) {
     pushToast("没有可保存的预览图", "warn");
+    return;
+  }
+  const blocked = isSingleArtistAlbum(albums.find((a) => a.id === albumId))
+    ? singleArtistImportError((cur.meta as { artists?: unknown }).artists)
+    : null;
+  if (blocked) {
+    pushToast(blocked, "warn");
     return;
   }
   closeStudioMenus();
@@ -249,7 +315,13 @@ export function useStudioSync() {
     const current = (s.studioJobId && studio.find((j) => j.id === s.studioJobId)) || active[0];
     if (current && jobIsActive(current)) {
       startBusy(current);
-      if (current.previewUrl) s.setLiveUrl(current.previewUrl);
+      const hadSelection = Boolean(useStudioStore.getState().currentId);
+      ensurePending(current);
+      paintPending(current);
+      if (!hadSelection) {
+        const slot = useStudioStore.getState().session.find((shot) => shot.pending && shot.jobId === current.id && shot.sample === 0);
+        if (slot) showShot(slot);
+      }
     }
     for (const job of studio) {
       if (jobIsActive(job)) continue;
@@ -323,6 +395,9 @@ export function useStudio() {
       const job = await generationApi.submitJob({ ...formToPayload(form), source: "studio" });
       notified.delete(job.id);
       startBusy(job);
+      ensurePending(job);
+      const slot = useStudioStore.getState().session.find((shot) => shot.pending && shot.jobId === job.id && shot.sample === 0);
+      if (slot) showShot(slot);
       await qc.invalidateQueries({ queryKey: queryKeys.jobs });
     } catch (err) {
       endBusy();
@@ -340,13 +415,15 @@ export function useStudio() {
   }
 
   async function downloadCurrent(kind: StudioDownloadKind = "original") {
-    const src = current ? previewUrl(current) : store.liveUrl;
+    const src = current && !current.pending ? current.url || current.thumbUrl : "";
     if (!src) {
       pushToast("没有可下载的预览图", "warn");
       return;
     }
     closeStudioMenus();
-    const filename = studioDownloadName(current?.name, current?.id || undefined, kind);
+    const seedRaw = current?.meta?.seed;
+    const seed = typeof seedRaw === "number" ? seedRaw : Number(seedRaw);
+    const filename = studioDownloadName(current?.name, current?.id || current?.blobHash, kind, Number.isFinite(seed) ? seed : null);
     try {
       const res = await fetch(src);
       if (!res.ok) throw new Error("无法读取图片");
@@ -503,8 +580,8 @@ export function useStudio() {
     albumId,
     status,
     sizeLabel: `${form.width} × ${form.height}`,
-    previewUrl: store.liveUrl,
-    hasPreview: Boolean(store.liveUrl),
+    previewUrl: current?.url || current?.thumbUrl || "",
+    hasPreview: Boolean(current?.url || current?.thumbUrl),
     setSize,
     patch,
     apply,

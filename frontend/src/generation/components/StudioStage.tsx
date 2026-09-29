@@ -22,8 +22,6 @@ export function StudioStage() {
     previewUrl,
     hasPreview,
     directing,
-    busy,
-    genProgress,
     current,
     activeChar,
     setActiveChar,
@@ -32,8 +30,10 @@ export function StudioStage() {
     deleteCurrent,
     soon,
   } = useStudio();
-  const w = form.width;
-  const h = form.height;
+  const watchingPending = Boolean(current?.pending);
+  const w = !watchingPending && current?.width ? current.width : form.width;
+  const h = !watchingPending && current?.height ? current.height : form.height;
+  const showDots = watchingPending && !previewUrl;
   const seedText = current?.meta?.seed != null && Number(current.meta.seed) >= 0 ? String(current.meta.seed) : form.seed >= 0 ? String(form.seed) : "随机";
 
   return (
@@ -81,6 +81,13 @@ export function StudioStage() {
       <div className="frame-wrap">
         <div className={`frame-box${w > h ? " landscape" : w === h ? " square" : ""}`} id="frame-box">
           {previewUrl ? <img src={previewUrl} alt="生成预览" /> : null}
+          {showDots ? (
+            <div className="load-dots" aria-label="生成中">
+              <i />
+              <i />
+              <i />
+            </div>
+          ) : null}
           <div className="dir-mask" />
           <div className="dir-pins">
             {directing &&
@@ -121,9 +128,6 @@ export function StudioStage() {
               })}
           </div>
         </div>
-      </div>
-      <div className={`busy-veil${busy ? " show" : ""}${busy && previewUrl ? " live" : ""}`}>
-        {busy && previewUrl ? "" : busy ? genProgress || "生成中" : "生成中"}
       </div>
       <div className="stage-bl">
         <span className="mchip">{sizeLabel}</span>

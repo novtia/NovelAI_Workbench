@@ -1,6 +1,7 @@
-import { chainText, drawIdOf, drawSum, resolveDrawVisual, sortedDrawRows } from "@/data";
+import { chainText, drawIdOf, drawSum, resolveDrawVisual, sortedDrawRows, splitArtistTokens } from "@/data";
 import type { DrawBatch, DrawResult as DrawResultType, LotShot } from "@/data/types";
 import { useLottery } from "@/state";
+import { ArtistHoverTrigger } from "@/ui/ArtistHover";
 import { DrawOps } from "./DrawOps";
 import { DrawResult } from "./DrawResult";
 import { WeightBar } from "./WeightBar";
@@ -27,7 +28,17 @@ export function DrawCard({ batch, index, draw }: { batch: DrawBatch; index: numb
         <span className="sum">Σ {sum}</span>
         <DrawOps batch={batch} index={index} draw={draw} job={job} busy={busy} hasShots={shots.length > 0} />
       </div>
-      <code>{chainText(draw.outputText)}</code>
+      <code>
+        {splitArtistTokens(chainText(draw.outputText)).map((part, i) =>
+          part.type === "artist" && part.name ? (
+            <ArtistHoverTrigger key={`${part.name}-${i}`} name={part.name}>
+              {part.value}
+            </ArtistHoverTrigger>
+          ) : (
+            <span key={i}>{part.value}</span>
+          ),
+        )}
+      </code>
       <WeightBar draw={draw} />
       <DrawResult batchId={batch.id} drawId={drawId} job={job} shots={shots} busy={busy} />
     </div>
