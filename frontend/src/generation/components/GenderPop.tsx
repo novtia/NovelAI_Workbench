@@ -1,5 +1,5 @@
 import type { GenderId } from "@/data/types";
-import { closeStudioMenus, useStudio } from "@/state";
+import { closeStudioMenus, useStudioActions, useStudioStore } from "@/state";
 import { GenderSvg } from "./icons";
 
 const OPTIONS: Array<{ g: GenderId; label: string }> = [
@@ -9,7 +9,9 @@ const OPTIONS: Array<{ g: GenderId; label: string }> = [
 ];
 
 export function GenderPop() {
-  const { pop, popPos, addCharacter } = useStudio();
+  const pop = useStudioStore((s) => s.pop);
+  const popPos = useStudioStore((s) => s.popPos);
+  const addCharacter = useStudioActions().addCharacter;
   const open = pop === "gender";
   return (
     <div

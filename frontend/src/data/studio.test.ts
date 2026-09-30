@@ -14,6 +14,7 @@ import {
   formFromMeta,
   studioDownloadName,
   tokenFillPercent,
+  estimateTokens,
 } from "./studio";
 
 describe("studio data", () => {
@@ -94,6 +95,10 @@ describe("studio data", () => {
     expect(hasImportableMeta({ prompt: "a" })).toBe(true);
     expect(hasImportableMeta({})).toBe(false);
     expect(tokenFillPercent("abc")).toBeGreaterThan(0);
+    expect(estimateTokens("")).toBe(0);
+    expect(estimateTokens("a".repeat(32))).toBe(10);
+    expect(tokenFillPercent("a".repeat(6400))).toBe(100);
+    expect(tokenFillPercent("a".repeat(3200))).toBeCloseTo((1000 / 1471) * 100, 5);
   });
 
   it("names original and clean studio downloads", () => {

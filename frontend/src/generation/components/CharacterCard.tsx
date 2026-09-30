@@ -1,19 +1,22 @@
+import { memo } from "react";
 import { inferGender } from "@/data";
-import { useStudio } from "@/state";
+import { useStudioActions, useStudioStore } from "@/state";
 import type { Character } from "@/data/types";
 import { GenderSvg, IconCheck, IconDown, IconTrash, IconUp } from "./icons";
 import { PromptWell, TokenBar } from "./PromptWell";
 
-export function CharacterCard({ ch, index }: { ch: Character; index: number }) {
-  const { form, patch, charTabs, setCharTab, mutateChar } = useStudio();
-  const tab = charTabs[index] || "prompt";
+export const CharacterCard = memo(function CharacterCard({ ch, index }: { ch: Character; index: number }) {
+  const tab = useStudioStore((s) => s.charTabs[index] || "prompt");
+  const setCharTab = useStudioStore((s) => s.setCharTab);
+  const { patch, mutateChar } = useStudioActions();
   const gender = inferGender(ch.prompt);
   const enabled = ch.enabled !== false;
 
   function move(dir: -1 | 1) {
+    const chars = useStudioStore.getState().form.characters;
     const j = index + dir;
-    if (j < 0 || j >= form.characters.length) return;
-    const next = form.characters.slice();
+    if (j < 0 || j >= chars.length) return;
+    const next = chars.slice();
     const [c] = next.splice(index, 1);
     next.splice(j, 0, c);
     patch({ characters: next });
@@ -41,7 +44,7 @@ export function CharacterCard({ ch, index }: { ch: Character; index: number }) {
         >
           <IconCheck />
         </button>
-        <button className="ico danger" type="button" title="删除" onClick={() => patch({ characters: form.characters.filter((_, i) => i !== index) })}>
+        <button className="ico danger" type="button" title="删除" onClick={() => patch({ characters: useStudioStore.getState().form.characters.filter((_, i) => i !== index) })}>
           <IconTrash />
         </button>
       </div>
@@ -55,18 +58,20 @@ export function CharacterCard({ ch, index }: { ch: Character; index: number }) {
           </button>
         </div>
         <div className="prompt-box sm">
-          <PromptWell
-            hidden={tab !== "prompt"}
-            value={ch.prompt}
-            onChange={(v) => {
-              mutateChar(index, (c) => ({ ...c, prompt: v, gender: inferGender(v) }));
-            }}
-            placeholder={`角色 ${index + 1}`}
-          />
-          <PromptWell hidden={tab !== "uc"} value={ch.uc} onChange={(v) => mutateChar(index, (c) => ({ ...c, uc: v }))} placeholder="Negative / UC" />
-          <TokenBar text={tab === "uc" ? ch.uc : ch.prompt} />
+          {tab === "uc" ? (
+            <PromptWell value={ch.uc} onChange={(v) => mutateChar(index, (c) => ({ ...c, uc: v }))} placeholder="Negative / UC" />
+          ) : (
+            <PromptWell
+              value={ch.prompt}
+              onChange={(v) => {
+                mutateChar(index, (c) => ({ ...c, prompt: v, gender: inferGender(v) }));
+              }}
+              placeholder={`角色 ${index + 1}`}
+            />
+          )}
+          <TokenBar text={tab === "uc" ? ch.uc : ch.prompt} label={`角色 ${index + 1} ${tab === "uc" ? "负面提示" : "提示词"}`} />
         </div>
       </div>
     </article>
   );
-}
+});

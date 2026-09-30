@@ -1,8 +1,12 @@
 import { useEffect, useRef } from "react";
-import { useStudio } from "@/state";
+import { useStudioActions, useStudioStore } from "@/state";
 
 export function ParamSetDialog() {
-  const { paramDialog, paramName, setParamDialog, setParamName, saveParamSet } = useStudio();
+  const paramDialog = useStudioStore((s) => s.paramDialog);
+  const paramName = useStudioStore((s) => s.paramName);
+  const setParamDialog = useStudioStore((s) => s.setParamDialog);
+  const setParamName = useStudioStore((s) => s.setParamName);
+  const saveParamSet = useStudioActions().saveParamSet;
   const ref = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {

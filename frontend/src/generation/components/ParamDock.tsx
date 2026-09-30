@@ -1,21 +1,27 @@
 import { SAMPLER_LABEL } from "@/data/studio";
 import { accountLabel, costLabel, genLabel, formatTokenStatus } from "@/data";
-import { openStudioPop, useStudio } from "@/state";
+import { useShallow } from "zustand/react/shallow";
+import { openStudioPop, useNaiStatusQuery, useStudioActions, useStudioStore } from "@/state";
 import { IconBolt, IconCollapse, IconExpand, IconReset, IconSeed, IconX } from "./icons";
 
 export function ParamDock() {
-  const {
-    form,
-    patch,
-    busy,
-    genProgress,
-    aiOpen,
-    aiSettled,
-    status,
-    generate,
-    resetParams,
-    setAiOpen,
-  } = useStudio();
+  const form = useStudioStore(
+    useShallow((s) => ({
+      seed: s.form.seed,
+      steps: s.form.steps,
+      scale: s.form.scale,
+      sampler: s.form.sampler,
+      cfgRescale: s.form.cfgRescale,
+      noiseSchedule: s.form.noiseSchedule,
+      nSamples: s.form.nSamples,
+    })),
+  );
+  const busy = useStudioStore((s) => s.busy);
+  const genProgress = useStudioStore((s) => s.genProgress);
+  const aiOpen = useStudioStore((s) => s.aiOpen);
+  const aiSettled = useStudioStore((s) => s.aiSettled);
+  const { patch, generate, resetParams, setAiOpen } = useStudioActions();
+  const status = useNaiStatusQuery().data || null;
   const random = form.seed < 0;
   const opus = Boolean(status?.subscription?.opus);
   const pct = status?.subscription?.usagePercent;

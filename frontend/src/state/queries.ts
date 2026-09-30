@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { galleryApi, generationApi, lotteryApi } from "@/api";
 import { queryKeys } from "@/data/queryKeys";
 import { useSession } from "./session";
+import { useStudioStore } from "./studioStore";
 
 export function useAlbumsQuery() {
   return useQuery({ queryKey: queryKeys.albums, queryFn: galleryApi.listAlbums });
@@ -18,14 +19,18 @@ export function useItemsQuery(albumId?: string) {
 }
 
 export function useJobsQuery() {
-  return useQuery({ queryKey: queryKeys.jobs, queryFn: generationApi.listJobs });
+  return useQuery({ queryKey: queryKeys.jobs, queryFn: generationApi.listJobs, staleTime: Infinity });
 }
 
 export function useNaiStatusQuery() {
+  const view = useSession((s) => s.view);
+  const quotaOpen = useStudioStore((s) => s.quotaOpen);
+  const enabled = view === "studio" || quotaOpen;
   return useQuery({
     queryKey: queryKeys.naiStatus,
     queryFn: generationApi.tokenStatus,
-    refetchInterval: 60000,
+    enabled,
+    refetchInterval: enabled ? 60000 : false,
   });
 }
 

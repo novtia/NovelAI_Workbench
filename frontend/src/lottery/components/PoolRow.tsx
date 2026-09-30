@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
 import { isListed } from "@/data";
 import type { PoolArtist } from "@/data/types";
-import { useLottery } from "@/state";
+import { useLotteryActions, useLotteryStore } from "@/state";
 import { ArtistHoverTrigger } from "@/ui/ArtistHover";
 import { IconPin } from "@/generation/components/icons";
 
 export function PoolRow({ artist }: { artist: PoolArtist }) {
-  const { pinned, excluded, weightCaps, controls, togglePin, toggleExclude, applyCap } = useLottery();
+  const pinned = useLotteryStore((s) => s.pinned);
+  const excluded = useLotteryStore((s) => s.excluded);
+  const weightCaps = useLotteryStore((s) => s.weightCaps);
+  const controls = useLotteryStore((s) => s.controls);
+  const { togglePin, toggleExclude, applyCap } = useLotteryActions();
   const off = isListed(excluded, artist);
   const pin = isListed(pinned, artist);
   const cap = weightCaps[artist.key];

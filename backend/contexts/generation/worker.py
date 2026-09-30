@@ -57,14 +57,12 @@ def run_job(svc: GenerationService, job_id: str) -> None:
                 step = chunk.get("step_ix")
                 text = _progress_text(sample, step, steps, n_samples)
                 raw = decode_image_b64(image)
-                rec = svc.store_image(raw)
-                digest = rec["blobHash"]
-                svc.mutate_job(job_id, lambda j, d=digest, s=sample, st=step, t=text: j.preview(s, st, d, t))
+                url = svc.write_preview(job_id, sample, raw)
                 svc.sse.emit(
                     {
                         "type": "preview",
                         "id": job_id,
-                        "url": rec["url"],
+                        "url": url,
                         "step": step,
                         "sample": sample,
                         "text": text,
@@ -100,6 +98,7 @@ def run_job(svc: GenerationService, job_id: str) -> None:
         else:
             svc.mutate_job(job_id, lambda j: j.fail(str(exc) or "生图失败", now_ms()))
     finally:
+        svc.clear_previews(job_id)
         if handle:
             resp, client = handle
             try:

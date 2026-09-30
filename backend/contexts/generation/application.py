@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import queue
 import threading
+import time
+from pathlib import Path
 from typing import Any, Callable
 
 from contexts.gallery.application import GalleryService
@@ -21,6 +24,7 @@ class SseHub:
     def __init__(self):
         self._lock = threading.Lock()
         self._subs: list[queue.Queue] = []
+        self._async: list[tuple[asyncio.AbstractEventLoop, asyncio.Queue]] = []
 
     def subscribe(self) -> queue.Queue:
         q: queue.Queue = queue.Queue()
@@ -33,11 +37,25 @@ class SseHub:
             if q in self._subs:
                 self._subs.remove(q)
 
+    def subscribe_async(self) -> asyncio.Queue:
+        loop = asyncio.get_running_loop()
+        q: asyncio.Queue = asyncio.Queue()
+        with self._lock:
+            self._async.append((loop, q))
+        return q
+
+    def unsubscribe_async(self, q: asyncio.Queue) -> None:
+        with self._lock:
+            self._async = [(loop, item) for loop, item in self._async if item is not q]
+
     def emit(self, payload: dict[str, Any]) -> None:
         with self._lock:
             subs = list(self._subs)
+            asyncs = list(self._async)
         for q in subs:
             q.put(payload)
+        for loop, q in asyncs:
+            loop.call_soon_threadsafe(q.put_nowait, payload)
 
 
 class GenerationService:
@@ -61,20 +79,43 @@ class GenerationService:
         self.work_queue: queue.Queue[str] = queue.Queue()
         self._cancel = set()
         self._lock = threading.Lock()
+        self._status_cache: dict[str, Any] | None = None
+        self._status_at = 0.0
 
     def token_status(self) -> dict[str, Any]:
+        now = time.monotonic()
+        if self._status_cache is not None and now - self._status_at < 45:
+            return self._status_cache
         token = self.vault.load()
         out: dict[str, Any] = {"configured": bool(token), "hint": token_hint(token) if token else "", "subscription": None}
-        if not token:
-            return out
-        try:
-            out["subscription"] = self.gateway.fetch_subscription(token)
-        except NaiError as exc:
-            out["error"] = exc.message
-            out["errorStatus"] = exc.status
+        if token:
+            try:
+                out["subscription"] = self.gateway.fetch_subscription(token)
+            except NaiError as exc:
+                out["error"] = exc.message
+                out["errorStatus"] = exc.status
+        self._status_cache = out
+        self._status_at = now
         return out
 
+    def preview_path(self, job_id: str, sample: int) -> Path:
+        folder = self.blobs.root.parent / "previews"
+        folder.mkdir(parents=True, exist_ok=True)
+        return folder / f"{job_id}-{int(sample)}.png"
+
+    def write_preview(self, job_id: str, sample: int, data: bytes) -> str:
+        self.preview_path(job_id, sample).write_bytes(data)
+        return f"/api/nai/jobs/{job_id}/preview?sample={int(sample)}"
+
+    def clear_previews(self, job_id: str) -> None:
+        folder = self.blobs.root.parent / "previews"
+        if not folder.is_dir():
+            return
+        for path in folder.glob(f"{job_id}-*.png"):
+            path.unlink(missing_ok=True)
+
     def set_token(self, token: str) -> dict[str, Any]:
+        self._status_cache = None
         token = (token or "").strip()
         if not token:
             raise DomainError("Token 不能为空")
@@ -87,6 +128,7 @@ class GenerationService:
         return self.token_status()
 
     def clear_token(self) -> dict[str, Any]:
+        self._status_cache = None
         self.vault.save("")
         from contexts.identity.domain import Credential
 

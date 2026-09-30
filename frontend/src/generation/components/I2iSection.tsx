@@ -1,8 +1,10 @@
-import { useStudio } from "@/state";
+import { useStudioActions, useStudioStore } from "@/state";
 import { IconCrop, IconImage, IconPencil } from "./icons";
 
 export function I2iSection() {
-  const { i2iOpen, setI2iOpen, soon } = useStudio();
+  const i2iOpen = useStudioStore((s) => s.i2iOpen);
+  const setI2iOpen = useStudioStore((s) => s.setI2iOpen);
+  const soon = useStudioActions().soon;
   return (
     <section>
       <div className="sec-label">参考图</div>

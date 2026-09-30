@@ -1,11 +1,15 @@
 import { SAMPLER_LABEL } from "@/data/studio";
-import { closeStudioMenus, useStudio } from "@/state";
+import { closeStudioMenus, useStudioActions, useStudioStore } from "@/state";
 
 const PRIMARY = "k_euler_ancestral";
 const REST = ["k_euler", "k_dpmpp_2s_ancestral", "k_dpmpp_2m_sde", "k_dpmpp_2m", "k_dpmpp_sde"];
 
 export function SamplerPop() {
-  const { pop, popPos, form, patch } = useStudio();
+  const pop = useStudioStore((s) => s.pop);
+  const popPos = useStudioStore((s) => s.popPos);
+  const sampler = useStudioStore((s) => s.form.sampler);
+  const patch = useStudioActions().patch;
+  const form = { sampler };
   const open = pop === "sampler";
   return (
     <div

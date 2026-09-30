@@ -1,9 +1,14 @@
 import { PRESET_LABEL } from "@/data/studio";
-import { useStudio } from "@/state";
+import { useShallow } from "zustand/react/shallow";
+import { useStudioActions, useStudioStore } from "@/state";
 import { IconChevron, IconLand, IconPort, IconSquare } from "./icons";
 
 export function ImageSettings() {
-  const { form, sizeLabel, setSize, patch, openDd, setOpenDd } = useStudio();
+  const form = useStudioStore(useShallow((s) => ({ preset: s.form.preset, aspect: s.form.aspect, width: s.form.width, height: s.form.height, nSamples: s.form.nSamples })));
+  const openDd = useStudioStore((s) => s.openDd);
+  const setOpenDd = useStudioStore((s) => s.setOpenDd);
+  const { setSize, patch } = useStudioActions();
+  const sizeLabel = `${form.width} × ${form.height}`;
   return (
     <section>
       <div className="sec-label">图像设置</div>

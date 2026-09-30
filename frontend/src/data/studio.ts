@@ -165,7 +165,7 @@ function lerpRgb(a: number[], b: number[], t: number) {
   return `rgb(${Math.round(a[0] + (b[0] - a[0]) * t)},${Math.round(a[1] + (b[1] - a[1]) * t)},${Math.round(a[2] + (b[2] - a[2]) * t)})`;
 }
 
-function weightStyle(n: number) {
+export function weightStyle(n: number) {
   if (n >= 1) {
     const t = clamp01((n - 1) / 2);
     return lerpRgb([255, 228, 222], [244, 168, 156], t);
@@ -181,9 +181,16 @@ export function highlight(text: string) {
   });
 }
 
+/** NAI V5 的 token 总上限（进度条填满的位置，与官方界面的 Max total tokens 一致）。 */
+export const TOKEN_LIMIT = 1471;
+
+/** 只估算这一个输入框自己的 token 数，不含其他输入框。 */
+export function estimateTokens(text: string) {
+  return Math.round((text || "").length / 3.2);
+}
+
 export function tokenFillPercent(text: string) {
-  const n = Math.round((text || "").length / 3.2);
-  return Math.min(100, (n / 225) * 100);
+  return Math.min(100, (estimateTokens(text) / TOKEN_LIMIT) * 100);
 }
 
 export function clipPrompt(s: string, n = 16) {

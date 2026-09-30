@@ -1,11 +1,17 @@
 import { copyText } from "@/data";
 import { QUALITY_LABEL, UC } from "@/data/studio";
-import { pushToast, useStudio } from "@/state";
+import { useShallow } from "zustand/react/shallow";
+import { pushToast, useStudioActions, useStudioStore } from "@/state";
 import { IconChevron, IconCopy, IconX } from "./icons";
 import { PromptWell, TokenBar } from "./PromptWell";
 
 export function PromptCard() {
-  const { form, promptTab, setPromptTab, patch, openDd, setOpenDd } = useStudio();
+  const form = useStudioStore(useShallow((s) => ({ prompt: s.form.prompt, uc: s.form.uc, straightAlpha: s.form.straightAlpha, quality: s.form.quality })));
+  const promptTab = useStudioStore((s) => s.promptTab);
+  const openDd = useStudioStore((s) => s.openDd);
+  const setPromptTab = useStudioStore((s) => s.setPromptTab);
+  const setOpenDd = useStudioStore((s) => s.setOpenDd);
+  const patch = useStudioActions().patch;
   const active = promptTab === "uc" ? form.uc : form.prompt;
 
   return (
@@ -30,8 +36,11 @@ export function PromptCard() {
         </button>
       </div>
       <div className="prompt-box">
-        <PromptWell value={form.prompt} onChange={(v) => patch({ prompt: v })} placeholder="画师串、场景、画质、自然语言…" hidden={promptTab !== "base"} />
-        <PromptWell value={form.uc} onChange={(v) => patch({ uc: v })} placeholder="Negative / UC" hidden={promptTab !== "uc"} />
+        {promptTab === "uc" ? (
+          <PromptWell value={form.uc} onChange={(v) => patch({ uc: v })} placeholder="Negative / UC" />
+        ) : (
+          <PromptWell value={form.prompt} onChange={(v) => patch({ prompt: v })} placeholder="画师串、场景、画质、自然语言…" />
+        )}
         <div className="prompt-tools" hidden={promptTab !== "base"}>
           <button
             className={`chip${form.straightAlpha ? " on" : ""}`}
@@ -69,7 +78,7 @@ export function PromptCard() {
             </button>
           </div>
         </div>
-        <TokenBar text={active} />
+        <TokenBar text={active} label={promptTab === "uc" ? "负面提示" : "主体提示词"} />
       </div>
     </section>
   );

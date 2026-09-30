@@ -1,5 +1,5 @@
 import { clipPrompt, inferGender } from "@/data";
-import { openStudioPop, pushToast, useStudio } from "@/state";
+import { openStudioPop, pushToast, useStudioActions, useStudioStore } from "@/state";
 import {
   Icon1x,
   Icon4x,
@@ -16,20 +16,20 @@ import {
 } from "./icons";
 
 export function StudioStage() {
-  const {
-    form,
-    sizeLabel,
-    previewUrl,
-    hasPreview,
-    directing,
-    current,
-    activeChar,
-    setActiveChar,
-    mutateChar,
-    confirmPositions,
-    deleteCurrent,
-    soon,
-  } = useStudio();
+  const directing = useStudioStore((s) => s.directing);
+  const activeChar = useStudioStore((s) => s.activeChar);
+  const setActiveChar = useStudioStore((s) => s.setActiveChar);
+  const characters = useStudioStore((s) => s.form.characters);
+  const width = useStudioStore((s) => s.form.width);
+  const height = useStudioStore((s) => s.form.height);
+  const seed = useStudioStore((s) => s.form.seed);
+  const current = useStudioStore((s) => s.session.find((x) => x.id === s.currentId) || null);
+  const liveUrl = useStudioStore((s) => s.liveUrl);
+  const { mutateChar, confirmPositions, deleteCurrent, soon } = useStudioActions();
+  const form = { characters, width, height, seed };
+  const previewUrl = current?.pending ? liveUrl || current.thumbUrl || "" : current?.url || current?.thumbUrl || "";
+  const hasPreview = Boolean(previewUrl);
+  const sizeLabel = `${form.width} × ${form.height}`;
   const watchingPending = Boolean(current?.pending);
   const w = !watchingPending && current?.width ? current.width : form.width;
   const h = !watchingPending && current?.height ? current.height : form.height;
@@ -108,19 +108,25 @@ export function StudioStage() {
                       e.preventDefault();
                       setActiveChar(i);
                       const pin = e.currentTarget;
+                      const box = document.getElementById("frame-box");
+                      const r = box?.getBoundingClientRect();
                       pin.setPointerCapture(e.pointerId);
+                      let nx = x;
+                      let ny = y;
                       const move = (ev: PointerEvent) => {
-                        const box = document.getElementById("frame-box");
-                        if (!box) return;
-                        const r = box.getBoundingClientRect();
-                        const nx = Math.min(0.98, Math.max(0.02, (ev.clientX - r.left) / r.width));
-                        const ny = Math.min(0.98, Math.max(0.02, (ev.clientY - r.top) / r.height));
-                        mutateChar(i, (c) => ({ ...c, x: Number(nx.toFixed(3)), y: Number(ny.toFixed(3)) }));
+                        if (!r || r.width < 1 || r.height < 1) return;
+                        nx = Math.min(0.98, Math.max(0.02, (ev.clientX - r.left) / r.width));
+                        ny = Math.min(0.98, Math.max(0.02, (ev.clientY - r.top) / r.height));
+                        pin.style.left = `${nx * 100}%`;
+                        pin.style.top = `${ny * 100}%`;
                       };
                       const up = () => {
                         pin.removeEventListener("pointermove", move);
                         pin.removeEventListener("pointerup", up);
+                        pin.removeEventListener("pointercancel", up);
+                        mutateChar(i, (c) => ({ ...c, x: Number(nx.toFixed(3)), y: Number(ny.toFixed(3)) }));
                       };
+                      pin.addEventListener("pointercancel", up);
                       pin.addEventListener("pointermove", move);
                       pin.addEventListener("pointerup", up);
                     }}

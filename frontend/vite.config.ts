@@ -30,11 +30,22 @@ export default defineConfig({
   },
   server: {
     host: "127.0.0.1",
-    port: 5173,
+    // 5173 常被本机 GameViewerServer 以 0.0.0.0 独占，绑定会报 EACCES。
+    port: 5174,
     proxy: {
       "/api": {
         target: "http://127.0.0.1:8766",
         changeOrigin: true,
+      },
+    },
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ["react", "react-dom"],
+          query: ["@tanstack/react-query"],
+        },
       },
     },
   },

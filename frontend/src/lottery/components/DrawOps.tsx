@@ -1,8 +1,9 @@
 import { jobProgressText } from "@/data";
 import type { DrawBatch, DrawResult, Job } from "@/data/types";
-import { useLottery } from "@/state";
+import { memo } from "react";
+import { useLotteryActions } from "@/state";
 
-export function DrawOps({
+export const DrawOps = memo(function DrawOps({
   batch,
   index,
   draw,
@@ -17,7 +18,7 @@ export function DrawOps({
   busy: boolean;
   hasShots: boolean;
 }) {
-  const { copyDraw, generateOne, removeDraw, editDraw } = useLottery();
+  const { copyDraw, generateOne, removeDraw, editDraw } = useLotteryActions();
   const genLabel = busy ? jobProgressText(job) || "排队中" : hasShots ? "重绘" : "生图";
   return (
     <span className="draw-ops">
@@ -35,4 +36,4 @@ export function DrawOps({
       </button>
     </span>
   );
-}
+});

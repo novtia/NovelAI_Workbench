@@ -1,8 +1,13 @@
-import { closeStudioMenus, useStudio } from "@/state";
+import { closeStudioMenus, useParamSetsQuery, useStudioActions, useStudioStore } from "@/state";
 import { IconPlus, IconTrash } from "./icons";
 
 export function ParamSetPop() {
-  const { pop, popPos, sets, currentSetId, selectParamSet, updateParamSet, deleteParamSet, setParamDialog } = useStudio();
+  const pop = useStudioStore((s) => s.pop);
+  const popPos = useStudioStore((s) => s.popPos);
+  const currentSetId = useStudioStore((s) => s.currentSetId);
+  const setParamDialog = useStudioStore((s) => s.setParamDialog);
+  const sets = useParamSetsQuery().data || [];
+  const { selectParamSet, updateParamSet, deleteParamSet } = useStudioActions();
   const open = pop === "paramSet";
   return (
     <div

@@ -1,6 +1,6 @@
 import { previewUrl } from "@/data";
 import type { LotShot } from "@/data/types";
-import { useLottery } from "@/state";
+import { useLotteryActions, useLotteryStore } from "@/state";
 import { IconCheck, IconCopyPlus } from "@/generation/components/icons";
 
 export function DrawShot({
@@ -14,17 +14,17 @@ export function DrawShot({
   shotIndex: number;
   item: LotShot;
 }) {
-  const { openSave, savedShots } = useLottery();
+  const savedShots = useLotteryStore((s) => s.savedShots);
+  const openSave = useLotteryActions().openSave;
   const url = previewUrl(item);
   const thumb = item.thumbUrl || url;
-  const src = url || thumb;
   const hash = item.blobHash || item.id || "";
   const saved = Boolean(item.savedId || item.albumId || (hash && savedShots[hash]));
 
   return (
     <div className="draw-shot">
-      <a href={src} target="_blank" rel="noopener noreferrer" title={saved ? "点击查看原图" : "点击查看原图（未入库）"}>
-        <img src={src} alt="" decoding="async" />
+      <a href={url || thumb} target="_blank" rel="noopener noreferrer" title={saved ? "点击查看原图" : "点击查看原图（未入库）"}>
+        <img src={thumb} alt="" decoding="async" loading="lazy" />
       </a>
       <button
         type="button"

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ApiError, generationApi } from "@/api";
 import {
@@ -32,15 +32,14 @@ import {
   triggerBlobDownload,
   fileFromShotRef,
 } from "@/data";
-import type { Artwork, GenderId, Job, StudioDownloadKind, StudioForm, StudioPop, StudioShot } from "@/data/types";
+import type { Album, Artwork, GenderId, Job, ParamSet, StudioDownloadKind, StudioForm, StudioPop, StudioShot } from "@/data/types";
 import type { StudioShotDrag } from "@/data/files";
 import { isImageFile, parseImageMeta } from "@/data/png";
 import { on } from "./bus";
-import { useCollection } from "./collection";
-import { useJobsQuery, useNaiStatusQuery, useParamSetsQuery } from "./queries";
+import { useJobsQuery } from "./queries";
 import { useLotteryStore } from "./lotteryStore";
 import { useSession } from "./session";
-import { useStudioStore } from "./studioStore";
+import { useStudioStore, type StudioState } from "./studioStore";
 import { pushToast } from "./toast";
 
 const notified = new Set<string>();
@@ -91,16 +90,11 @@ function ensurePending(job: Job) {
 
 function paintPending(job: Job) {
   const url = job.previewUrl || "";
-  if (!url) return;
+  if (!url || url.startsWith("data:")) return;
   const sample = Number(job.progress?.sample ?? 0);
   const s = useStudioStore.getState();
-  let changed = false;
-  const next = s.session.map((shot) => {
-    if (!shot.pending || shot.jobId !== job.id || shot.sample !== sample || shot.url === url) return shot;
-    changed = true;
-    return { ...shot, url, thumbUrl: url };
-  });
-  if (changed) s.setSession(next);
+  const watching = s.session.some((shot) => shot.pending && shot.jobId === job.id && shot.sample === sample && shot.id === s.currentId);
+  if (watching && s.liveUrl !== url) s.setLiveUrl(url);
 }
 
 function dropPending(jobId: string) {
@@ -234,7 +228,7 @@ export async function saveStudioCurrent(qc: ReturnType<typeof useQueryClient>, a
       s.setSession(s.session.map((x) => (x.id === cur.id ? { ...x, savedId: rec.id } : x)));
       await Promise.all([
         qc.invalidateQueries({ queryKey: queryKeys.albums }),
-        qc.invalidateQueries({ queryKey: queryKeys.itemsRoot }),
+        qc.invalidateQueries({ queryKey: queryKeys.items(albumId) }),
       ]);
       const name = albums.find((a) => a.id === albumId)?.name;
       pushToast(name ? `已保存到「${name}」` : "已保存到收藏夹", "ok");
@@ -250,8 +244,11 @@ export function useStudioSync() {
     useStudioStore.getState().setImportOpts(loadImportOpts());
     const unsub = useStudioStore.subscribe((s, prev) => {
       if (s.form !== prev.form) {
+        const text =
+          s.form.prompt !== prev.form.prompt || s.form.uc !== prev.form.uc || s.form.characters !== prev.form.characters;
         window.clearTimeout(draftTimer);
-        draftTimer = window.setTimeout(() => persistDraft(s.form), 240);
+        const save = () => persistDraft(useStudioStore.getState().form);
+        draftTimer = text ? window.setTimeout(save, 240) : window.setTimeout(save, 1200);
       }
       if (s.currentSetId !== prev.currentSetId) persistSelectedSet(s.currentSetId);
     });
@@ -331,19 +328,20 @@ export function useStudioSync() {
   }, [jobsQ.data]);
 }
 
-export function useStudio() {
-  const store = useStudioStore();
+/** 动作不订阅 store：调用时再读最新状态和 query 缓存，引用在 qc 不变时保持稳定。 */
+export function useStudioActions() {
   const qc = useQueryClient();
-  const statusQ = useNaiStatusQuery();
-  const setsQ = useParamSetsQuery();
-  const { albums, albumId } = useCollection();
-  const form = store.form;
-  const current = store.session.find((x) => x.id === store.currentId) || null;
-  const sets = setsQ.data || [];
-  const currentSet = sets.find((x) => x.id === store.currentSetId) || null;
-  const status = statusQ.data || null;
+  return useMemo(() => {
+    const store = new Proxy({} as StudioState, {
+      get(_target, key: string) {
+        return (useStudioStore.getState() as unknown as Record<string, unknown>)[key];
+      },
+    });
+    const setsNow = () => (qc.getQueryData(queryKeys.paramSets) as ParamSet[] | undefined) || [];
+    const albumsNow = () => (qc.getQueryData(queryKeys.albums) as Album[] | undefined) || [];
 
-  function setSize(preset?: StudioForm["preset"], aspect?: StudioForm["aspect"], custom?: [number, number]) {
+    function setSize(preset?: StudioForm["preset"], aspect?: StudioForm["aspect"], custom?: [number, number]) {
+      const form = store.form;
     store.setForm(applySizeToForm(form, preset, aspect, custom));
   }
 
@@ -361,6 +359,7 @@ export function useStudio() {
   }
 
   function addCharacter(g: GenderId) {
+    const form = store.form;
     if (form.characters.length >= MAX_CHARS) {
       pushToast(`最多 ${MAX_CHARS} 个角色框`, "warn");
       return;
@@ -378,12 +377,14 @@ export function useStudio() {
     store.setActiveChar(next.length - 1);
   }
 
-  function mutateChar(i: number, fn: (c: (typeof form.characters)[0]) => (typeof form.characters)[0] | null) {
+  function mutateChar(i: number, fn: (c: StudioForm["characters"][0]) => StudioForm["characters"][0] | null) {
+    const form = store.form;
     const next = form.characters.map((c, idx) => (idx === i ? fn(c) : c)).filter((c): c is NonNullable<typeof c> => c != null);
     store.patchForm({ characters: next });
   }
 
   async function generate() {
+    const form = store.form;
     if (store.busy) return;
     if (!form.prompt.trim() && form.quality === "off") {
       pushToast("先填主体 Prompt，或打开质量词", "warn");
@@ -411,10 +412,11 @@ export function useStudio() {
   }
 
   async function saveTo(id: string) {
-    await saveStudioCurrent(qc, id, albums);
+    await saveStudioCurrent(qc, id, albumsNow());
   }
 
   async function downloadCurrent(kind: StudioDownloadKind = "original") {
+    const current = currentShot();
     const src = current && !current.pending ? current.url || current.thumbUrl : "";
     if (!src) {
       pushToast("没有可下载的预览图", "warn");
@@ -436,6 +438,7 @@ export function useStudio() {
   }
 
   function deleteCurrent() {
+    const current = currentShot();
     if (!current) {
       pushToast("没有可删除的预览", "warn");
       return;
@@ -457,6 +460,7 @@ export function useStudio() {
   }
 
   function selectParamSet(id: string) {
+    const sets = setsNow();
     const item = sets.find((x) => x.id === id);
     if (!item) return;
     store.setCurrentSetId(item.id);
@@ -466,6 +470,8 @@ export function useStudio() {
   }
 
   async function updateParamSet() {
+    const form = store.form;
+    const currentSet = setsNow().find((x) => x.id === store.currentSetId) || null;
     if (!currentSet) {
       pushToast("请先选择预设", "warn");
       return;
@@ -477,6 +483,8 @@ export function useStudio() {
   }
 
   async function saveParamSet(name: string) {
+    const form = store.form;
+    const sets = setsNow();
     const trimmed = name.trim();
     if (!trimmed) return;
     if (sets.some((item) => item.name === trimmed)) {
@@ -492,6 +500,7 @@ export function useStudio() {
   }
 
   async function deleteParamSet(id: string) {
+    const sets = setsNow();
     const item = sets.find((x) => x.id === id);
     if (!item) return;
     if (!confirm(`删除预设「${item.name}」？`)) return;
@@ -571,17 +580,6 @@ export function useStudio() {
   }
 
   return {
-    ...store,
-    form,
-    current,
-    currentSet,
-    sets,
-    albums,
-    albumId,
-    status,
-    sizeLabel: `${form.width} × ${form.height}`,
-    previewUrl: current?.url || current?.thumbUrl || "",
-    hasPreview: Boolean(current?.url || current?.thumbUrl),
     setSize,
     patch,
     apply,
@@ -606,6 +604,7 @@ export function useStudio() {
     showShot,
     importMeta,
   };
+  }, [qc]);
 }
 
 async function openDroppedShot(shot: StudioShotDrag) {

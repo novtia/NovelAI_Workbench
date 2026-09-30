@@ -296,6 +296,7 @@ def _parse_error(resp: httpx.Response) -> NaiError:
 class NaiGateway:
     def __init__(self, vault: TokenVault):
         self.vault = vault
+        self._client = httpx.Client(timeout=20)
 
     def _headers(self, token: str, accept: str = "*/*") -> dict[str, str]:
         return {
@@ -309,8 +310,7 @@ class NaiGateway:
         token = token or self.vault.load()
         if not token:
             raise NaiError(401, "还没有配置 NovelAI Persistent API Token")
-        with httpx.Client(timeout=20) as client:
-            resp = client.get(f"{IMAGE_API}/user/subscription", headers=self._headers(token))
+        resp = self._client.get(f"{IMAGE_API}/user/subscription", headers=self._headers(token))
         if resp.status_code >= 400:
             raise _parse_error(resp)
         data = resp.json()

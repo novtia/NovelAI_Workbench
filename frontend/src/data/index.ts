@@ -15,6 +15,21 @@ export {
   uniqueArtistKeys,
 } from "./singleArtist";
 export type { ArtistColumn, ArtistSections, ArtistSpan, ArtistToken } from "./singleArtist";
+export {
+  WEIGHT_STEP,
+  applySuggestionText,
+  artistLibraryNames,
+  filterArtistNames,
+  findArtistCards,
+  formatArtistCard,
+  formatWeight,
+  joinPromptSegments,
+  parseWeightInput,
+  splitPromptSegments,
+  stepWeight,
+  suggestQueryFromSegment,
+} from "./artistCards";
+export type { ArtistCard, PromptSegment, SuggestQuery } from "./artistCards";
 export { isImageFile, makeThumb, parseImageMeta, reencodePngClean, sha256Hex, triggerBlobDownload } from "./png";
 export type { CharCaption, ImageMeta } from "./png";
 export {
@@ -52,7 +67,10 @@ export {
   inferGender,
   escapeHtml,
   highlight,
+  weightStyle,
   tokenFillPercent,
+  estimateTokens,
+  TOKEN_LIMIT,
   clipPrompt,
   cleanPromptText,
   defaultImportOpts,

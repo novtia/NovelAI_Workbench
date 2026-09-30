@@ -1,8 +1,13 @@
 import { formatTokenStatus, tokenDotClass } from "@/data";
-import { useStudio } from "@/state";
+import { useNaiStatusQuery, useStudioActions, useStudioStore } from "@/state";
 
 export function TokenPop() {
-  const { pop, popPos, status, tokenInput, setTokenInput, saveToken, clearToken } = useStudio();
+  const pop = useStudioStore((s) => s.pop);
+  const popPos = useStudioStore((s) => s.popPos);
+  const tokenInput = useStudioStore((s) => s.tokenInput);
+  const setTokenInput = useStudioStore((s) => s.setTokenInput);
+  const { saveToken, clearToken } = useStudioActions();
+  const status = useNaiStatusQuery().data || null;
   const open = pop === "token";
   const sub = status?.subscription;
   const detail = sub

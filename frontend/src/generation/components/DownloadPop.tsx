@@ -1,7 +1,9 @@
-import { closeStudioMenus, useStudio } from "@/state";
+import { closeStudioMenus, useStudioActions, useStudioStore } from "@/state";
 
 export function DownloadPop() {
-  const { pop, popPos, downloadCurrent } = useStudio();
+  const pop = useStudioStore((s) => s.pop);
+  const popPos = useStudioStore((s) => s.popPos);
+  const downloadCurrent = useStudioActions().downloadCurrent;
   const open = pop === "download";
   return (
     <div

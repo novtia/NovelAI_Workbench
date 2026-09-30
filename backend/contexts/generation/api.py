@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import json
-import queue
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 
 from contexts.generation.application import GenerationService
 from contexts.generation.nai_client import UC_PRESETS
@@ -30,7 +30,7 @@ def status(request: Request):
 async def save_token(request: Request):
     body = await request.json()
     try:
-        return _svc(request).set_token(str(body.get("token") or ""))
+        return await asyncio.to_thread(_svc(request).set_token, str(body.get("token") or ""))
     except DomainError as exc:
         return _err(exc)
 
@@ -49,7 +49,7 @@ def list_sets(request: Request):
 async def save_set(request: Request):
     body = await request.json()
     try:
-        item = _svc(request).save_param_set(str(body.get("name") or ""), body.get("form") or {})
+        item = await asyncio.to_thread(_svc(request).save_param_set, str(body.get("name") or ""), body.get("form") or {})
     except DomainError as exc:
         return _err(exc)
     return JSONResponse({"paramSet": item}, status_code=201)
@@ -59,7 +59,7 @@ async def save_set(request: Request):
 async def update_set(sid: str, request: Request):
     body = await request.json()
     try:
-        item = _svc(request).update_param_set(sid, body.get("form") or {})
+        item = await asyncio.to_thread(_svc(request).update_param_set, sid, body.get("form") or {})
     except DomainError as exc:
         return _err(exc)
     return {"paramSet": item}
@@ -80,7 +80,7 @@ async def create_job(request: Request):
     if not isinstance(body, dict):
         return JSONResponse({"error": "请求格式错误"}, status_code=400)
     try:
-        job = _svc(request).enqueue(body)
+        job = await asyncio.to_thread(_svc(request).enqueue, body)
     except DomainError as exc:
         return _err(exc)
     return JSONResponse({"job": job}, status_code=202)
@@ -92,22 +92,22 @@ def list_jobs(request: Request):
 
 
 @router.get("/api/nai/jobs/stream")
-def stream_jobs(request: Request):
+async def stream_jobs(request: Request):
     svc = _svc(request)
-    q = svc.sse.subscribe()
+    q = svc.sse.subscribe_async()
 
-    def gen():
+    async def gen():
         snapshot = json.dumps({"type": "snapshot", "jobs": svc.list_jobs()}, ensure_ascii=False)
         yield f"data: {snapshot}\n\n"
         try:
             while True:
                 try:
-                    payload = q.get(timeout=15)
+                    payload = await asyncio.wait_for(q.get(), timeout=15)
                     yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-                except queue.Empty:
+                except asyncio.TimeoutError:
                     yield ": ping\n\n"
         finally:
-            svc.sse.unsubscribe(q)
+            svc.sse.unsubscribe_async(q)
 
     return StreamingResponse(gen(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
@@ -118,6 +118,14 @@ def get_job(job_id: str, request: Request):
     if not job:
         return JSONResponse({"error": "任务不存在"}, status_code=404)
     return {"job": job}
+
+
+@router.get("/api/nai/jobs/{job_id}/preview")
+def job_preview(job_id: str, request: Request, sample: int = 0):
+    path = _svc(request).preview_path(job_id, sample)
+    if not path.is_file():
+        return JSONResponse({"error": "预览不存在"}, status_code=404)
+    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "no-store"})
 
 
 @router.post("/api/nai/jobs/{job_id}/cancel")
@@ -152,7 +160,7 @@ async def promote(request: Request):
     if not album_id or not resolved:
         return JSONResponse({"error": "缺少收藏夹或图片"}, status_code=400)
     try:
-        items = svc.promote(album_id, resolved, body.get("meta") or {})
+        items = await asyncio.to_thread(svc.promote, album_id, resolved, body.get("meta") or {})
     except DomainError as exc:
         return _err(exc)
     return JSONResponse({"items": items, "saved": True}, status_code=201)

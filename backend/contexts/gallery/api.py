@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 
 from contexts.gallery.application import GalleryService
 from kernel.blobs import BlobStore
@@ -36,7 +37,7 @@ def list_albums(request: Request):
 async def create_album(request: Request):
     body = await request.json()
     try:
-        album = _svc(request).create_album(str(body.get("name") or ""), body.get("id"))
+        album = await asyncio.to_thread(_svc(request).create_album, str(body.get("name") or ""), body.get("id"))
     except DomainError as exc:
         return _err(exc)
     return JSONResponse({"album": album}, status_code=201)
@@ -46,7 +47,7 @@ async def create_album(request: Request):
 async def rename_album(album_id: str, request: Request):
     body = await request.json()
     try:
-        album = _svc(request).rename_album(album_id, str(body.get("name") or ""))
+        album = await asyncio.to_thread(_svc(request).rename_album, album_id, str(body.get("name") or ""))
     except DomainError as exc:
         return _err(exc)
     return {"album": album}
@@ -71,9 +72,9 @@ def restore_album(album_id: str, request: Request):
 
 
 @router.get("/api/albums/{album_id}/items")
-def list_items(album_id: str, request: Request):
+def list_items(album_id: str, request: Request, limit: int | None = None, offset: int = 0):
     try:
-        items = _svc(request).list_items(album_id)
+        items = _svc(request).list_items(album_id, limit=limit, offset=offset)
     except DomainError as exc:
         return _err(exc)
     return {"items": items}
@@ -112,7 +113,7 @@ async def add_item(album_id: str, request: Request):
     data = await upload.read()
     thumb_bytes = await thumb.read() if thumb is not None and getattr(thumb, "filename", None) else None
     try:
-        item = _svc(request).import_bytes(album_id, data, meta, thumb=thumb_bytes)
+        item = await asyncio.to_thread(_svc(request).import_bytes, album_id, data, meta, thumb=thumb_bytes)
     except DomainError as exc:
         return _err(exc)
     return JSONResponse({"item": item}, status_code=201)
@@ -122,7 +123,7 @@ async def add_item(album_id: str, request: Request):
 async def move_item(item_id: str, request: Request):
     body = await request.json()
     try:
-        item = _svc(request).move_item(item_id, str(body.get("albumId") or ""))
+        item = await asyncio.to_thread(_svc(request).move_item, item_id, str(body.get("albumId") or ""))
     except DomainError as exc:
         return _err(exc)
     return {"item": item}
@@ -180,14 +181,22 @@ def get_blob(digest: str, request: Request):
 
 
 def _blob_response(blobs: BlobStore, digest: str, mime: str | None):
-    data = blobs.get(digest)
-    if data is None:
+    path = blobs.path_for(digest)
+    if not path.is_file():
         return JSONResponse({"error": "文件不存在"}, status_code=404)
-    media = mime or "application/octet-stream"
-    if data[:8] == b"\x89PNG\r\n\x1a\n":
-        media = "image/png"
-    elif data[:2] == b"\xff\xd8":
-        media = "image/jpeg"
-    elif data[:4] == b"RIFF":
-        media = "image/webp"
-    return Response(content=data, media_type=media, headers={"Cache-Control": "public, max-age=31536000, immutable"})
+    media = mime
+    if not media:
+        head = path.read_bytes()[:12]
+        if head[:8] == b"\x89PNG\r\n\x1a\n":
+            media = "image/png"
+        elif head[:2] == b"\xff\xd8":
+            media = "image/jpeg"
+        elif head[:4] == b"RIFF":
+            media = "image/webp"
+        else:
+            media = "application/octet-stream"
+    return FileResponse(
+        path,
+        media_type=media,
+        headers={"Cache-Control": "public, max-age=31536000, immutable", "ETag": f'"{digest}"'},
+    )

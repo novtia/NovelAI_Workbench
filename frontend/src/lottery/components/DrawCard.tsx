@@ -1,15 +1,29 @@
-import { chainText, drawIdOf, drawSum, resolveDrawVisual, sortedDrawRows, splitArtistTokens } from "@/data";
-import type { DrawBatch, DrawResult as DrawResultType, LotShot } from "@/data/types";
-import { useLottery } from "@/state";
+import { useSyncExternalStore } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { chainText, drawIdOf, drawSum, matchDrawJob, queryKeys, resolveDrawVisual, sortedDrawRows, splitArtistTokens } from "@/data";
+import type { DrawBatch, DrawResult as DrawResultType, Job, LotShot } from "@/data/types";
+import { useLotteryStore } from "@/state";
 import { ArtistHoverTrigger } from "@/ui/ArtistHover";
 import { DrawOps } from "./DrawOps";
 import { DrawResult } from "./DrawResult";
 import { WeightBar } from "./WeightBar";
 
+const EMPTY_JOBS: Job[] = [];
+
+function useDrawJob(batchId: string, drawId: string) {
+  const qc = useQueryClient();
+  return useSyncExternalStore(
+    (onChange) => qc.getQueryCache().subscribe(onChange),
+    () => matchDrawJob((qc.getQueryData(queryKeys.jobs) as Job[] | undefined) || EMPTY_JOBS, batchId, drawId) || null,
+  );
+}
+
 export function DrawCard({ batch, index, draw }: { batch: DrawBatch; index: number; draw: DrawResultType }) {
-  const { enqueuing, savedShots, jobs } = useLottery();
+  const enqueuing = useLotteryStore((s) => s.enqueuing);
+  const savedShots = useLotteryStore((s) => s.savedShots);
   const drawId = drawIdOf(batch.id, draw, index);
-  const resolved = resolveDrawVisual(jobs, batch.id, drawId, draw);
+  const jobHit = useDrawJob(batch.id, drawId);
+  const resolved = resolveDrawVisual(jobHit ? [jobHit] : [], batch.id, drawId, draw);
   const job = resolved.job;
   const busy = Boolean(resolved.active) || enqueuing.includes(`${batch.id}:${drawId}`);
   const rows = sortedDrawRows(draw);

@@ -1,10 +1,17 @@
 import { useEffect, useRef } from "react";
 import { persistImportOpts } from "@/data";
-import { closeMetaDialog, useStudio } from "@/state";
+import { closeMetaDialog, useStudioActions, useStudioStore } from "@/state";
 import { IconX } from "./icons";
 
 export function MetaImportDialog() {
-  const { metaOpen, metaUrl, metaStatus, metaError, metaForm, importOpts, setImportOpts, importMeta, soon } = useStudio();
+  const metaOpen = useStudioStore((s) => s.metaOpen);
+  const metaUrl = useStudioStore((s) => s.metaUrl);
+  const metaStatus = useStudioStore((s) => s.metaStatus);
+  const metaError = useStudioStore((s) => s.metaError);
+  const metaForm = useStudioStore((s) => s.metaForm);
+  const importOpts = useStudioStore((s) => s.importOpts);
+  const setImportOpts = useStudioStore((s) => s.setImportOpts);
+  const { importMeta, soon } = useStudioActions();
   const ref = useRef<HTMLDialogElement>(null);
   const ok = metaStatus === "ok" && Boolean(metaForm);
 

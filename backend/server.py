@@ -77,7 +77,7 @@ def main() -> None:
     print(f"OpenAPI：http://{HOST}:{port}/docs")
     print(f"数据目录：{ROOT / 'data'}")
     print("前端请另开终端：cd workbench/frontend && npm run dev")
-    print("浏览器打开：http://127.0.0.1:5173")
+    print("浏览器打开：http://127.0.0.1:5174")
     uvicorn.run(
         "app.main:app",
         host=HOST,

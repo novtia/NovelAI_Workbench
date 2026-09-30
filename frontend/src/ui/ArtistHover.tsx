@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { galleryApi } from "@/api";
-import { indexArtistPreviews, isSingleArtistAlbum, queryKeys, stripArtist, tagKey } from "@/data";
+import { artistLibraryNames, indexArtistPreviews, isSingleArtistAlbum, queryKeys, stripArtist, tagKey } from "@/data";
 import type { Artwork } from "@/data/types";
 import { useAlbumsQuery } from "@/state";
 
@@ -18,7 +18,6 @@ type ArtistHoverApi = {
   show: (name: string, rect: DOMRect) => void;
   delayHide: () => void;
   cancelHide: () => void;
-  active: HoverState | null;
 };
 
 const ArtistHoverContext = createContext<ArtistHoverApi | null>(null);
@@ -28,18 +27,42 @@ const noop: ArtistHoverApi = {
   show() {},
   delayHide() {},
   cancelHide() {},
-  active: null,
 };
 
-function usePreviewMap() {
+let libraryArmed = false;
+const libraryArmers = new Set<() => void>();
+
+/** 第一次进入提示词输入框时才去拉「单画师」库。 */
+export function armArtistLibrary() {
+  if (libraryArmed) return;
+  libraryArmed = true;
+  libraryArmers.forEach((fn) => fn());
+}
+
+const NO_ITEMS: Artwork[] = [];
+
+const NamesContext = createContext<string[]>([]);
+const PreviewsContext = createContext<Map<string, Artwork[]>>(new Map());
+
+function useSingleArtistItems(enabled: boolean) {
   const albumsQ = useAlbumsQuery();
   const album = (albumsQ.data || []).find(isSingleArtistAlbum);
   const itemsQ = useQuery({
     queryKey: queryKeys.items(album?.id || "_none_"),
     queryFn: () => galleryApi.listItems(album!.id),
-    enabled: Boolean(album?.id),
+    enabled: enabled && Boolean(album?.id),
   });
-  return useMemo(() => indexArtistPreviews(itemsQ.data || []), [itemsQ.data]);
+  return itemsQ.data || NO_ITEMS;
+}
+
+/** 画师 tagKey -> 测试图（最新在前），联想列表右侧预览用。 */
+export function useArtistPreviews() {
+  return useContext(PreviewsContext);
+}
+
+/** 「单画师」库里去重后的画师名，输入联想用。 */
+export function useArtistLibrary() {
+  return useContext(NamesContext);
 }
 
 export function useArtistHover() {
@@ -47,7 +70,18 @@ export function useArtistHover() {
 }
 
 export function ArtistHoverProvider({ children }: { children: ReactNode }) {
-  const previews = usePreviewMap();
+  const [armed, setArmed] = useState(libraryArmed);
+  useEffect(() => {
+    if (libraryArmed) return;
+    const fn = () => setArmed(true);
+    libraryArmers.add(fn);
+    return () => {
+      libraryArmers.delete(fn);
+    };
+  }, []);
+  const items = useSingleArtistItems(armed);
+  const names = useMemo(() => artistLibraryNames(items), [items]);
+  const previews = useMemo(() => indexArtistPreviews(items), [items]);
   const [state, setState] = useState<HoverState | null>(null);
   const hideTimer = useRef(0);
   const stateRef = useRef(state);
@@ -74,6 +108,14 @@ export function ArtistHoverProvider({ children }: { children: ReactNode }) {
         return;
       }
       setState((prev) => {
+        if (
+          prev?.key === key &&
+          Math.abs(prev.rect.left - rect.left) < 4 &&
+          Math.abs(prev.rect.top - rect.top) < 4 &&
+          Math.abs(prev.rect.width - rect.width) < 4
+        ) {
+          return prev;
+        }
         if (prev?.key === key) return { ...prev, name, rect, items };
         return { name, key, items, index: 0, rect };
       });
@@ -91,6 +133,7 @@ export function ArtistHoverProvider({ children }: { children: ReactNode }) {
   }, [previews]);
 
   useEffect(() => {
+    if (!state) return;
     function onWheel(e: WheelEvent) {
       const cur = stateRef.current;
       if (!cur || cur.items.length < 2) return;
@@ -103,20 +146,21 @@ export function ArtistHoverProvider({ children }: { children: ReactNode }) {
     }
     window.addEventListener("wheel", onWheel, { passive: false });
     return () => window.removeEventListener("wheel", onWheel);
-  }, []);
+  }, [Boolean(state)]);
 
   useEffect(() => () => window.clearTimeout(hideTimer.current), []);
 
-  const api = useMemo<ArtistHoverApi>(
-    () => ({ show, delayHide, cancelHide, active: state }),
-    [show, delayHide, cancelHide, state],
-  );
+  const api = useMemo<ArtistHoverApi>(() => ({ show, delayHide, cancelHide }), [show, delayHide, cancelHide]);
 
   return (
-    <ArtistHoverContext.Provider value={api}>
-      {children}
-      <ArtistHoverPop state={state} onEnter={cancelHide} onLeave={delayHide} />
-    </ArtistHoverContext.Provider>
+    <NamesContext.Provider value={names}>
+      <PreviewsContext.Provider value={previews}>
+        <ArtistHoverContext.Provider value={api}>
+          {children}
+          <ArtistHoverPop state={state} onEnter={cancelHide} onLeave={delayHide} />
+        </ArtistHoverContext.Provider>
+      </PreviewsContext.Provider>
+    </NamesContext.Provider>
   );
 }
 

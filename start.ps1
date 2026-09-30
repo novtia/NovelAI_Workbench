@@ -71,8 +71,9 @@ if (-not (Test-PortFree $Port)) {
     exit 1
 }
 
-if (-not (Test-PortFree 5173)) {
-    Write-Host "端口 5173 已被占用。Vite 会改用下一个空闲端口，请看前端窗口里的实际地址。"
+if (-not (Test-PortFree 5174)) {
+    Write-Host "端口 5174 已被占用。请先关掉占用它的程序，再重新启动。"
+    exit 1
 }
 
 if (-not (Test-Path -LiteralPath (Join-Path $FrontendDir "node_modules"))) {
@@ -94,7 +95,7 @@ $backend = Start-Process -FilePath "cmd.exe" `
     -WorkingDirectory $BackendDir `
     -PassThru
 
-Write-Host "启动前端  http://127.0.0.1:5173/"
+Write-Host "启动前端  http://127.0.0.1:5174/"
 $frontend = Start-Process -FilePath "cmd.exe" `
     -ArgumentList "/k", "title workbench-frontend && npm run dev" `
     -WorkingDirectory $FrontendDir `
@@ -102,7 +103,7 @@ $frontend = Start-Process -FilePath "cmd.exe" `
 
 Write-Host ""
 Write-Host "后端 PID $($backend.Id)    前端 PID $($frontend.Id)"
-Write-Host "浏览器打开 http://127.0.0.1:5173"
+Write-Host "浏览器打开 http://127.0.0.1:5174"
 Write-Host "在本窗口按 Ctrl+C，或关掉任一服务窗口，会停止前后端。"
 
 $reason = $null

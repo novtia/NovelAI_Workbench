@@ -1,9 +1,10 @@
 import { accountLabel } from "@/data";
-import { openStudioPop, pushToast, useStudio } from "@/state";
+import { openStudioPop, pushToast, useNaiStatusQuery, useStudioActions } from "@/state";
 import { IconBolt, IconMenu, IconPlus } from "./icons";
 
 export function StudioHeader() {
-  const { status, clearSession } = useStudio();
+  const status = useNaiStatusQuery().data || null;
+  const clearSession = useStudioActions().clearSession;
   return (
     <header className="left-head">
       <span className="brand" title="生图室">

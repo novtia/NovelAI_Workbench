@@ -1,9 +1,15 @@
 import { MODE_LABEL, MODEL_LABEL } from "@/data/studio";
-import { openStudioPop, useStudio } from "@/state";
+import { useShallow } from "zustand/react/shallow";
+import { openStudioPop, useParamSetsQuery, useStudioActions, useStudioStore } from "@/state";
 import { IconChevron, IconSpark } from "./icons";
 
 export function ModelRow() {
-  const { form, patch, openDd, setOpenDd, currentSet } = useStudio();
+  const form = useStudioStore(useShallow((s) => ({ model: s.form.model, v5Mode: s.form.v5Mode })));
+  const openDd = useStudioStore((s) => s.openDd);
+  const currentSetId = useStudioStore((s) => s.currentSetId);
+  const setOpenDd = useStudioStore((s) => s.setOpenDd);
+  const patch = useStudioActions().patch;
+  const currentSet = (useParamSetsQuery().data || []).find((x) => x.id === currentSetId) || null;
   return (
     <div className="model-row">
       <span className="k">模型</span>

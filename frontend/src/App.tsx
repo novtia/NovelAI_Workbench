@@ -6,7 +6,11 @@ import "./styles/app.css";
 import "./styles/studio.css";
 import "./styles/extra.css";
 
-const client = new QueryClient();
+const client = new QueryClient({
+  defaultOptions: {
+    queries: { staleTime: 30_000, refetchOnWindowFocus: false },
+  },
+});
 
 export function App() {
   return (

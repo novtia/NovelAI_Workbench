@@ -1,9 +1,12 @@
-import { openStudioPop, useStudio } from "@/state";
+import { openStudioPop, useStudioActions, useStudioStore } from "@/state";
 import { CharacterCard } from "./CharacterCard";
 import { IconGrid, IconPlus } from "./icons";
 
 export function CharacterList() {
-  const { form, setCustom, directing } = useStudio();
+  const characters = useStudioStore((s) => s.form.characters);
+  const useCoords = useStudioStore((s) => s.form.useCoords);
+  const directing = useStudioStore((s) => s.directing);
+  const setCustom = useStudioActions().setCustom;
   return (
     <section className="chars-area">
       <div className="card chars-head">
@@ -28,10 +31,10 @@ export function CharacterList() {
         <div className="pos-row">
           <span className="k">位置</span>
           <div className="seg-bar pos-bar">
-            <button className={!form.useCoords ? "on" : ""} type="button" onClick={() => setCustom(false)}>
+            <button className={!useCoords ? "on" : ""} type="button" onClick={() => setCustom(false)}>
               自动
             </button>
-            <button className={form.useCoords && !directing ? "on" : ""} type="button" onClick={() => setCustom(true, false)}>
+            <button className={useCoords && !directing ? "on" : ""} type="button" onClick={() => setCustom(true, false)}>
               自定义
             </button>
             <button className={directing ? "on" : ""} type="button" title="构图" onClick={() => setCustom(true, true)}>
@@ -41,7 +44,7 @@ export function CharacterList() {
         </div>
       </div>
       <div id="char-list">
-        {form.characters.map((ch, i) => (
+        {characters.map((ch, i) => (
           <CharacterCard key={i} ch={ch} index={i} />
         ))}
       </div>

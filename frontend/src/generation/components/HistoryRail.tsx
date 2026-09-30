@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { previewUrl, writeStudioShotDrag } from "@/data";
 import type { StudioShot } from "@/data/types";
-import { pushToast, useStudio } from "@/state";
+import { pushToast, useStudioActions, useStudioStore } from "@/state";
 import { IconHistPlay, IconTrash } from "./icons";
 
 function isLandscape(width?: number | null, height?: number | null) {
@@ -54,7 +54,10 @@ function HistoryThumb({ item, on, onShow }: { item: StudioShot; on: boolean; onS
 }
 
 export function HistoryRail() {
-  const { session, current, showShot, clearSession } = useStudio();
+  const session = useStudioStore((s) => s.session);
+  const currentId = useStudioStore((s) => s.currentId);
+  const { showShot, clearSession } = useStudioActions();
+  const current = session.find((x) => x.id === currentId) || null;
   return (
     <aside className="hist">
       <div className="hist-head">

@@ -83,6 +83,7 @@ CREATE TABLE IF NOT EXISTS projections_jobs (
     version INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_jobs_created ON projections_jobs(created_at);
+CREATE INDEX IF NOT EXISTS idx_jobs_source_status ON projections_jobs(source, status);
 
 CREATE TABLE IF NOT EXISTS projections_param_sets (
     id TEXT PRIMARY KEY,
@@ -106,6 +107,8 @@ CREATE TABLE IF NOT EXISTS projections_lottery_batches (
     deleted INTEGER NOT NULL DEFAULT 0,
     version INTEGER NOT NULL DEFAULT 0
 );
+CREATE INDEX IF NOT EXISTS idx_lottery_batches_live ON projections_lottery_batches(deleted, created_at);
+CREATE INDEX IF NOT EXISTS idx_param_sets_deleted ON projections_param_sets(deleted);
 
 CREATE TABLE IF NOT EXISTS projections_lottery_board (
     id TEXT PRIMARY KEY,
@@ -158,6 +161,9 @@ class EventStore:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA busy_timeout = 30000")
         conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("PRAGMA synchronous = NORMAL")
+        conn.execute("PRAGMA cache_size = -20000")
+        conn.execute("PRAGMA mmap_size = 67108864")
         return conn
 
     def latest_hash(self, conn: sqlite3.Connection | None = None) -> str:
@@ -186,6 +192,18 @@ class EventStore:
             rows = conn.execute(
                 "SELECT * FROM events WHERE aggregate_id = ? ORDER BY version",
                 (aggregate_id,),
+            ).fetchall()
+        return [self._row(r) for r in rows]
+
+    def has_events(self) -> bool:
+        with self.connect() as conn:
+            return conn.execute("SELECT 1 FROM events LIMIT 1").fetchone() is not None
+
+    def load_after(self, after: int, limit: int = 500) -> list[StoredEvent]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM events WHERE global_seq > ? ORDER BY global_seq LIMIT ?",
+                (after, limit),
             ).fetchall()
         return [self._row(r) for r in rows]
 

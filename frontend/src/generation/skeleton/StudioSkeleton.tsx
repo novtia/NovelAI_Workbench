@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { PANEL, clampPanel } from "@/data/studio";
 import { ACTIVITY_RAIL } from "@/ui/inkBackdrop";
-import { closeStudioMenus, useSession, useStudio } from "@/state";
+import { closeStudioMenus, useSession, useStudioStore } from "@/state";
 import { CharacterList } from "../components/CharacterList";
 import { GenderPop } from "../components/GenderPop";
 import { HistoryRail } from "../components/HistoryRail";
@@ -21,17 +21,21 @@ import { TokenPop } from "../components/TokenPop";
 
 export function StudioSkeleton() {
   const view = useSession((s) => s.view);
-  const { leftW, histW, setLeftW, setHistW, pop } = useStudio();
+  const leftW = useStudioStore((s) => s.leftW);
+  const histW = useStudioStore((s) => s.histW);
 
+  // 监听只随视图切换挂一次；宽度、弹层等一律用 getState() 取最新值，不进依赖
   useEffect(() => {
     function clamp() {
       const root = document.getElementById("view-studio");
       const w = root?.clientWidth || Math.max(0, window.innerWidth - ACTIVITY_RAIL);
-      const s = { leftW, histW };
+      const s = useStudioStore.getState();
       const maxLeft = Math.min(PANEL.leftMax, w - s.histW - PANEL.split - PANEL.centerMin);
       const maxHist = Math.min(PANEL.histMax, w - s.leftW - PANEL.split - PANEL.centerMin);
-      setLeftW(clampPanel(s.leftW, PANEL.leftMin, maxLeft));
-      setHistW(clampPanel(s.histW, PANEL.histMin, maxHist));
+      const nextLeft = clampPanel(s.leftW, PANEL.leftMin, maxLeft);
+      const nextHist = clampPanel(s.histW, PANEL.histMin, maxHist);
+      if (nextLeft !== s.leftW) s.setLeftW(nextLeft);
+      if (nextHist !== s.histW) s.setHistW(nextHist);
     }
     function onDoc(e: MouseEvent) {
       const t = e.target as HTMLElement | null;
@@ -51,7 +55,7 @@ export function StudioSkeleton() {
       window.removeEventListener("resize", clamp);
       document.removeEventListener("click", onDoc);
     };
-  }, [view, leftW, histW, setLeftW, setHistW, pop]);
+  }, [view]);
 
   return (
     <section

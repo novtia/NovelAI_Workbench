@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from contexts.gallery.api import router as gallery_router
 from contexts.gallery.application import GalleryService, ensure_default_album, ensure_single_artist_album
@@ -54,7 +55,7 @@ def create_app() -> FastAPI:
         sse,
     )
 
-    if not store.load_all() and (LEGACY / "gallery.db").is_file():
+    if not store.has_events() and (LEGACY / "gallery.db").is_file():
         migrate_legacy(gallery, LEGACY)
     ensure_default_album(gallery)
     ensure_single_artist_album(gallery)
@@ -62,9 +63,15 @@ def create_app() -> FastAPI:
     start_worker(generation)
 
     app = FastAPI(title="画师串工作台", version="0.1.0")
+    app.add_middleware(GZipMiddleware, minimum_size=1024)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
+        allow_origins=[
+            "http://127.0.0.1:5173",
+            "http://localhost:5173",
+            "http://127.0.0.1:5174",
+            "http://localhost:5174",
+        ],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

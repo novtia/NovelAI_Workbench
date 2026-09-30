@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 
@@ -25,7 +27,7 @@ def get_board(request: Request):
 @router.put("/api/lottery/board")
 async def put_board(request: Request):
     body = await request.json()
-    return {"board": _svc(request).configure(body)}
+    return {"board": await asyncio.to_thread(_svc(request).configure, body)}
 
 
 @router.get("/api/lottery/batches")
@@ -40,7 +42,7 @@ async def draw(request: Request):
     if not album_id:
         return JSONResponse({"error": "缺少收藏夹"}, status_code=400)
     try:
-        batch = _svc(request).draw(album_id, body)
+        batch = await asyncio.to_thread(_svc(request).draw, album_id, body)
     except DomainError as exc:
         return _err(exc)
     return JSONResponse({"batch": batch}, status_code=201)

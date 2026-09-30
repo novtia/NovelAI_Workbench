@@ -1,9 +1,10 @@
 import { jobIsActive } from "@/data";
 import type { DrawBatch } from "@/data/types";
-import { useLottery } from "@/state";
+import { useJobsQuery, useLotteryActions } from "@/state";
 
 export function BatchHead({ batch }: { batch: DrawBatch }) {
-  const { batchNumber, generateBatch, copyBatch, removeBatch, verify, lotteryJobs } = useLottery();
+  const { batchNumber, generateBatch, copyBatch, removeBatch, verify } = useLotteryActions();
+  const lotteryJobs = (useJobsQuery().data || []).filter((j) => j.source === "lottery" && jobIsActive(j));
   const n = batchNumber(batch.id);
   const params = batch.params || {};
   const min = Number(params.nMin ?? params.n ?? "");

@@ -40,6 +40,7 @@ import { useSession } from "./session";
 import { pushToast } from "./toast";
 
 let persistTimer = 0;
+let latestLottery: any = {};
 
 function drawKey(batchId: string, drawId: string) {
   return `${batchId}:${drawId}`;
@@ -56,6 +57,7 @@ export function useLotterySync() {
   const hydrate = useLotteryStore((s) => s.hydrate);
   const version = useLotteryStore((s) => s.boardVersion);
   const dirty = useLotteryStore((s) => s.dirty);
+  useEffect(() => () => window.clearTimeout(persistTimer), []);
   useEffect(() => {
     const board = boardQ.data;
     if (!board || dirty) return;
@@ -105,7 +107,7 @@ export async function saveLotteryPreview(qc: QueryClient, targetAlbumId: string,
       useLotteryStore.getState().markSaved(hash, { savedId: rec.id, albumId: rec.albumId || targetAlbumId });
       await Promise.all([
         qc.invalidateQueries({ queryKey: queryKeys.albums }),
-        qc.invalidateQueries({ queryKey: queryKeys.itemsRoot }),
+        qc.invalidateQueries({ queryKey: queryKeys.items(targetAlbumId) }),
       ]);
       const name = albums.find((a) => a.id === targetAlbumId)?.name;
       pushToast(name ? `已保存到「${name}」` : "已保存到收藏夹", "ok");
@@ -270,7 +272,7 @@ export function useLottery() {
     }
   }
 
-  return {
+  const api = {
     albumId,
     albums,
     pool,
@@ -456,4 +458,29 @@ export function useLottery() {
     drawJob: (batchId: string, drawId: string) => matchDrawJob(jobs, batchId, drawId),
     batchNumber: (id: string) => batchNumber(batches, id),
   };
+  latestLottery = api;
+  return api;
+}
+
+/** 行组件用：包装函数引用稳定，调用时转到最近一次 useLottery 渲染出的实现。 */
+export function useLotteryActions() {
+  return useMemo(
+    () => ({
+      togglePin: (key: string) => latestLottery.togglePin(key),
+      toggleExclude: (key: string) => latestLottery.toggleExclude(key),
+      applyCap: (key: string, raw: string) => latestLottery.applyCap(key, raw) as string,
+      copyDraw: (draw: DrawResult) => latestLottery.copyDraw(draw),
+      generateOne: (batch: DrawBatch, draw: DrawResult, i?: number) => latestLottery.generateOne(batch, draw, i),
+      removeDraw: (batch: DrawBatch, draw: DrawResult, index?: number) => latestLottery.removeDraw(batch, draw, index),
+      editDraw: (draw: DrawResult, job?: Job | null) => latestLottery.editDraw(draw, job),
+      openSave: (trigger: HTMLElement, ctx: { batchId: string; drawId: string; shotIndex: number; item: LotShot }) =>
+        latestLottery.openSave(trigger, ctx),
+      generateBatch: (batch: DrawBatch) => latestLottery.generateBatch(batch),
+      copyBatch: (batch: DrawBatch, n: number) => latestLottery.copyBatch(batch, n),
+      removeBatch: (batch: DrawBatch, n: number) => latestLottery.removeBatch(batch, n),
+      verify: (batch: DrawBatch) => latestLottery.verify(batch),
+      batchNumber: (id: string) => latestLottery.batchNumber(id) as number,
+    }),
+    [],
+  );
 }

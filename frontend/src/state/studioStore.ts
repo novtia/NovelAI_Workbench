@@ -4,7 +4,7 @@ import type { StudioForm, StudioImportOpts, StudioPop, StudioShot } from "@/data
 
 export type StudioDd = "model" | "mode" | "qtags" | "preset" | "";
 
-type StudioState = {
+export type StudioState = {
   form: StudioForm;
   promptTab: "base" | "uc";
   charTabs: Record<number, "prompt" | "uc">;

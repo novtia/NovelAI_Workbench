@@ -72,7 +72,7 @@ def make_thumb(data: bytes, max_size: int = 420) -> bytes | None:
         if image.mode not in ("RGB", "RGBA"):
             image = image.convert("RGBA" if "A" in image.getbands() else "RGB")
         out = io.BytesIO()
-        image.save(out, format="WEBP", quality=82, method=4)
+        image.save(out, format="WEBP", quality=82, method=0)
         return out.getvalue()
     except Exception:
         return None

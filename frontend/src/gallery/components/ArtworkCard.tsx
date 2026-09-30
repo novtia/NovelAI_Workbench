@@ -1,17 +1,18 @@
+import { memo } from "react";
 import { asMeta } from "@/data";
 import type { Artwork } from "@/data/types";
 import { useCommands, useSession } from "@/state";
 import { IconCopy, IconSparkles } from "@/generation/components/icons";
 
-export function ArtworkCard({ item, index }: { item: Artwork; index: number }) {
-  const openId = useSession((s) => s.openId);
+export const ArtworkCard = memo(function ArtworkCard({ item, index }: { item: Artwork; index: number }) {
+  const selected = useSession((s) => s.openId === item.id);
   const { openItemById, copyArtists, generateFrom } = useCommands();
   const unknown = asMeta(item.params).source === "none";
   const shown = (item.artists || []).slice(0, 3);
 
   return (
     <div
-      className={`card${unknown ? " unknown" : ""}${openId === item.id ? " sel" : ""}`}
+      className={`card${unknown ? " unknown" : ""}${selected ? " sel" : ""}`}
       style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
       data-id={item.id}
       role="button"
@@ -30,6 +31,7 @@ export function ArtworkCard({ item, index }: { item: Artwork; index: number }) {
           src={item.thumbUrl}
           alt={item.artistLine || item.name}
           loading="lazy"
+          decoding="async"
           width={item.width || undefined}
           height={item.height || undefined}
         />
@@ -77,4 +79,4 @@ export function ArtworkCard({ item, index }: { item: Artwork; index: number }) {
       </div>
     </div>
   );
-}
+});

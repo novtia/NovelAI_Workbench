@@ -130,7 +130,14 @@ class GalleryService:
             raise DomainError("收藏夹不存在", 404)
         return found
 
-    def list_items(self, album_id: str, *, include_deleted: bool = False) -> list[dict[str, Any]]:
+    def list_items(
+        self,
+        album_id: str,
+        *,
+        include_deleted: bool = False,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
         album = self.get_album(album_id)
         if not album or (album["deleted"] and not include_deleted):
             raise DomainError("收藏夹不存在", 404)
@@ -139,6 +146,9 @@ class GalleryService:
         if not include_deleted:
             sql += " AND deleted=0"
         sql += " ORDER BY added_at DESC"
+        if limit is not None:
+            sql += " LIMIT ? OFFSET ?"
+            args.extend([max(0, limit), max(0, offset)])
         with self.store.connect() as conn:
             rows = conn.execute(sql, args).fetchall()
         return [artwork_row(r) for r in rows]

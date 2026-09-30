@@ -1,13 +1,13 @@
+import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { galleryApi } from "@/api";
 import { ApiError } from "@/api/client";
 import { artistText, copyText, fileFromShotRef, importImageFiles, isSingleArtistAlbum, promptText, queryKeys, SINGLE_ARTIST_ALBUM_NAME, singleArtistImportError } from "@/data";
-import type { Artwork } from "@/data/types";
+import type { Album, Artwork } from "@/data/types";
 import type { StudioShotDrag } from "@/data/files";
 import { emit } from "./bus";
 import { useSession } from "./session";
 import { pushToast } from "./toast";
-import { useCollection } from "./collection";
 import { saveLotteryPreview } from "./lottery";
 import { useLotteryStore } from "./lotteryStore";
 import { saveStudioCurrent } from "./studio";
@@ -15,17 +15,29 @@ import { useStudioStore } from "./studioStore";
 
 export function useCommands() {
   const qc = useQueryClient();
-  const session = useSession();
-  const { albums, album, albumId, items, openItem } = useCollection();
+  return useMemo(() => {
+  const read = () => {
+    const session = useSession.getState();
+    const albums = (qc.getQueryData(queryKeys.albums) as Album[] | undefined) || [];
+    const albumId = session.albumId;
+    const album = albums.find((a) => a.id === albumId) || null;
+    const items = (qc.getQueryData(queryKeys.items(albumId)) as Artwork[] | undefined) || [];
+    const openItem = items.find((it) => it.id === session.openId) || null;
+    return { session, albums, album, albumId, items, openItem };
+  };
 
-  async function refresh() {
-    await Promise.all([
-      qc.invalidateQueries({ queryKey: queryKeys.albums }),
-      qc.invalidateQueries({ queryKey: queryKeys.itemsRoot }),
-    ]);
+  async function refresh(...ids: string[]) {
+    const targets = [...new Set(ids.filter(Boolean))];
+    if (!targets.length) {
+      const current = useSession.getState().albumId;
+      if (current) targets.push(current);
+    }
+    await qc.invalidateQueries({ queryKey: queryKeys.albums });
+    await Promise.all(targets.map((id) => qc.invalidateQueries({ queryKey: queryKeys.items(id) })));
   }
 
   async function importFiles(fileList: Iterable<File>) {
+    const { session, album, albumId } = read();
     if (!albumId) return;
     const list = [...fileList];
     if (!list.length) {
@@ -67,23 +79,24 @@ export function useCommands() {
   }
 
   async function copyArtists(item?: Artwork | null) {
-    const target = item || openItem;
+    const target = item || read().openItem;
     const text = target ? artistText(target) : "";
     pushToast((await copyText(text)) ? "已复制画师串" : "没有可复制的画师", text ? "ok" : "warn");
   }
 
   async function copyPrompt(item?: Artwork | null) {
-    const target = item || openItem;
+    const target = item || read().openItem;
     const text = target ? promptText(target) : "";
     pushToast((await copyText(text)) ? "已复制 Prompt" : "没有 Prompt", text ? "ok" : "warn");
   }
 
   function generateFrom(item: Artwork) {
     emit("generation.open", item);
-    session.setView("studio");
+    useSession.getState().setView("studio");
   }
 
   async function moveOpenItem(targetAlbumId: string) {
+    const { session, albums, openItem } = read();
     if (!openItem || !targetAlbumId || targetAlbumId === openItem.albumId) return;
     const target = albums.find((a) => a.id === targetAlbumId);
     const blocked = isSingleArtistAlbum(target) ? singleArtistImportError(openItem.artists) : null;
@@ -98,7 +111,7 @@ export function useCommands() {
       }
       await galleryApi.moveItem(openItem.id, targetAlbumId);
       session.setOpenId(null);
-      await refresh();
+      await refresh(openItem.albumId, targetAlbumId);
       const name = albums.find((a) => a.id === targetAlbumId)?.name || "";
       pushToast(`已移到「${name}」`, "ok");
     } catch (err) {
@@ -107,6 +120,7 @@ export function useCommands() {
   }
 
   async function deleteOpenItem() {
+    const { session, openItem } = read();
     if (!openItem) return;
     await galleryApi.deleteItem(openItem.id);
     session.setOpenId(null);
@@ -115,6 +129,7 @@ export function useCommands() {
   }
 
   async function clearCurrentAlbum() {
+    const { session, album, albumId, items } = read();
     if (!albumId || !items.length) return;
     const name = album?.name || "当前收藏夹";
     if (!confirm(`清空「${name}」中的 ${items.length} 张图片？`)) return;
@@ -125,6 +140,7 @@ export function useCommands() {
   }
 
   async function deleteAlbumById(id: string) {
+    const { albums } = read();
     if (albums.length <= 1) {
       pushToast("至少保留一个收藏夹", "warn");
       return;
@@ -155,6 +171,7 @@ export function useCommands() {
       pushToast("「单画师」为系统收藏夹名称", "warn");
       return;
     }
+    const { session, albums } = read();
     if (dialog.mode === "rename" && dialog.albumId && isSingleArtistAlbum(albums.find((a) => a.id === dialog.albumId))) {
       pushToast("系统收藏夹不可重命名", "warn");
       return;
@@ -198,9 +215,10 @@ export function useCommands() {
     clearCurrentAlbum,
     deleteAlbumById,
     submitDialog,
-    selectAlbum: session.setAlbumId,
-    openItemById: session.setOpenId,
-    closeInspector: () => session.setOpenId(null),
+    selectAlbum: (id: string) => useSession.getState().setAlbumId(id),
+    openItemById: (id: string | null) => useSession.getState().setOpenId(id),
+    closeInspector: () => useSession.getState().setOpenId(null),
     pickFiles: () => document.getElementById("wb-file-input")?.click(),
   };
+  }, [qc]);
 }

@@ -10,6 +10,25 @@ body.is-resizing img {
   pointer-events: none;
 }
 
+/* 拖拽分栏时：关掉过渡与毛玻璃，别让每帧都重算它们 */
+body.is-resizing *,
+body.is-resizing *::before,
+body.is-resizing *::after {
+  transition: none !important;
+}
+
+body.is-resizing .tbtn,
+body.is-resizing .overlay {
+  backdrop-filter: none;
+}
+
+/* 各栏的布局/样式变化不外溢，拖一栏不会牵动另外两栏的重排 */
+.st-app > .left,
+.st-app > .hist,
+.st-app > .stage {
+  contain: layout style;
+}
+
 .split.is-on::after {
   background: var(--zhu);
   height: 64px;

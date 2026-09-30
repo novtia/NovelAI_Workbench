@@ -1,11 +1,14 @@
-import { useEffect, useSyncExternalStore } from "react";
-import { GalleryView } from "../gallery";
-import { LotteryView } from "../lottery";
-import { JobsDock, QuotaBattery, StudioView } from "../generation";
+import { lazy, Suspense, useEffect, useRef, useSyncExternalStore } from "react";
+import { JobsDock, QuotaBattery } from "../generation";
 import { getToasts, subscribeToasts, useJobsQuery, useSession } from "@/state";
 import { jobIsActive } from "@/data";
 import { WorkbenchHosts } from "./hosts";
 import { bindInkDrop, installInkTextures, paintBackdrop } from "@/ui/inkBackdrop";
+import { bindInkFluid } from "@/ui/inkFluid";
+
+const GalleryView = lazy(() => import("../gallery").then((m) => ({ default: m.GalleryView })));
+const LotteryView = lazy(() => import("../lottery").then((m) => ({ default: m.LotteryView })));
+const StudioView = lazy(() => import("../generation/StudioView").then((m) => ({ default: m.StudioView })));
 
 const VIEWS = [
   { id: "gallery" as const, label: "图库", title: "图库", glyph: "藏" },
@@ -20,10 +23,23 @@ export function Workbench() {
   const jobsQ = useJobsQuery();
   const active = (jobsQ.data || []).filter((j) => jobIsActive(j));
 
+  const liveRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    document.documentElement.dataset.view = view;
+  }, [view]);
+
   useEffect(() => {
     installInkTextures();
     void paintBackdrop();
-    return bindInkDrop();
+    const offDrop = bindInkDrop();
+    const offLive = liveRef.current ? bindInkFluid(liveRef.current) : null;
+    // 活墨可用时，静态泼墨层不再显示（它只是兜底）
+    document.documentElement.classList.toggle("ink-gl", Boolean(offLive));
+    return () => {
+      document.documentElement.classList.remove("ink-gl");
+      offDrop();
+      offLive?.();
+    };
   }, []);
 
   return (
@@ -36,6 +52,8 @@ export function Workbench() {
       </svg>
       <div className="bg-paper" />
       <div className="bg-ink" id="bg-ink" />
+      <div className="bg-ink" id="bg-ink-b" />
+      <canvas className="bg-ink-live" ref={liveRef} aria-hidden="true" />
       <div className="bg-grain" />
       <div id="app" className="workbench">
         <nav className="activity" aria-label="视图切换">
@@ -65,9 +83,11 @@ export function Workbench() {
           </div>
         </nav>
         <main className="views">
-          <GalleryView />
-          <LotteryView />
-          <StudioView />
+          <Suspense fallback={null}>
+            {view === "gallery" ? <GalleryView /> : null}
+            {view === "lottery" ? <LotteryView /> : null}
+            {view === "studio" ? <StudioView /> : null}
+          </Suspense>
         </main>
         <WorkbenchHosts />
         <div className="toasts">

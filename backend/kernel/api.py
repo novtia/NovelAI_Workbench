@@ -20,10 +20,10 @@ def health():
 def stream_events(request: Request, aggregateId: str | None = None, after: int = 0):
     store: EventStore = request.app.state.store
     if aggregateId:
-        events = [e for e in store.load_stream(aggregateId) if e.global_seq > after]
+        events = [e for e in store.load_stream(aggregateId) if e.global_seq > after][-500:]
     else:
-        events = [e for e in store.load_all() if e.global_seq > after]
-    return {"events": [e.as_dict() for e in events[-500:]]}
+        events = store.load_after(after, 500)
+    return {"events": [e.as_dict() for e in events]}
 
 
 @router.post("/api/integrity/verify")

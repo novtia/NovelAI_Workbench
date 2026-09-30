@@ -1,8 +1,13 @@
-import { closeStudioMenus, useSession, useStudio } from "@/state";
+import { closeStudioMenus, useAlbumsQuery, useSession, useStudioActions, useStudioStore } from "@/state";
 import { IconPlus } from "./icons";
 
 export function StudioAlbumPop() {
-  const { pop, popPos, albums, albumId, saveTo, setPendingSave } = useStudio();
+  const pop = useStudioStore((s) => s.pop);
+  const popPos = useStudioStore((s) => s.popPos);
+  const setPendingSave = useStudioStore((s) => s.setPendingSave);
+  const albums = useAlbumsQuery().data || [];
+  const albumId = useSession((s) => s.albumId);
+  const saveTo = useStudioActions().saveTo;
   const openCreateDialog = useSession((s) => s.openCreateDialog);
   const open = pop === "album";
   return (

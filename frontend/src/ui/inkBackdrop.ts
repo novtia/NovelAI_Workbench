@@ -58,7 +58,8 @@ export function installInkTextures() {
   style.setProperty("--i-search", `url("${svgUri(SEARCH_ICON)}")`);
 }
 
-function inkScape(W: number, H: number) {
+/** a：纸面斑驳与暗角；b：泼墨（WebGL 活墨可用时由 inkFluid 取代，仅作兜底）。 */
+function inkScape(W: number, H: number, part: "a" | "b") {
   const sx = W / 1600;
   const sy = H / 1000;
   const s = Math.min(sx, sy);
@@ -94,22 +95,29 @@ function inkScape(W: number, H: number) {
       </filter>
       <radialGradient id="vig" cx="50%" cy="45%" r="75%"><stop offset=".55" stop-color="#6b5530" stop-opacity="0"/><stop offset="1" stop-color="#6b5530" stop-opacity=".14"/></radialGradient>
     </defs>
-    <rect width="${W}" height="${H}" filter="url(#mottle)"/>
-    <g filter="url(#tea)" fill="#8a6a36">${E(1400, 120, 200, 120, 0.06, -12)}${E(1300, 190, 70, 46, 0.04)}</g>
+    ${
+      part === "a"
+        ? `<rect width="${W}" height="${H}" filter="url(#mottle)"/>
+    <rect width="${W}" height="${H}" fill="url(#vig)"/>`
+        : `<g filter="url(#tea)" fill="#8a6a36">${E(1400, 120, 200, 120, 0.06, -12)}${E(1300, 190, 70, 46, 0.04)}</g>
     <g filter="url(#ink2)" fill="#1e2828">${E(90, 20, 340, 130, 0.045, 8)}${E(60, 30, 160, 60, 0.05)}</g>
     <g filter="url(#ink)" fill="#1a1d1b">
       ${E(1460, 1010, 600, 240, 0.07, -8)}${E(1500, 1010, 380, 150, 0.09, -6)}${E(1560, 990, 180, 90, 0.15)}${E(1600, 980, 80, 50, 0.12)}${E(1180, 1060, 260, 90, 0.05)}
-    </g>
-    <rect width="${W}" height="${H}" fill="url(#vig)"/>
+    </g>`
+    }
   </svg>`;
 }
 
 export async function paintBackdrop() {
   const W = Math.min(2400, window.innerWidth);
   const H = Math.min(1500, window.innerHeight);
-  const host = document.getElementById("bg-ink");
+  await Promise.all([paintLayer("bg-ink", "a", W, H), paintLayer("bg-ink-b", "b", W, H)]);
+}
+
+async function paintLayer(hostId: string, part: "a" | "b", W: number, H: number) {
+  const host = document.getElementById(hostId);
   if (!host) return;
-  const src = inkScape(W, H);
+  const src = inkScape(W, H, part);
   try {
     const img = new Image();
     img.src = svgUri(src);
@@ -123,7 +131,11 @@ export async function paintBackdrop() {
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
     if (!blob) throw new Error("blob");
-    host.style.backgroundImage = `url("${URL.createObjectURL(blob)}")`;
+    const next = URL.createObjectURL(blob);
+    const prev = host.dataset.blobUrl;
+    if (prev) URL.revokeObjectURL(prev);
+    host.dataset.blobUrl = next;
+    host.style.backgroundImage = `url("${next}")`;
   } catch {
     host.style.backgroundImage = `url("${svgUri(src)}")`;
   }
