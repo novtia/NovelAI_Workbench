@@ -17,6 +17,18 @@ export function isSingleArtistAlbum(album?: Pick<Album, "id" | "name" | "kind"> 
   return album.kind === "singleArtist" || album.id === SINGLE_ARTIST_ALBUM_ID || album.name === SINGLE_ARTIST_ALBUM_NAME;
 }
 
+/** 测试集只属于「单画师」收藏夹：当前收藏夹是别的，选中的测试集不生效（但仍记着）。 */
+export function activeTestSetId(album: Pick<Album, "id" | "name" | "kind"> | null | undefined, testSetId: string) {
+  return isSingleArtistAlbum(album) ? testSetId : "";
+}
+
+export const TEST_SET_ID_PREFIX = "testset-";
+
+export function isTestSetAlbum(album?: Pick<Album, "id" | "kind"> | null) {
+  if (!album) return false;
+  return album.kind === "testSet" || album.id.startsWith(TEST_SET_ID_PREFIX);
+}
+
 export function uniqueArtistKeys(artists: unknown) {
   const keys: string[] = [];
   const seen = new Set<string>();

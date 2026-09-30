@@ -120,7 +120,8 @@ export async function saveLotteryPreview(qc: QueryClient, targetAlbumId: string,
 export function useLottery() {
   const qc = useQueryClient();
   const albumId = useSession((s) => s.albumId);
-  const { albums, items } = useCollection();
+  // 抽奖池永远取当前收藏夹本身，不受图库里选中的测试集影响。
+  const { albums, baseItems: items } = useCollection();
   const batchesQ = useLotteryBatchesQuery();
   const setsQ = useParamSetsQuery();
   const jobsQ = useJobsQuery();

@@ -30,8 +30,24 @@ export function sourceLabel(source: unknown) {
 }
 
 export function charCaptions(item: Artwork): CharCaption[] {
-  const caps = asMeta(item.params).v4Prompt?.caption?.char_captions;
-  return Array.isArray(caps) ? caps : [];
+  const p = asMeta(item.params);
+  const caps = p.v4Prompt?.caption?.char_captions;
+  if (Array.isArray(caps) && caps.length) return caps;
+  // 没有 v4Prompt 的图（比如早期的测试图）：退回到参数里记的角色列表。
+  const raw = (item.params || {}).characters;
+  if (!Array.isArray(raw)) return [];
+  const out: CharCaption[] = [];
+  for (const c of raw as Array<{ prompt?: unknown; center?: { x?: number; y?: number }; x?: number; y?: number }>) {
+    const text = String(c?.prompt || "").trim();
+    if (!text) continue;
+    const x = c.center?.x ?? c.x;
+    const y = c.center?.y ?? c.y;
+    out.push({
+      char_caption: text,
+      centers: x != null && y != null ? [{ x: Number(x), y: Number(y) }] : undefined,
+    });
+  }
+  return out;
 }
 
 export async function copyText(text: string) {

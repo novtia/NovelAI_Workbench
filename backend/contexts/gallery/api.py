@@ -43,6 +43,61 @@ async def create_album(request: Request):
     return JSONResponse({"album": album}, status_code=201)
 
 
+@router.get("/api/gallery/view")
+def get_view(request: Request):
+    return {"view": _svc(request).view()}
+
+
+@router.put("/api/gallery/view")
+async def put_view(request: Request):
+    body = await request.json()
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "参数格式错误"}, status_code=400)
+    try:
+        view = await asyncio.to_thread(_svc(request).select_view, body)
+    except DomainError as exc:
+        return _err(exc)
+    return {"view": view}
+
+
+@router.get("/api/artist-basket")
+def get_basket(request: Request):
+    return {"artists": _svc(request).basket()}
+
+
+@router.post("/api/artist-basket")
+async def add_basket(request: Request):
+    body = await request.json()
+    names = body.get("names") if isinstance(body, dict) else None
+    try:
+        artists = await asyncio.to_thread(_svc(request).basket_add, names if names is not None else [])
+    except DomainError as exc:
+        return _err(exc)
+    return {"artists": artists}
+
+
+@router.delete("/api/artist-basket/{key:path}")
+async def remove_basket(key: str, request: Request):
+    artists = await asyncio.to_thread(_svc(request).basket_remove, key)
+    return {"artists": artists}
+
+
+@router.delete("/api/artist-basket")
+async def clear_basket(request: Request):
+    artists = await asyncio.to_thread(_svc(request).basket_clear)
+    return {"artists": artists}
+
+
+@router.post("/api/test-sets")
+async def create_test_set(request: Request):
+    body = await request.json()
+    try:
+        album = await asyncio.to_thread(_svc(request).create_test_set, str(body.get("name") or ""))
+    except DomainError as exc:
+        return _err(exc)
+    return JSONResponse({"album": album}, status_code=201)
+
+
 @router.patch("/api/albums/{album_id}")
 async def rename_album(album_id: str, request: Request):
     body = await request.json()

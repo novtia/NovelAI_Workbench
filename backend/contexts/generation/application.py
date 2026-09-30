@@ -219,7 +219,12 @@ class GenerationService:
     def list_jobs(self) -> list[dict[str, Any]]:
         with self.store.connect() as conn:
             rows = conn.execute(
-                "SELECT * FROM projections_jobs ORDER BY created_at DESC LIMIT 80"
+                """
+                SELECT * FROM projections_jobs
+                WHERE status IN ('queued', 'running')
+                   OR id IN (SELECT id FROM projections_jobs ORDER BY created_at DESC LIMIT 80)
+                ORDER BY created_at DESC
+                """
             ).fetchall()
         return [self._job_row(r) for r in rows]
 
@@ -297,6 +302,47 @@ class GenerationService:
         if not items:
             raise DomainError("重复", 409)
         return items
+
+    def bind_test_set_items(
+        self,
+        source: str,
+        client: dict[str, Any] | None,
+        items: list[dict[str, Any]],
+        gen_meta: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """图库测试图任务完成时，把图自动绑定进对应测试集。返回新写入的图库条目。
+
+        gen_meta 是这次生图实际发给 NovelAI 的参数（含 v4Prompt / v4Negative / 角色 / 真实 seed），
+        写进图片元数据后，图片详情里才有角色信息。
+        """
+        client = client if isinstance(client, dict) else {}
+        set_id = str(client.get("testSetId") or "").strip()
+        if source != "gallery" or not set_id or not items:
+            return []
+        hashes = [str(it.get("blobHash") or "") for it in items if it.get("blobHash")]
+        if not hashes:
+            return []
+        form = client.get("form") if isinstance(client.get("form"), dict) else {}
+        artists = client.get("artists") if isinstance(client.get("artists"), list) else []
+        artist_line = str(client.get("artistLine") or "")
+        base_prompt = str(form.get("prompt") or "").strip()
+        prompt = f"{artist_line}, {base_prompt}" if artist_line and base_prompt else (artist_line or base_prompt)
+        used = gen_meta if isinstance(gen_meta, dict) else {}
+        meta = {
+            **form,
+            "prompt": prompt,
+            **used,
+            "name": "nai.png",
+            "artists": [str(a) for a in artists],
+            "artistLine": artist_line,
+            "source": "nai-v5",
+            "testSetId": set_id,
+            "testIndex": client.get("testIndex"),
+        }
+        try:
+            return self.promote(set_id, hashes, meta)
+        except DomainError:
+            return []
 
     def _param_row(self, row) -> dict[str, Any]:
         return {

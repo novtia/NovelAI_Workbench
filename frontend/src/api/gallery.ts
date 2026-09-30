@@ -1,5 +1,5 @@
 import { request } from "./client";
-import type { Album, Artwork } from "@/data/types";
+import type { Album, Artwork, BasketArtist } from "@/data/types";
 
 export async function listAlbums() {
   const data = await request<{ albums: Album[] }>("/api/albums");
@@ -8,6 +8,54 @@ export async function listAlbums() {
 
 export async function createAlbum(name: string) {
   const data = await request<{ album: Album }>("/api/albums", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+  return data.album;
+}
+
+export type GalleryView = { albumId: string; testSetId: string; presetId: string; version?: number };
+
+export async function getView() {
+  const data = await request<{ view: GalleryView }>("/api/gallery/view");
+  return data.view;
+}
+
+export async function putView(view: Partial<GalleryView>) {
+  const data = await request<{ view: GalleryView }>("/api/gallery/view", {
+    method: "PUT",
+    body: JSON.stringify(view),
+  });
+  return data.view;
+}
+
+export async function getBasket() {
+  const data = await request<{ artists: BasketArtist[] }>("/api/artist-basket");
+  return data.artists;
+}
+
+export async function addToBasket(names: string[]) {
+  const data = await request<{ artists: BasketArtist[] }>("/api/artist-basket", {
+    method: "POST",
+    body: JSON.stringify({ names }),
+  });
+  return data.artists;
+}
+
+export async function removeFromBasket(key: string) {
+  const data = await request<{ artists: BasketArtist[] }>(`/api/artist-basket/${encodeURIComponent(key)}`, {
+    method: "DELETE",
+  });
+  return data.artists;
+}
+
+export async function clearBasket() {
+  const data = await request<{ artists: BasketArtist[] }>("/api/artist-basket", { method: "DELETE" });
+  return data.artists;
+}
+
+export async function createTestSet(name: string) {
+  const data = await request<{ album: Album }>("/api/test-sets", {
     method: "POST",
     body: JSON.stringify({ name }),
   });

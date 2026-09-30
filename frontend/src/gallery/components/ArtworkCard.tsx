@@ -1,12 +1,15 @@
 import { memo } from "react";
 import { asMeta } from "@/data";
 import type { Artwork } from "@/data/types";
-import { useCommands, useSession } from "@/state";
+import { useBasketActions, useBasketHas, useCommands, useSession } from "@/state";
 import { IconCopy, IconSparkles } from "@/generation/components/icons";
 
 export const ArtworkCard = memo(function ArtworkCard({ item, index }: { item: Artwork; index: number }) {
   const selected = useSession((s) => s.openId === item.id);
   const { openItemById, copyArtists, generateFrom } = useCommands();
+  const hasArtists = (item.artists || []).length > 0;
+  const inBasket = useBasketHas(item.artists);
+  const { toggle: toggleBasket } = useBasketActions();
   const unknown = asMeta(item.params).source === "none";
   const shown = (item.artists || []).slice(0, 3);
 
@@ -49,6 +52,19 @@ export const ArtworkCard = memo(function ArtworkCard({ item, index }: { item: Ar
               <IconCopy />
               复制串
             </button>
+            {hasArtists && (
+              <button
+                type="button"
+                className={inBasket ? "in-basket" : undefined}
+                title={inBasket ? "已在画师串里，再点一次移出" : "把这张图的画师加入画师串"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleBasket(item.artists);
+                }}
+              >
+                {inBasket ? "已加入" : "加入串"}
+              </button>
+            )}
             <button
               type="button"
               title="用此参数生图"

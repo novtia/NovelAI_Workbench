@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from contexts.gallery.rules import strip_artist, tag_key
 from kernel.errors import DomainError
 from kernel.events import AggregateRoot
 
@@ -157,3 +158,76 @@ class Artwork(AggregateRoot):
 
     def _on_ArtworkRestored(self, payload: dict[str, Any]) -> None:
         self.deleted = False
+
+
+GALLERY_VIEW_ID = "gallery-view"
+
+
+class GalleryView(AggregateRoot):
+    """图库的全局视图选择：当前收藏夹、选中的测试集、测试生图预设。存在数据库里，刷新/换浏览器都不丢。"""
+
+    aggregate_type = "GalleryView"
+
+    def __init__(self, aggregate_id: str = GALLERY_VIEW_ID):
+        super().__init__(aggregate_id)
+        self.album_id = ""
+        self.test_set_id = ""
+        self.preset_id = ""
+
+    def select(self, album_id: str, test_set_id: str, preset_id: str):
+        if self.version > 0 and (self.album_id, self.test_set_id, self.preset_id) == (album_id, test_set_id, preset_id):
+            return
+        self.record(
+            "GalleryViewSelected",
+            {"albumId": album_id, "testSetId": test_set_id, "presetId": preset_id},
+        )
+
+    def _on_GalleryViewSelected(self, payload: dict[str, Any]) -> None:
+        self.album_id = str(payload.get("albumId") or "")
+        self.test_set_id = str(payload.get("testSetId") or "")
+        self.preset_id = str(payload.get("presetId") or "")
+
+
+ARTIST_BASKET_ID = "artist-basket"
+
+
+class ArtistBasket(AggregateRoot):
+    """画师串面板：收集的画师，不带权重（一律按默认 1），按加入顺序，去重。"""
+
+    aggregate_type = "ArtistBasket"
+
+    def __init__(self, aggregate_id: str = ARTIST_BASKET_ID):
+        super().__init__(aggregate_id)
+        self.keys: set[str] = set()
+
+    def add(self, names: list[Any], added_at: int):
+        fresh: list[dict[str, str]] = []
+        seen = set(self.keys)
+        for raw in names:
+            name = strip_artist(str(raw or ""))[:120]
+            key = tag_key(name)
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            fresh.append({"key": key, "name": name})
+        if fresh:
+            self.record("ArtistBasketAdded", {"items": fresh, "addedAt": added_at})
+
+    def remove(self, key: str):
+        key = tag_key(key)
+        if key in self.keys:
+            self.record("ArtistBasketRemoved", {"key": key})
+
+    def clear(self):
+        if self.keys:
+            self.record("ArtistBasketCleared", {})
+
+    def _on_ArtistBasketAdded(self, payload: dict[str, Any]) -> None:
+        for item in payload.get("items") or []:
+            self.keys.add(str(item.get("key") or ""))
+
+    def _on_ArtistBasketRemoved(self, payload: dict[str, Any]) -> None:
+        self.keys.discard(str(payload.get("key") or ""))
+
+    def _on_ArtistBasketCleared(self, payload: dict[str, Any]) -> None:
+        self.keys.clear()

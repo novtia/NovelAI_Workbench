@@ -229,9 +229,34 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border: 0; bord
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .g-title .count { font-family: var(--mono); font-size: 12px; color: var(--ink-3); padding-bottom: 4px; white-space: nowrap; }
+/* 单画师图库：测试集条与上方标题栏合成一个整体，只在最底下留一条分隔线，左右与标题、网格同为 32px */
+.g-toolbar.has-testbar { border-bottom: 0; padding-bottom: 16px; }
+.g-toolbar.has-testbar::after { display: none; }
+.g-testbar {
+  position: relative; display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px 20px; padding: 0 32px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.g-testbar::after {
+  content: ""; position: absolute; left: 32px; bottom: -2px; width: 90px; height: 4px; background: var(--stroke) center / 100% 100% no-repeat;
+}
+.tb-group { display: flex; align-items: flex-end; gap: 10px; }
+.tb-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tb-field > span { font-size: 11px; letter-spacing: .16em; color: var(--ink-3); }
+.tb-field select { height: 34px; width: 100%; }
+.tb-set { width: 260px; }
+.tb-preset { width: 200px; }
+.tb-ops { display: inline-flex; align-items: center; gap: 2px; height: 34px; }
+.tb-ops svg { width: 14px; height: 14px; }
+.tb-sep { width: 1px; height: 34px; background: var(--line-2); margin: 0 6px; }
+.tb-run { flex: none; height: 34px; }
+.tb-progress { font-family: var(--mono); font-size: 12px; color: var(--zhu); line-height: 34px; white-space: nowrap; }
+.tb-progress.is-warn { color: var(--ink-3); }
+.g-testbar .mini { height: 34px; }
 .g-scroll { flex: 1; overflow: auto; padding: 30px 32px 70px; }
-.grid { columns: 230px; column-gap: 28px; }
-.grid.compact { columns: 150px; column-gap: 14px; }
+/* 所有收藏夹都按行排：第 1 张在左上，向右依次排，排满再换行（不用 columns 瀑布流，它是先竖着填满一列） */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); column-gap: 28px; align-items: start; }
+.grid.compact { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); column-gap: 14px; }
+.grid[hidden] { display: none; }
 .grid .card {
   break-inside: avoid; margin: 0 0 30px; display: block; position: relative; cursor: pointer; outline: none;
   background: var(--paper-3); padding: 8px 8px 0;
@@ -433,6 +458,16 @@ pre.prompt {
 .draw-shot.is-live img { filter: blur(calc(var(--p, 1) * 14px)) grayscale(var(--p, 1)); transition: filter .2s; }
 .draw-shot.is-waiting img { opacity: .55; }
 .draw-job-badge { position: absolute; left: 8px; bottom: 8px; font-size: 10px; font-family: var(--mono); background: rgba(21, 20, 15, .82); color: var(--paper-3); padding: 2px 6px; }
+.grid .card.pending { cursor: default; content-visibility: visible; }
+.grid .card.pending:hover { transform: none; box-shadow: 0 0 0 1px var(--line), 0 16px 28px -20px rgba(40, 30, 10, .5); }
+.card.pending .thumb-wrap { min-height: 60px; }
+.card.pending .draw-shot { padding: 0; background: transparent; }
+.card.pending .pending-ph {
+  position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--mono); font-size: 11px; color: var(--ink-4);
+  letter-spacing: .12em; border: 1px dashed var(--line-3);
+}
+.card.pending.is-queued .pending-ph { opacity: .75; }
+.card.pending.is-error .pending-ph { color: var(--zhu); border-color: rgba(179, 38, 30, .45); }
 .draw-job { font-size: 12px; font-family: var(--mono); color: var(--ink-3); padding: 10px 12px; border: 1px dashed var(--line-3); }
 
 /* ---------- 生图室 ---------- */
@@ -516,6 +551,52 @@ pre.prompt {
 .artist-card .ac-w:focus { background: var(--paper-3); box-shadow: 0 0 0 1px var(--zhu); }
 .artist-card .ac-name { margin-left: 3px; border-bottom: 1px dotted var(--ink-4); cursor: help; }
 .artist-card .ac-name:hover { color: var(--zhu); border-bottom-color: var(--zhu); }
+
+/* ---------- 画师串抽屉 ---------- */
+.act-badge {
+  position: absolute; top: 4px; right: 4px; min-width: 16px; height: 16px; padding: 0 4px; display: grid; place-items: center;
+  border-radius: 8px; background: var(--zhu); color: #fff; font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: 0; line-height: 1;
+  box-shadow: 0 0 0 1.5px var(--paper-3);
+}
+/* 贴在活动栏「串」按钮右侧的弹窗，位置由 BasketPopover 用 left / bottom 内联设置；小箭头指向按钮。 */
+.basket-pop {
+  position: fixed; left: 92px; bottom: 90px; z-index: 100; width: 320px; max-height: 560px; display: flex; flex-direction: column;
+  background: var(--paper-3); box-shadow: 0 0 0 1px var(--line-2), 0 26px 54px -22px rgba(30, 20, 10, .5); animation: basketPopIn .2s var(--ease);
+  transform-origin: left bottom;
+}
+.basket-pop::before { content: ""; position: absolute; left: 0; top: 0; width: 22px; height: 2px; background: var(--zhu); }
+.basket-pop::after {
+  content: ""; position: absolute; left: -6px; bottom: var(--arrow-bottom, 30px); width: 12px; height: 12px;
+  background: var(--paper-3); transform: rotate(45deg); box-shadow: -1px 1px 0 var(--line-2);
+}
+@keyframes basketPopIn { from { opacity: 0; transform: translateX(-6px) scale(.98); } }
+.bd-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 16px 16px 12px; border-bottom: 1px solid var(--line); }
+.bd-head strong { font-family: var(--brush); font-size: 22px; font-weight: 400; letter-spacing: .12em; }
+.bd-count { font-family: var(--mono); font-size: 12px; color: var(--paper-3); background: var(--ink); border-radius: 9px; padding: 1px 7px; }
+.bd-close { margin-left: auto; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 2px; font-size: 18px; color: var(--ink-3); }
+.bd-close:hover { background: var(--ink); color: var(--paper-3); }
+.bd-body { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 14px; }
+.bd-cards { display: flex; flex-wrap: wrap; gap: 12px 8px; align-content: flex-start; }
+.basket-card { height: 30px; margin: 0; padding: 0 8px 0 3px; gap: 6px; font-size: 12px; background: var(--paper); }
+.basket-card .ac-name { margin-left: 0; cursor: pointer; }
+.basket-card .ac-name:active { color: var(--zhu); }
+.bc-thumb { width: 24px; height: 24px; flex: none; object-fit: cover; border-radius: 2px; background: var(--line); }
+.bc-thumb.empty { display: inline-block; }
+.bd-empty { padding: 48px 12px; text-align: center; color: var(--ink-4); letter-spacing: .12em; }
+.bd-empty p { margin: 0 0 10px; font-size: 14px; }
+.bd-empty small { display: block; font-size: 11px; line-height: 1.7; letter-spacing: .04em; }
+.bd-preview {
+  flex: none; max-height: 84px; overflow-y: auto; margin: 0 14px; padding: 8px 10px; font-family: var(--mono); font-size: 11px; line-height: 1.5;
+  color: var(--ink-3); background: var(--paper); box-shadow: inset 0 0 0 1px var(--line); overflow-wrap: anywhere; user-select: text;
+}
+.bd-foot { flex: none; display: flex; gap: 8px; padding: 12px 14px 16px; }
+.bd-foot button { height: 34px; padding: 0 14px; font-size: 12px; letter-spacing: .14em; border-radius: 2px; transition: .2s; }
+.bd-copy { flex: 1; background: var(--ink); color: var(--paper-3); }
+.bd-copy:hover:not(:disabled) { background: var(--zhu); }
+.bd-clear { box-shadow: inset 0 0 0 1px var(--line-2); color: var(--ink-3); }
+.bd-clear:hover:not(:disabled) { color: var(--zhu); box-shadow: inset 0 0 0 1px var(--zhu); }
+.bd-foot button:disabled { opacity: .4; cursor: not-allowed; }
+.qa button.in-basket { background: var(--zhu); border-color: var(--zhu); }
 .artist-suggest {
   position: fixed; z-index: 150; display: flex; align-items: stretch; background: var(--paper-3);
   box-shadow: 0 0 0 1px var(--line-2), 0 24px 44px -18px rgba(30, 20, 10, .55); animation: popIn .16s var(--ease);
@@ -876,6 +957,19 @@ dialog.modal input[type=text]:focus { border-bottom-color: var(--zhu); }
 .artist-hover-pop { position: fixed; z-index: 140; width: 220px; padding: 8px; background: var(--paper-3); box-shadow: 0 0 0 1px var(--line-2), 0 24px 44px -18px rgba(30, 20, 10, .55); animation: popIn .18s var(--ease); }
 .artist-hover-pop .cap { display: flex; justify-content: space-between; gap: 8px; font-family: var(--mono); font-size: 11px; padding: 2px 2px 8px; }
 .artist-hover-pop .idx { color: var(--zhu); }
+.artist-hover-pop .pop-img { position: relative; }
+.basket-add {
+  display: inline-grid; place-items: center; width: 16px; height: 16px; margin-left: 5px; padding: 0; vertical-align: middle; border-radius: 50%;
+  font-family: var(--mono); font-size: 11px; line-height: 1; color: var(--ink-3); box-shadow: inset 0 0 0 1px var(--line-2); cursor: pointer; transition: .15s;
+}
+.basket-add:hover { background: var(--ink); color: var(--paper-3); box-shadow: none; }
+.basket-add.on { background: var(--zhu); color: #fff; box-shadow: none; }
+.basket-add.on-image {
+  position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; margin: 0; font-size: 15px;
+  background: rgba(21, 20, 15, .72); color: var(--paper-3); box-shadow: none; backdrop-filter: blur(4px);
+}
+.basket-add.on-image:hover { background: var(--zhu); }
+.basket-add.on-image.on { background: var(--zhu); }
 .artist-hover-pop img { display: block; width: 100%; height: auto; max-height: 290px; object-fit: cover; }
 .demo-tab { position: fixed; right: 0; top: 50%; z-index: 110; transform: translateY(-50%); writing-mode: vertical-rl; padding: 12px 5px; background: var(--ink); color: var(--paper-3); font-size: 11px; letter-spacing: .4em; opacity: .55; transition: .2s; }
 .demo-tab:hover, .demo-tab.on { opacity: 1; background: var(--zhu); }

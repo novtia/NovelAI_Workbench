@@ -1,8 +1,21 @@
 import { useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { connectJobStream } from "@/api";
 import { applyJobToBatches, queryKeys } from "@/data";
 import type { DrawBatch, Job } from "@/data/types";
+
+const refreshTimers = new Map<string, number>();
+
+/** 连续完成多张图时合并刷新，避免每张都拉一次整个测试集。 */
+function scheduleTestSetRefresh(qc: QueryClient, setId: string) {
+  if (refreshTimers.has(setId)) return;
+  const timer = window.setTimeout(() => {
+    refreshTimers.delete(setId);
+    void qc.invalidateQueries({ queryKey: queryKeys.items(setId) });
+    void qc.invalidateQueries({ queryKey: queryKeys.albums });
+  }, 250);
+  refreshTimers.set(setId, timer);
+}
 
 export function useJobStream() {
   const qc = useQueryClient();
@@ -50,6 +63,11 @@ export function useJobStream() {
         });
         if (next.source === "lottery" && next.status === "done") {
           qc.setQueryData(queryKeys.lotteryBatches, (old: DrawBatch[] | undefined) => applyJobToBatches(old, next));
+        }
+        if (next.source === "gallery" && next.status === "done") {
+          // 后端在任务完成前已把图绑进测试集，这里只需刷新显示。
+          const setId = String(next.client?.testSetId || "");
+          if (setId) scheduleTestSetRefresh(qc, setId);
         }
       }
     });

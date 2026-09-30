@@ -1,7 +1,8 @@
 export { useSession } from "./session";
 export type { ViewId, AlbumDialogState, OverlayCopy, ImportProgress } from "./session";
-export { useAlbumsQuery, useItemsQuery, useJobsQuery, useNaiStatusQuery, useParamSetsQuery, useLotteryBatchesQuery, useLotteryBoardQuery } from "./queries";
+export { useAlbumsQuery, useTestSetsQuery, useItemsQuery, useJobsQuery, useNaiStatusQuery, useParamSetsQuery, useLotteryBatchesQuery, useLotteryBoardQuery } from "./queries";
 export { useCollection } from "./collection";
+export { useBasket, useBasketActions, useBasketHas, useBasketQuery } from "./basket";
 export { useCommands } from "./commands";
 export { useImportGestures } from "./gestures";
 export { WorkbenchProvider } from "./WorkbenchProvider";
@@ -10,5 +11,7 @@ export { on, emit } from "./bus";
 export { useLottery, useLotteryActions, useLotterySync, saveLotteryPreview } from "./lottery";
 export { useLotteryStore } from "./lotteryStore";
 export { useJobStream } from "./jobs";
+export { useTestRun } from "./testRun";
+export { useTestRunStore } from "./testRunStore";
 export { useStudioActions, useStudioSync, saveStudioCurrent, closeStudioMenus, openStudioPop, closeMetaDialog } from "./studio";
 export { useStudioStore } from "./studioStore";

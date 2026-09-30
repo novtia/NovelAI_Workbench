@@ -3,13 +3,16 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from contexts.gallery.domain import Album, Artwork
+from contexts.gallery.domain import ARTIST_BASKET_ID, GALLERY_VIEW_ID, Album, ArtistBasket, Artwork, GalleryView
 from contexts.gallery.projectors import album_row, artwork_row
 from contexts.gallery.rules import (
     SINGLE_ARTIST_ALBUM_ID,
     SINGLE_ARTIST_ALBUM_NAME,
     SINGLE_ARTIST_IMPORT_ERROR,
+    TEST_SET_ID_PREFIX,
     is_single_artist_album,
+    is_test_set_album,
+    is_test_set_id,
     unique_artist_keys,
 )
 from kernel.blobs import BlobStore, make_thumb, png_size, sniff_mime
@@ -53,7 +56,8 @@ class GalleryService:
     def active_album_count(self) -> int:
         with self.store.connect() as conn:
             return conn.execute(
-                "SELECT COUNT(*) FROM projections_albums WHERE deleted=0"
+                "SELECT COUNT(*) FROM projections_albums WHERE deleted=0 AND id NOT LIKE ?",
+                (f"{TEST_SET_ID_PREFIX}%",),
             ).fetchone()[0]
 
     def find_single_artist_album(self, *, include_deleted: bool = False) -> dict[str, Any] | None:
@@ -69,10 +73,89 @@ class GalleryService:
                 break
         return live or dead
 
-    def create_album(self, name: str, album_id: str | None = None, *, system: bool = False) -> dict[str, Any]:
+    def view(self) -> dict[str, Any]:
+        """图库全局视图选择（当前收藏夹 / 测试集 / 测试生图预设），已删除的收藏夹或测试集会被忽略。"""
+        with self.store.connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM projections_gallery_view WHERE id=?", (GALLERY_VIEW_ID,)
+            ).fetchone()
+        album_id = row["album_id"] if row else ""
+        test_set_id = row["test_set_id"] if row else ""
+        preset_id = row["preset_id"] if row else ""
+        album = self.get_album(album_id) if album_id else None
+        if not album or album["deleted"] or is_test_set_album(album):
+            album_id = ""
+        test_set = self.get_album(test_set_id) if test_set_id else None
+        if not test_set or test_set["deleted"] or not is_test_set_album(test_set):
+            test_set_id = ""
+        return {
+            "albumId": album_id,
+            "testSetId": test_set_id,
+            "presetId": preset_id,
+            "version": row["version"] if row else 0,
+        }
+
+    def select_view(self, data: dict[str, Any]) -> dict[str, Any]:
+        current = self.view()
+        album_id = str(data.get("albumId") if data.get("albumId") is not None else current["albumId"])
+        test_set_id = str(data.get("testSetId") if data.get("testSetId") is not None else current["testSetId"])
+        preset_id = str(data.get("presetId") if data.get("presetId") is not None else current["presetId"])
+        agg = self.uow.load(GalleryView, GALLERY_VIEW_ID)
+        agg.select(album_id, test_set_id, preset_id[:64])
+        self.uow.commit(agg)
+        return self.view()
+
+    def basket(self) -> list[dict[str, Any]]:
+        with self.store.connect() as conn:
+            rows = conn.execute(
+                "SELECT key, name, added_at FROM projections_artist_basket ORDER BY sort_order ASC"
+            ).fetchall()
+        return [{"key": r["key"], "name": r["name"], "addedAt": r["added_at"]} for r in rows]
+
+    def basket_add(self, names: list[Any]) -> list[dict[str, Any]]:
+        if not isinstance(names, list):
+            raise DomainError("names 必须是数组")
+        agg = self.uow.load(ArtistBasket, ARTIST_BASKET_ID)
+        agg.add(names, now_ms())
+        self.uow.commit(agg)
+        return self.basket()
+
+    def basket_remove(self, key: str) -> list[dict[str, Any]]:
+        agg = self.uow.load(ArtistBasket, ARTIST_BASKET_ID)
+        agg.remove(key)
+        self.uow.commit(agg)
+        return self.basket()
+
+    def basket_clear(self) -> list[dict[str, Any]]:
+        agg = self.uow.load(ArtistBasket, ARTIST_BASKET_ID)
+        agg.clear()
+        self.uow.commit(agg)
+        return self.basket()
+
+    def create_test_set(self, name: str) -> dict[str, Any]:
+        name = (name or "").strip()
+        if not name:
+            raise DomainError("测试集名称不能为空")
+        if name == SINGLE_ARTIST_ALBUM_NAME:
+            raise DomainError("「单画师」为系统收藏夹名称")
+        self._assert_test_set_name_free(name)
+        return self.create_album(name, f"{TEST_SET_ID_PREFIX}{new_id()}", test_set=True)
+
+    def _assert_test_set_name_free(self, name: str, *, except_id: str | None = None) -> None:
+        for album in self.list_albums():
+            if album["id"] == except_id or not is_test_set_album(album):
+                continue
+            if album["name"] == name:
+                raise DomainError("已有同名测试集", 409)
+
+    def create_album(
+        self, name: str, album_id: str | None = None, *, system: bool = False, test_set: bool = False
+    ) -> dict[str, Any]:
         name = (name or "").strip()
         album_id = album_id or new_id()
         if not ID_RE.fullmatch(album_id):
+            raise DomainError("无效的收藏夹 id")
+        if is_test_set_id(album_id) and not test_set:
             raise DomainError("无效的收藏夹 id")
         reserved = name == SINGLE_ARTIST_ALBUM_NAME or album_id == SINGLE_ARTIST_ALBUM_ID
         if reserved and not system:
@@ -98,6 +181,8 @@ class GalleryService:
         name = (name or "").strip()
         if name == SINGLE_ARTIST_ALBUM_NAME:
             raise DomainError("「单画师」为系统收藏夹名称")
+        if is_test_set_album(current):
+            self._assert_test_set_name_free(name, except_id=album_id)
         album = self.uow.load(Album, album_id)
         album.rename(name)
         self.uow.commit(album)
@@ -110,7 +195,7 @@ class GalleryService:
         current = self.get_album(album_id)
         if is_single_artist_album(current):
             raise DomainError("系统收藏夹不可删除")
-        if self.active_album_count() <= 1:
+        if not is_test_set_album(current) and self.active_album_count() <= 1:
             raise DomainError("至少保留一个收藏夹")
         album = self.uow.load(Album, album_id)
         album.delete()
@@ -221,7 +306,9 @@ class GalleryService:
         }
         art = self.uow.load(Artwork, item_id)
         art.import_(payload, command_id=command_id)
-        self.uow.commit(art, command_id=command_id or f"artwork.import:{blob_hash}:{album_id}")
+        # 幂等键带上图片 id：同一次请求重试不会重复写入；但删除 / 移走后再导入同一张图（新 id）必须能成功，
+        # 否则旧事件会让这次提交被当成重复而什么都不写，接口就报 500「导入失败」。
+        self.uow.commit(art, command_id=command_id or f"artwork.import:{item_id}:{blob_hash}:{album_id}")
         item = self.get_item(item_id)
         if not item:
             raise DomainError("导入失败", 500)
@@ -299,14 +386,14 @@ class GalleryService:
         return [r["id"] for r in rows]
 
     def _assert_single_artist_meta(self, album: dict[str, Any], artists: Any) -> None:
-        if not is_single_artist_album(album):
+        if not is_single_artist_album(album) and not is_test_set_album(album):
             return
         if len(unique_artist_keys(artists)) != 1:
             raise DomainError(SINGLE_ARTIST_IMPORT_ERROR)
 
 
 def ensure_default_album(service: GalleryService) -> None:
-    if service.list_albums():
+    if any(not is_test_set_album(a) for a in service.list_albums()):
         return
     service.create_album("默认收藏夹", "default")
 

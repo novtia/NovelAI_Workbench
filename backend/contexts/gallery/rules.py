@@ -7,6 +7,8 @@ SINGLE_ARTIST_ALBUM_ID = "single-artist"
 SINGLE_ARTIST_ALBUM_NAME = "单画师"
 SINGLE_ARTIST_KIND = "singleArtist"
 SINGLE_ARTIST_IMPORT_ERROR = "「单画师」收藏夹只接受含单个画师串的测试图"
+TEST_SET_ID_PREFIX = "testset-"
+TEST_SET_KIND = "testSet"
 
 ARTIST_PREFIX = re.compile(r"^artist\s*:\s*", re.I)
 
@@ -36,7 +38,13 @@ def unique_artist_keys(artists: Any) -> list[str]:
     return keys
 
 
+def is_test_set_id(album_id: str) -> bool:
+    return str(album_id or "").startswith(TEST_SET_ID_PREFIX)
+
+
 def album_kind(album_id: str, name: str) -> str | None:
+    if is_test_set_id(album_id):
+        return TEST_SET_KIND
     if album_id == SINGLE_ARTIST_ALBUM_ID or str(name or "").strip() == SINGLE_ARTIST_ALBUM_NAME:
         return SINGLE_ARTIST_KIND
     return None
@@ -46,3 +54,9 @@ def is_single_artist_album(album: dict[str, Any] | None) -> bool:
     if not album:
         return False
     return album_kind(str(album.get("id") or ""), str(album.get("name") or "")) == SINGLE_ARTIST_KIND
+
+
+def is_test_set_album(album: dict[str, Any] | None) -> bool:
+    if not album:
+        return False
+    return album_kind(str(album.get("id") or ""), str(album.get("name") or "")) == TEST_SET_KIND

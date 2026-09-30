@@ -10,11 +10,17 @@ export {
   splitSingleArtistSections,
   indexArtistPreviews,
   isSingleArtistAlbum,
+  activeTestSetId,
+  isTestSetAlbum,
+  TEST_SET_ID_PREFIX,
   singleArtistImportError,
   splitArtistTokens,
   uniqueArtistKeys,
 } from "./singleArtist";
 export type { ArtistColumn, ArtistSections, ArtistSpan, ArtistToken } from "./singleArtist";
+export { basketAdd, basketHasAll, basketRemove, basketText, normalizeBasketNames } from "./artistBasket";
+export { buildSkinLayout, buildTestTargets, indexSkins, missingTargets, testJobKey } from "./testRun";
+export type { SkinGroup, SkinLayout, SkinProgress, SkinSlot, TestCard, TestCardState, TestTarget } from "./testRun";
 export {
   WEIGHT_STEP,
   applySuggestionText,

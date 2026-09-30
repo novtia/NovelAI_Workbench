@@ -43,6 +43,7 @@ def run_job(svc: GenerationService, job_id: str) -> None:
                 sub = svc.gateway.fetch_subscription()
             except NaiError:
                 sub = None
+            svc.bind_test_set_items(job.source, job.client, items, meta)
             svc.mutate_job(job_id, lambda j: j.complete(items, meta, sub, now_ms()))
             return
 
@@ -84,6 +85,7 @@ def run_job(svc: GenerationService, job_id: str) -> None:
             sub = svc.gateway.fetch_subscription()
         except NaiError:
             sub = None
+        svc.bind_test_set_items(job.source, job.client, items, meta)
         svc.mutate_job(job_id, lambda j: j.complete(items, meta, sub, now_ms()))
     except InterruptedError:
         svc.mutate_job(job_id, lambda j: j.cancel(now_ms()))

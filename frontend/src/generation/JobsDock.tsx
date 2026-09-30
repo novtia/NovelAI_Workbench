@@ -1,9 +1,9 @@
 import { useLayoutEffect, useRef } from "react";
 import { generationApi } from "@/api";
-import { jobIsActive, jobProgressText, queryKeys } from "@/data";
+import { isSingleArtistAlbum, jobIsActive, jobProgressText, queryKeys } from "@/data";
 import { closeStudioMenus, pushToast, useJobsQuery, useSession, useStudioStore } from "@/state";
 import { useQueryClient } from "@tanstack/react-query";
-import type { Job } from "@/data/types";
+import type { Album, Job } from "@/data/types";
 
 function jobTitle(job: Job) {
   if (job.source === "lottery") {
@@ -11,6 +11,10 @@ function jobTitle(job: Job) {
     const i = Number(job.client?.drawIndex);
     if (n && Number.isFinite(i) && i >= 0) return `抽奖 第${n}批 · ${i + 1}`;
     return "抽奖生图";
+  }
+  if (job.source === "gallery") {
+    const artist = String(job.client?.artist || "").trim();
+    return artist ? `图库测试生图 · ${artist}` : "图库测试生图";
   }
   return "生图室";
 }
@@ -66,6 +70,18 @@ export function JobsDock() {
                 type="button"
                 onClick={() => {
                   setJobsOpen(false);
+                  if (job.source === "gallery") {
+                    setView("gallery");
+                    const setId = String(job.client?.testSetId || "");
+                    if (setId) {
+                      // 测试集属于「单画师」收藏夹，先切过去再选测试集。
+                      const albums = (qc.getQueryData(queryKeys.albums) as Album[] | undefined) || [];
+                      const single = albums.find((a) => isSingleArtistAlbum(a));
+                      if (single) useSession.getState().setAlbumId(single.id);
+                      useSession.getState().setTestSetId(setId);
+                    }
+                    return;
+                  }
                   setView(job.source === "lottery" ? "lottery" : "studio");
                 }}
               >

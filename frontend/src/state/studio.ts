@@ -28,6 +28,7 @@ import {
   shotFromJobItem,
   singleArtistImportError,
   isSingleArtistAlbum,
+  isTestSetAlbum,
   studioDownloadName,
   triggerBlobDownload,
   fileFromShotRef,
@@ -37,7 +38,6 @@ import type { StudioShotDrag } from "@/data/files";
 import { isImageFile, parseImageMeta } from "@/data/png";
 import { on } from "./bus";
 import { useJobsQuery } from "./queries";
-import { useLotteryStore } from "./lotteryStore";
 import { useSession } from "./session";
 import { useStudioStore, type StudioState } from "./studioStore";
 import { pushToast } from "./toast";
@@ -338,7 +338,7 @@ export function useStudioActions() {
       },
     });
     const setsNow = () => (qc.getQueryData(queryKeys.paramSets) as ParamSet[] | undefined) || [];
-    const albumsNow = () => (qc.getQueryData(queryKeys.albums) as Album[] | undefined) || [];
+    const albumsNow = () => ((qc.getQueryData(queryKeys.albums) as Album[] | undefined) || []).filter((a) => !isTestSetAlbum(a));
 
     function setSize(preset?: StudioForm["preset"], aspect?: StudioForm["aspect"], custom?: [number, number]) {
       const form = store.form;
@@ -465,7 +465,6 @@ export function useStudioActions() {
     if (!item) return;
     store.setCurrentSetId(item.id);
     store.setForm(mergeStudioForm(defaultForm(), item.form, { replace: true }));
-    useLotteryStore.getState().setPresetId(item.id);
     closeStudioMenus();
   }
 
@@ -493,7 +492,6 @@ export function useStudioActions() {
     }
     const saved = await generationApi.saveParamSet(trimmed, cloneForm(form));
     store.setCurrentSetId(saved.id);
-    useLotteryStore.getState().setPresetId(saved.id);
     store.setParamDialog(false);
     await qc.invalidateQueries({ queryKey: queryKeys.paramSets });
     pushToast("已保存预设", "ok");

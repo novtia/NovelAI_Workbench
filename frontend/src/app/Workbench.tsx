@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useSyncExternalStore } from "react";
 import { JobsDock, QuotaBattery } from "../generation";
-import { getToasts, subscribeToasts, useJobsQuery, useSession } from "@/state";
+import { getToasts, subscribeToasts, useBasketQuery, useJobsQuery, useSession } from "@/state";
 import { jobIsActive } from "@/data";
 import { WorkbenchHosts } from "./hosts";
 import { bindInkDrop, installInkTextures, paintBackdrop } from "@/ui/inkBackdrop";
@@ -19,6 +19,9 @@ const VIEWS = [
 export function Workbench() {
   const view = useSession((s) => s.view);
   const setView = useSession((s) => s.setView);
+  const basketOpen = useSession((s) => s.basketOpen);
+  const toggleBasket = useSession((s) => s.toggleBasket);
+  const basketCount = useBasketQuery((l) => l.length).data ?? 0;
   const toasts = useSyncExternalStore(subscribeToasts, getToasts, getToasts);
   const jobsQ = useJobsQuery();
   const active = (jobsQ.data || []).filter((j) => jobIsActive(j));
@@ -78,6 +81,18 @@ export function Workbench() {
             );
           })}
           <div className="act-foot">
+            <button
+              className={`act-btn${basketOpen ? " active" : ""}`}
+              type="button"
+              title="画师串（收集画师，一键复制）"
+              data-panel="basket"
+              aria-pressed={basketOpen}
+              onClick={toggleBasket}
+            >
+              <span className="glyph">串</span>
+              <span className="lab">画师串</span>
+              {basketCount ? <span className="act-badge">{basketCount > 99 ? "99+" : basketCount}</span> : null}
+            </button>
             <JobsDock />
             <QuotaBattery />
           </div>

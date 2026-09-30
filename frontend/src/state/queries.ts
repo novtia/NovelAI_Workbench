@@ -1,11 +1,22 @@
 import { useQuery } from "@tanstack/react-query";
 import { galleryApi, generationApi, lotteryApi } from "@/api";
 import { queryKeys } from "@/data/queryKeys";
+import { isTestSetAlbum } from "@/data/singleArtist";
+import type { Album } from "@/data/types";
 import { useSession } from "./session";
 import { useStudioStore } from "./studioStore";
 
+const regularAlbums = (albums: Album[]) => albums.filter((a) => !isTestSetAlbum(a));
+const testSetAlbums = (albums: Album[]) => albums.filter((a) => isTestSetAlbum(a));
+
+/** 收藏夹列表（不含测试集）。 */
 export function useAlbumsQuery() {
-  return useQuery({ queryKey: queryKeys.albums, queryFn: galleryApi.listAlbums });
+  return useQuery({ queryKey: queryKeys.albums, queryFn: galleryApi.listAlbums, select: regularAlbums });
+}
+
+/** 单画师测试集列表，只在图库顶部下拉里出现。 */
+export function useTestSetsQuery() {
+  return useQuery({ queryKey: queryKeys.albums, queryFn: galleryApi.listAlbums, select: testSetAlbums });
 }
 
 export function useItemsQuery(albumId?: string) {

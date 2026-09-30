@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { galleryApi } from "@/api";
 import { ApiError } from "@/api/client";
-import { artistText, copyText, fileFromShotRef, importImageFiles, isSingleArtistAlbum, promptText, queryKeys, SINGLE_ARTIST_ALBUM_NAME, singleArtistImportError } from "@/data";
+import { activeTestSetId, artistText, copyText, fileFromShotRef, importImageFiles, isSingleArtistAlbum, isTestSetAlbum, promptText, queryKeys, SINGLE_ARTIST_ALBUM_NAME, singleArtistImportError } from "@/data";
 import type { Album, Artwork } from "@/data/types";
 import type { StudioShotDrag } from "@/data/files";
 import { emit } from "./bus";
@@ -18,19 +18,23 @@ export function useCommands() {
   return useMemo(() => {
   const read = () => {
     const session = useSession.getState();
-    const albums = (qc.getQueryData(queryKeys.albums) as Album[] | undefined) || [];
+    const albums = ((qc.getQueryData(queryKeys.albums) as Album[] | undefined) || []).filter((a) => !isTestSetAlbum(a));
     const albumId = session.albumId;
     const album = albums.find((a) => a.id === albumId) || null;
+    // 测试集里的图是「皮肤」，默认集的图始终在；当前打开的图可能是其中任意一处的。
+    const skinId = activeTestSetId(album, session.testSetId);
     const items = (qc.getQueryData(queryKeys.items(albumId)) as Artwork[] | undefined) || [];
-    const openItem = items.find((it) => it.id === session.openId) || null;
+    const skins = skinId ? (qc.getQueryData(queryKeys.items(skinId)) as Artwork[] | undefined) || [] : [];
+    const openItem = items.find((it) => it.id === session.openId) || skins.find((it) => it.id === session.openId) || null;
     return { session, albums, album, albumId, items, openItem };
   };
 
   async function refresh(...ids: string[]) {
     const targets = [...new Set(ids.filter(Boolean))];
     if (!targets.length) {
-      const current = useSession.getState().albumId;
+      const { albumId: current, testSetId } = useSession.getState();
       if (current) targets.push(current);
+      if (testSetId) targets.push(testSetId);
     }
     await qc.invalidateQueries({ queryKey: queryKeys.albums });
     await Promise.all(targets.map((id) => qc.invalidateQueries({ queryKey: queryKeys.items(id) })));
@@ -124,7 +128,7 @@ export function useCommands() {
     if (!openItem) return;
     await galleryApi.deleteItem(openItem.id);
     session.setOpenId(null);
-    await refresh();
+    await refresh(openItem.albumId);
     pushToast("已删除");
   }
 

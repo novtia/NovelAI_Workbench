@@ -120,6 +120,21 @@ CREATE TABLE IF NOT EXISTS projections_lottery_board (
     version INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS projections_gallery_view (
+    id TEXT PRIMARY KEY,
+    album_id TEXT NOT NULL DEFAULT '',
+    test_set_id TEXT NOT NULL DEFAULT '',
+    preset_id TEXT NOT NULL DEFAULT '',
+    version INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS projections_artist_basket (
+    key TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    added_at INTEGER NOT NULL,
+    sort_order INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS projections_identity (
     id TEXT PRIMARY KEY,
     configured INTEGER NOT NULL DEFAULT 0,
@@ -140,6 +155,8 @@ PROJECTION_TABLES = (
     "projections_param_sets",
     "projections_lottery_batches",
     "projections_lottery_board",
+    "projections_gallery_view",
+    "projections_artist_basket",
     "projections_identity",
     "projections_meta",
     "snapshots",

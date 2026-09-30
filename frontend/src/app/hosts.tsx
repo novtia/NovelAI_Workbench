@@ -1,3 +1,4 @@
+import { BasketPopover } from "../basket/BasketPopover";
 import { useCommands, useSession } from "@/state";
 
 export function WorkbenchHosts() {
@@ -31,6 +32,7 @@ export function WorkbenchHosts() {
           <span>{overlay.desc}</span>
         </div>
       </div>
+      <BasketPopover />
       <div className={`progress${progress.show ? " show" : ""}`}>
         <span>
           正在解析 {progress.done} / {progress.total}

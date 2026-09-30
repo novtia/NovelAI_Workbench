@@ -107,3 +107,18 @@ def test_single_artist_import_requires_one_artist(tmp_path):
         gallery.move_item(multi["id"], album_id)
     gallery.move_item(first["id"], other["id"])
     assert gallery.get_item(first["id"])["albumId"] == other["id"]
+
+
+def test_reimport_after_delete_or_clear(tmp_path):
+    gallery = _gallery(tmp_path)
+    album_id = gallery.create_album("单画师", SINGLE_ARTIST_ALBUM_ID, system=True)["id"]
+    meta = {"name": "a.png", "artists": ["foo"]}
+    first = gallery.import_bytes(album_id, _png(7), meta)
+    gallery.delete_item(first["id"])
+    # 删除后再导入同一张图：不能因为旧事件的幂等键而静默失败
+    second = gallery.import_bytes(album_id, _png(7), meta)
+    assert second["id"] != first["id"]
+    gallery.clear_album(album_id)
+    third = gallery.import_bytes(album_id, _png(7), meta)
+    assert third["id"] not in (first["id"], second["id"])
+    assert [it["id"] for it in gallery.list_items(album_id)] == [third["id"]]

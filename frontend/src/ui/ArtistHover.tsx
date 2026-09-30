@@ -4,7 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { galleryApi } from "@/api";
 import { artistLibraryNames, indexArtistPreviews, isSingleArtistAlbum, queryKeys, stripArtist, tagKey } from "@/data";
 import type { Artwork } from "@/data/types";
-import { useAlbumsQuery } from "@/state";
+import { useAlbumsQuery, useSession } from "@/state";
+import { BasketAddButton } from "./BasketAddButton";
 
 type HoverState = {
   name: string;
@@ -55,6 +56,17 @@ function useSingleArtistItems(enabled: boolean) {
   return itemsQ.data || NO_ITEMS;
 }
 
+/** 图库里选中的测试集图片：悬停预览要显示测试集画面。 */
+function useTestSetItems() {
+  const testSetId = useSession((s) => s.testSetId);
+  const itemsQ = useQuery({
+    queryKey: queryKeys.items(testSetId || "_none_"),
+    queryFn: () => galleryApi.listItems(testSetId),
+    enabled: Boolean(testSetId),
+  });
+  return testSetId ? itemsQ.data || NO_ITEMS : NO_ITEMS;
+}
+
 /** 画师 tagKey -> 测试图（最新在前），联想列表右侧预览用。 */
 export function useArtistPreviews() {
   return useContext(PreviewsContext);
@@ -79,9 +91,19 @@ export function ArtistHoverProvider({ children }: { children: ReactNode }) {
       libraryArmers.delete(fn);
     };
   }, []);
-  const items = useSingleArtistItems(armed);
+  const testSetId = useSession((s) => s.testSetId);
+  // 选了测试集时也要有默认图，用来给没有皮肤的画师兜底。
+  const items = useSingleArtistItems(armed || Boolean(testSetId));
   const names = useMemo(() => artistLibraryNames(items), [items]);
-  const previews = useMemo(() => indexArtistPreviews(items), [items]);
+  const testItems = useTestSetItems();
+  // 测试集是皮肤：有皮肤的画师先显示测试集里的画面，其余（以及皮肤之后）是「单画师」库里的默认图。
+  const previews = useMemo(() => {
+    const base = indexArtistPreviews(items);
+    if (!testSetId) return base;
+    const merged = new Map(base);
+    for (const [key, list] of indexArtistPreviews(testItems)) merged.set(key, [...list, ...(base.get(key) || [])]);
+    return merged;
+  }, [testSetId, testItems, items]);
   const [state, setState] = useState<HoverState | null>(null);
   const hideTimer = useRef(0);
   const stateRef = useRef(state);
@@ -238,7 +260,10 @@ function ArtistHoverPop({
           </span>
         )}
       </div>
-      <img src={item.thumbUrl} alt="" width={item.width || undefined} height={item.height || undefined} />
+      <div className="pop-img">
+        <img src={item.thumbUrl} alt="" width={item.width || undefined} height={item.height || undefined} />
+        <BasketAddButton className="on-image" names={[state.name]} />
+      </div>
     </div>,
     document.body,
   );

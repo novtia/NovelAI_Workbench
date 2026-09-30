@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { useImportGestures } from "./gestures";
+import { useGallerySelectionSync } from "./gallerySelection";
 import { useJobStream } from "./jobs";
 import { useJobsQuery } from "./queries";
 import { jobIsActive } from "@/data";
@@ -9,6 +10,7 @@ import { useStudioSync } from "./studio";
 
 export function WorkbenchProvider({ children }: { children: ReactNode }) {
   useImportGestures();
+  useGallerySelectionSync();
   useJobStream();
   useLotterySync();
   useStudioSync();

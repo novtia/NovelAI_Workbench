@@ -6,7 +6,14 @@ export type Album = {
   count?: number;
   deleted?: boolean;
   version?: number;
-  kind?: "singleArtist";
+  kind?: "singleArtist" | "testSet";
+};
+
+/** 画师串面板里的一位画师：没有权重，一律按默认 1。 */
+export type BasketArtist = {
+  key: string;
+  name: string;
+  addedAt: number;
 };
 
 export type Artwork = {

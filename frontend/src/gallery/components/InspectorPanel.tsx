@@ -1,10 +1,11 @@
 import { asMeta, charCaptions, negativeText, promptText, sourceLabel } from "@/data";
 import { useCommands, useCollection } from "@/state";
 import { ArtistHoverTrigger } from "@/ui/ArtistHover";
+import { BasketAddButton } from "@/ui/BasketAddButton";
 import { IconCopy, IconX } from "@/generation/components/icons";
 
 export function InspectorPanel() {
-  const { openItem, albums } = useCollection();
+  const { openItem, albums, testSet } = useCollection();
   const { closeInspector, copyArtists, copyPrompt, generateFrom, moveOpenItem, deleteOpenItem } = useCommands();
   const item = openItem;
   const p = asMeta(item?.params);
@@ -39,6 +40,7 @@ export function InspectorPanel() {
                   ? item.artists.map((n) => (
                       <ArtistHoverTrigger className="chip" name={n} key={n}>
                         artist:{n}
+                        <BasketAddButton names={[n]} />
                       </ArtistHoverTrigger>
                     ))
                   : <span className="chip">未识别画师</span>}
@@ -66,6 +68,11 @@ export function InspectorPanel() {
               <div className="move-row">
                 <label htmlFor="move-album">收藏夹</label>
                 <select id="move-album" value={item.albumId} onChange={(e) => void moveOpenItem(e.target.value)}>
+                  {testSet && item.albumId === testSet.id && (
+                    <option value={testSet.id} disabled>
+                      测试集 · {testSet.name}
+                    </option>
+                  )}
                   {albums.map((a) => (
                     <option key={a.id} value={a.id}>
                       {a.name}

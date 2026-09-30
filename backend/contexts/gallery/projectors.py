@@ -70,6 +70,36 @@ class GalleryProjector(Projector):
                     event.version,
                 ),
             )
+        elif t == "GalleryViewSelected":
+            conn.execute(
+                """
+                INSERT INTO projections_gallery_view (id, album_id, test_set_id, preset_id, version)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    album_id=excluded.album_id, test_set_id=excluded.test_set_id,
+                    preset_id=excluded.preset_id, version=excluded.version
+                """,
+                (
+                    event.aggregate_id,
+                    p.get("albumId") or "",
+                    p.get("testSetId") or "",
+                    p.get("presetId") or "",
+                    event.version,
+                ),
+            )
+        elif t == "ArtistBasketAdded":
+            for item in p.get("items") or []:
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO projections_artist_basket (key, name, added_at, sort_order)
+                    VALUES (?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM projections_artist_basket))
+                    """,
+                    (item["key"], item["name"], p.get("addedAt") or 0),
+                )
+        elif t == "ArtistBasketRemoved":
+            conn.execute("DELETE FROM projections_artist_basket WHERE key=?", (p.get("key") or "",))
+        elif t == "ArtistBasketCleared":
+            conn.execute("DELETE FROM projections_artist_basket")
         elif t == "ArtworkMoved":
             conn.execute(
                 "UPDATE projections_artworks SET album_id=?, version=? WHERE id=?",
