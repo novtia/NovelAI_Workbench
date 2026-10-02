@@ -7,6 +7,9 @@ import { jobIsActive } from "@/data";
 import { useLotterySync } from "./lottery";
 import { useSession } from "./session";
 import { useStudioSync } from "./studio";
+import { getSettings, useSettingsStore } from "./settingsStore";
+import { useStudioStore } from "./studioStore";
+import { pushToast } from "./toast";
 
 export function WorkbenchProvider({ children }: { children: ReactNode }) {
   useImportGestures();
@@ -14,6 +17,24 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
   useJobStream();
   useLotterySync();
   useStudioSync();
+  const hydrateSettings = useSettingsStore((s) => s.hydrate);
+  const saveError = useSettingsStore((s) => s.saveError);
+  useEffect(() => {
+    void hydrateSettings();
+  }, [hydrateSettings]);
+  const settingsReady = useSettingsStore((s) => s.ready);
+  useEffect(() => {
+    // 远端设置到达后，把持久化的面板宽度同步进工作台
+    if (!settingsReady) return;
+    const { layout } = getSettings();
+    if (!layout.rememberWidths) return;
+    const st = useStudioStore.getState();
+    if (st.leftW !== layout.leftWidth) st.setLeftW(layout.leftWidth);
+    if (st.histW !== layout.histWidth) st.setHistW(layout.histWidth);
+  }, [settingsReady]);
+  useEffect(() => {
+    if (saveError) pushToast(`设置未能保存：${saveError}`, "error");
+  }, [saveError]);
   const jobs = useJobsQuery().data;
   const keep = Boolean(jobs?.some((job) => jobIsActive(job)));
   useEffect(() => {
@@ -28,7 +49,7 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onHash = () => {
       const raw = location.hash.replace("#", "");
-      if (raw === "lottery" || raw === "studio" || raw === "gallery") {
+      if (raw === "lottery" || raw === "studio" || raw === "gallery" || raw === "settings") {
         useSession.setState({ view: raw });
       }
     };

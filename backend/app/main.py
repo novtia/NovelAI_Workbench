@@ -19,6 +19,9 @@ from contexts.identity.projectors import IdentityProjector
 from contexts.lottery.api import router as lottery_router
 from contexts.lottery.application import LotteryService
 from contexts.lottery.projectors import LotteryProjector
+from contexts.settings.api import router as settings_router
+from contexts.settings.application import SettingsService
+from contexts.settings.projectors import SettingsProjector
 from kernel.api import router as kernel_router
 from kernel.blobs import BlobStore
 from kernel.bus import EventHub, UnitOfWork
@@ -39,20 +42,30 @@ def create_app() -> FastAPI:
         LotteryProjector(),
         GenerationProjector(),
         IdentityProjector(),
+        SettingsProjector(),
     ]
     hub = EventHub()
     uow = UnitOfWork(store, projectors, hub)
     gallery = GalleryService(uow, store, blobs)
     lottery = LotteryService(uow, store, gallery)
     sse = SseHub()
+    settings = SettingsService(uow, store)
+    lottery.default_controls = lambda: settings.section("lottery")
+    blobs.thumb_provider = lambda: (
+        int(settings.value("gallery", "thumbSize")),
+        int(settings.value("gallery", "thumbQuality")),
+    )
+    gateway = NaiGateway(vault)
+    gateway.timeout_provider = lambda: float(settings.value("generation", "timeoutSec"))
     generation = GenerationService(
         uow,
         store,
         blobs,
         gallery,
-        NaiGateway(vault),
+        gateway,
         vault,
         sse,
+        settings,
     )
 
     if not store.has_events() and (LEGACY / "gallery.db").is_file():
@@ -80,6 +93,8 @@ def create_app() -> FastAPI:
     app.include_router(gallery_router)
     app.include_router(lottery_router)
     app.include_router(generation_router)
+    app.include_router(settings_router)
+    app.state.settings = settings
     app.state.store = store
     app.state.blobs = blobs
     app.state.projectors = projectors

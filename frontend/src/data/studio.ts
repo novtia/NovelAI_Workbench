@@ -1,3 +1,4 @@
+import { DEFAULT_SETTINGS, type Settings } from "./settings";
 import type { Artwork, Character, GenderId, StudioDownloadKind, StudioForm, StudioImportOpts, StudioShot, TokenStatus } from "./types";
 
 export const LS_DRAFT = "nai-v5-draft";
@@ -62,27 +63,36 @@ export function defaultChar(extra: Partial<Character> = {}): Character {
   return { prompt: "", uc: "", x: 0.5, y: 0.5, gender: "f", enabled: true, ...extra };
 }
 
+/** 设置里的「生图默认参数」由状态层注入；没注入（如单元测试）时用内置默认值。 */
+let formPrefs: (() => Settings["generation"]) | null = null;
+
+export function setFormDefaultsProvider(fn: (() => Settings["generation"]) | null) {
+  formPrefs = fn;
+}
+
 export function defaultForm(): StudioForm {
+  const g = formPrefs ? formPrefs() : DEFAULT_SETTINGS.generation;
+  const [width, height] = SIZES[g.preset][g.aspect];
   return {
     prompt: "",
-    uc: UC.heavy,
+    uc: UC[g.ucPreset],
     characters: [],
-    model: "nai-diffusion-5-full",
-    v5Mode: "anime",
-    quality: "gallery",
-    width: 832,
-    height: 1216,
-    sampler: "k_euler_ancestral",
-    noiseSchedule: "karras",
-    steps: 28,
-    scale: 5,
-    cfgRescale: 0,
+    model: g.model,
+    v5Mode: g.v5Mode,
+    quality: g.quality,
+    width,
+    height,
+    sampler: g.sampler,
+    noiseSchedule: g.noiseSchedule,
+    steps: g.steps,
+    scale: g.scale,
+    cfgRescale: g.cfgRescale,
     seed: -1,
-    nSamples: 1,
+    nSamples: g.nSamples,
     useCoords: false,
     straightAlpha: true,
-    aspect: "port",
-    preset: "Normal",
+    aspect: g.aspect,
+    preset: g.preset,
   };
 }
 

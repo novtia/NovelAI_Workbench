@@ -1,6 +1,6 @@
 ﻿# 同时启动画师串工作台的后端与前端。
 # 后端固定 127.0.0.1:8766（与 frontend/vite.config.ts 的 /api 代理一致）。
-# 前端为 Vite，默认 127.0.0.1:5173。
+# 前端为 Vite，默认 127.0.0.1:5174。
 # 在本窗口按 Ctrl+C，或关掉任一服务窗口，会把两边一起停掉。
 
 $ErrorActionPreference = "Stop"

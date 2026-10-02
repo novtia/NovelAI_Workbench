@@ -4,7 +4,7 @@ import type { Artwork } from "@/data/types";
 import { useBasketActions, useBasketHas, useCommands, useSession } from "@/state";
 import { IconCopy, IconSparkles } from "@/generation/components/icons";
 
-export const ArtworkCard = memo(function ArtworkCard({ item, index }: { item: Artwork; index: number }) {
+export const ArtworkCard = memo(function ArtworkCard({ item, index, enter = true }: { item: Artwork; index: number; enter?: boolean }) {
   const selected = useSession((s) => s.openId === item.id);
   const { openItemById, copyArtists, generateFrom } = useCommands();
   const hasArtists = (item.artists || []).length > 0;
@@ -15,8 +15,8 @@ export const ArtworkCard = memo(function ArtworkCard({ item, index }: { item: Ar
 
   return (
     <div
-      className={`card${unknown ? " unknown" : ""}${selected ? " sel" : ""}`}
-      style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
+      className={`card${unknown ? " unknown" : ""}${selected ? " sel" : ""}${enter ? "" : " no-enter"}`}
+      style={enter ? { animationDelay: `${Math.min(index, 12) * 30}ms` } : undefined}
       data-id={item.id}
       role="button"
       tabIndex={0}

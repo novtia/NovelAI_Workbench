@@ -1,14 +1,15 @@
 import { isSingleArtistAlbum } from "@/data";
-import { useCommands, useCollection, useSession } from "@/state";
+import { useCommands, useCollection, useSession, useSettings, useSettingsStore } from "@/state";
 import { IconPlus } from "@/generation/components/icons";
 
 const VOLUME = ["〇", "壹", "贰", "叁", "肆", "伍", "陆", "柒", "捌", "玖", "拾"];
 
 export function GalleryToolbar() {
   const { album, albums, testSet, items, filtered, query } = useCollection();
-  const compact = useSession((s) => s.compact);
+  const compact = useSettings((s) => s.gallery.density === "compact");
   const setQuery = useSession((s) => s.setQuery);
-  const toggleCompact = useSession((s) => s.toggleCompact);
+  const setSetting = useSettingsStore((s) => s.set);
+  const toggleCompact = () => setSetting("gallery", "density", compact ? "comfortable" : "compact");
   const { pickFiles, clearCurrentAlbum } = useCommands();
   const has = items.length > 0;
   const count = query.trim() ? `${filtered.length} / ${items.length} 张` : `${items.length} 张`;

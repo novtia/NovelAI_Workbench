@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { defaultForm, defaultImportOpts, loadDraft, loadSelectedSet } from "@/data/studio";
+import { getSettings } from "./settingsStore";
 import type { StudioForm, StudioImportOpts, StudioPop, StudioShot } from "@/data/types";
 
 export type StudioDd = "model" | "mode" | "qtags" | "preset" | "";
@@ -69,7 +70,7 @@ export type StudioState = {
   setJobsOpen: (jobsOpen: boolean) => void;
 };
 
-const draft = typeof localStorage !== "undefined" ? loadDraft() : null;
+const draft = typeof localStorage !== "undefined" && getSettings().generation.draftSave ? loadDraft() : null;
 
 export const useStudioStore = create<StudioState>((set, get) => ({
   form: draft || defaultForm(),
@@ -92,8 +93,8 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   popPos: { left: 0, top: 0 },
   popPreferUp: false,
   openDd: "",
-  leftW: 392,
-  histW: 268,
+  leftW: getSettings().layout.leftWidth,
+  histW: getSettings().layout.histWidth,
   paramDialog: false,
   paramName: "",
   metaOpen: false,

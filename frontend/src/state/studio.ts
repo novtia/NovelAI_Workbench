@@ -32,6 +32,7 @@ import {
   studioDownloadName,
   triggerBlobDownload,
   fileFromShotRef,
+  extractArtists,
 } from "@/data";
 import type { Album, Artwork, GenderId, Job, ParamSet, StudioDownloadKind, StudioForm, StudioPop, StudioShot } from "@/data/types";
 import type { StudioShotDrag } from "@/data/files";
@@ -39,11 +40,18 @@ import { isImageFile, parseImageMeta } from "@/data/png";
 import { on } from "./bus";
 import { useJobsQuery } from "./queries";
 import { useSession } from "./session";
+import { getSettings } from "./settingsStore";
 import { useStudioStore, type StudioState } from "./studioStore";
+import { confirmDialog } from "./confirm";
 import { pushToast } from "./toast";
 
 const notified = new Set<string>();
 let draftTimer = 0;
+
+/** 设置里可以关掉草稿自动保存。 */
+function saveDraft() {
+  if (getSettings().generation.draftSave) persistDraft(useStudioStore.getState().form);
+}
 let aiSettle: (() => void) | null = null;
 
 function currentShot(): StudioShot | null {
@@ -209,7 +217,12 @@ export async function saveStudioCurrent(qc: ReturnType<typeof useQueryClient>, a
     return;
   }
   const blocked = isSingleArtistAlbum(albums.find((a) => a.id === albumId))
-    ? singleArtistImportError((cur.meta as { artists?: unknown }).artists)
+    ? singleArtistImportError(
+        (() => {
+          const m = cur.meta as { artists?: unknown; prompt?: unknown };
+          return Array.isArray(m.artists) && m.artists.length ? m.artists : extractArtists(String(m.prompt || "")).names;
+        })(),
+      )
     : null;
   if (blocked) {
     pushToast(blocked, "warn");
@@ -247,8 +260,9 @@ export function useStudioSync() {
         const text =
           s.form.prompt !== prev.form.prompt || s.form.uc !== prev.form.uc || s.form.characters !== prev.form.characters;
         window.clearTimeout(draftTimer);
-        const save = () => persistDraft(useStudioStore.getState().form);
-        draftTimer = text ? window.setTimeout(save, 240) : window.setTimeout(save, 1200);
+        const save = () => saveDraft();
+        const wait = getSettings().generation.draftDebounceMs;
+        draftTimer = text ? window.setTimeout(save, Math.min(240, wait)) : window.setTimeout(save, wait);
       }
       if (s.currentSetId !== prev.currentSetId) persistSelectedSet(s.currentSetId);
     });
@@ -265,7 +279,7 @@ export function useStudioSync() {
       s.setForm(mergeStudioForm(s.form, formFromItem(item)));
       s.setDirecting(false);
       useSession.getState().setView("studio");
-      persistDraft(useStudioStore.getState().form);
+      saveDraft();
     });
     const offForm = on("generation.openForm", (payload) => {
       const form = payload as StudioForm;
@@ -273,13 +287,13 @@ export function useStudioSync() {
       s.setForm(mergeStudioForm(defaultForm(), form, { replace: true }));
       s.setDirecting(false);
       useSession.getState().setView("studio");
-      persistDraft(useStudioStore.getState().form);
+      saveDraft();
     });
     const offApply = on("generation.applyForm", (payload) => {
       const form = payload as StudioForm;
       const s = useStudioStore.getState();
       s.setForm(mergeStudioForm(defaultForm(), form, { replace: true }));
-      persistDraft(useStudioStore.getState().form);
+      saveDraft();
     });
     const offDrop = on("generation.drop", (payload) => {
       void openDroppedImages(payload as File[]);
@@ -390,7 +404,7 @@ export function useStudioActions() {
       pushToast("先填主体 Prompt，或打开质量词", "warn");
       return;
     }
-    persistDraft(form);
+    saveDraft();
     store.setBusy(true, "", "排队中");
     try {
       const job = await generationApi.submitJob({ ...formToPayload(form), source: "studio" });
@@ -501,7 +515,7 @@ export function useStudioActions() {
     const sets = setsNow();
     const item = sets.find((x) => x.id === id);
     if (!item) return;
-    if (!confirm(`删除预设「${item.name}」？`)) return;
+    if (!(await confirmDialog(`删除预设「${item.name}」？`, { title: "删除预设", confirmText: "删除" }))) return;
     await generationApi.deleteParamSet(id);
     if (store.currentSetId === id) store.setCurrentSetId("");
     await qc.invalidateQueries({ queryKey: queryKeys.paramSets });

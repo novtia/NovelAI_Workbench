@@ -142,6 +142,12 @@ CREATE TABLE IF NOT EXISTS projections_identity (
     version INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS projections_settings (
+    id TEXT PRIMARY KEY,
+    data_json TEXT NOT NULL,
+    version INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS projections_meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -158,6 +164,7 @@ PROJECTION_TABLES = (
     "projections_gallery_view",
     "projections_artist_basket",
     "projections_identity",
+    "projections_settings",
     "projections_meta",
     "snapshots",
 )

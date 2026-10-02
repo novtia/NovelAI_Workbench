@@ -9,9 +9,10 @@ from pathlib import Path
 from typing import Any, Callable
 
 from contexts.gallery.application import GalleryService
+from contexts.gallery.rules import extract_artists
 from contexts.generation.domain import GenerationJob, ParamSet
 from contexts.generation.nai_client import NaiError, NaiGateway, TokenVault, decode_image_b64, token_hint
-from kernel.blobs import BlobStore, make_thumb, png_size
+from kernel.blobs import BlobStore, png_size
 from kernel.bus import UnitOfWork
 from kernel.clock import new_hex, new_id, now_ms
 from kernel.errors import DomainError
@@ -68,7 +69,9 @@ class GenerationService:
         gateway: NaiGateway,
         vault: TokenVault,
         sse: SseHub,
+        settings: Any | None = None,
     ):
+        self.settings = settings
         self.uow = uow
         self.store = store
         self.blobs = blobs
@@ -82,9 +85,18 @@ class GenerationService:
         self._status_cache: dict[str, Any] | None = None
         self._status_at = 0.0
 
+    def cfg(self, section: str, key: str, default: Any) -> Any:
+        """读取设置项；没有设置服务（如单元测试）时回落到默认值。"""
+        if self.settings is None:
+            return default
+        try:
+            return self.settings.value(section, key)
+        except KeyError:
+            return default
+
     def token_status(self) -> dict[str, Any]:
         now = time.monotonic()
-        if self._status_cache is not None and now - self._status_at < 45:
+        if self._status_cache is not None and now - self._status_at < self.cfg("account", "statusTtlSec", 45):
             return self._status_cache
         token = self.vault.load()
         out: dict[str, Any] = {"configured": bool(token), "hint": token_hint(token) if token else "", "subscription": None}
@@ -217,14 +229,16 @@ class GenerationService:
         return public
 
     def list_jobs(self) -> list[dict[str, Any]]:
+        keep = int(self.cfg("generation", "jobsKeep", 80))
         with self.store.connect() as conn:
             rows = conn.execute(
                 """
                 SELECT * FROM projections_jobs
                 WHERE status IN ('queued', 'running')
-                   OR id IN (SELECT id FROM projections_jobs ORDER BY created_at DESC LIMIT 80)
+                   OR id IN (SELECT id FROM projections_jobs ORDER BY created_at DESC LIMIT ?)
                 ORDER BY created_at DESC
-                """
+                """,
+                (keep,),
             ).fetchall()
         return [self._job_row(r) for r in rows]
 
@@ -263,7 +277,7 @@ class GenerationService:
 
     def store_image(self, data: bytes) -> dict[str, Any]:
         digest = self.blobs.put(data)
-        thumb = make_thumb(data)
+        thumb = self.blobs.thumb(data)
         thumb_hash = self.blobs.put(thumb) if thumb else ""
         size = png_size(data)
         rec = {
@@ -279,14 +293,24 @@ class GenerationService:
 
     def promote(self, album_id: str, blob_hashes: list[str], meta: dict[str, Any]) -> list[dict[str, Any]]:
         items = []
+        artists = meta.get("artists")
+        artist_line = meta.get("artistLine")
+        if isinstance(artists, str):
+            # 上游有时传的是画师串文本而不是列表
+            artist_line = artist_line or artists
+            artists = extract_artists(artists)[0]
+        if not artists:
+            # 生图台里画师直接写在 prompt 里，没有单独的画师列表：从 prompt 里识别，否则图库会显示「未识别画师」
+            artists, chain = extract_artists(str(meta.get("prompt") or ""))
+            artist_line = artist_line or chain
         for digest in blob_hashes:
             data = self.blobs.get(digest)
             if not data:
                 raise DomainError("预览文件不存在", 404)
             payload_meta = {
                 "name": meta.get("name") or "nai.png",
-                "artists": meta.get("artists") or [],
-                "artistLine": meta.get("artistLine") or meta.get("artists") or "",
+                "artists": artists or [],
+                "artistLine": artist_line or artists or "",
                 "params": {**meta, "source": meta.get("source") or "nai-v5"},
                 "width": meta.get("width"),
                 "height": meta.get("height"),

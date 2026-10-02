@@ -7,6 +7,8 @@ import type { Album, Artwork } from "@/data/types";
 import type { StudioShotDrag } from "@/data/files";
 import { emit } from "./bus";
 import { useSession } from "./session";
+import { getSettings } from "./settingsStore";
+import { confirmDialog } from "./confirm";
 import { pushToast } from "./toast";
 import { saveLotteryPreview } from "./lottery";
 import { useLotteryStore } from "./lotteryStore";
@@ -51,6 +53,9 @@ export function useCommands() {
     session.setProgress(true, 0, list.length);
     const result = await importImageFiles(list, albumId, (done, total) => session.setProgress(true, done, total), {
       singleArtist: isSingleArtistAlbum(album),
+      concurrency: getSettings().system.importConcurrency,
+      thumbSize: getSettings().gallery.thumbSize,
+      thumbQuality: getSettings().gallery.thumbQuality / 100,
     });
     session.setProgress(false);
     await refresh();
@@ -136,7 +141,7 @@ export function useCommands() {
     const { session, album, albumId, items } = read();
     if (!albumId || !items.length) return;
     const name = album?.name || "当前收藏夹";
-    if (!confirm(`清空「${name}」中的 ${items.length} 张图片？`)) return;
+    if (getSettings().gallery.confirmDelete && !(await confirmDialog(`清空「${name}」中的 ${items.length} 张图片？`, { title: "清空收藏夹", confirmText: "清空" }))) return;
     await galleryApi.clearAlbum(albumId);
     session.setOpenId(null);
     await refresh();
@@ -157,7 +162,7 @@ export function useCommands() {
     }
     const n = target.count ?? 0;
     const msg = n ? `删除「${target.name}」以及其中 ${n} 张图片？` : `删除收藏夹「${target.name}」？`;
-    if (!confirm(msg)) return;
+    if (getSettings().gallery.confirmDelete && !(await confirmDialog(msg, { title: "删除收藏夹", confirmText: "删除" }))) return;
     try {
       await galleryApi.deleteAlbum(id);
       await refresh();

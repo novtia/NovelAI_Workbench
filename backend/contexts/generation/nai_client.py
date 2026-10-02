@@ -9,7 +9,7 @@ import random
 import re
 import zipfile
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
 
 import httpx
 
@@ -297,6 +297,11 @@ class NaiGateway:
     def __init__(self, vault: TokenVault):
         self.vault = vault
         self._client = httpx.Client(timeout=20)
+        # 生图请求超时（秒），由设置服务注入。
+        self.timeout_provider: Callable[[], float] | None = None
+
+    def _gen_timeout(self) -> float:
+        return float(self.timeout_provider()) if self.timeout_provider else 180.0
 
     def _headers(self, token: str, accept: str = "*/*") -> dict[str, str]:
         return {
@@ -348,7 +353,7 @@ class NaiGateway:
         if not token:
             raise NaiError(401, "还没有配置 NovelAI Persistent API Token")
         payload, meta = build_payload(body)
-        with httpx.Client(timeout=180) as client:
+        with httpx.Client(timeout=self._gen_timeout()) as client:
             resp = client.post(
                 f"{IMAGE_API}/ai/generate-image",
                 headers=self._headers(token),
@@ -364,7 +369,7 @@ class NaiGateway:
             raise NaiError(401, "还没有配置 NovelAI Persistent API Token")
         payload, meta = build_payload(body)
         payload["parameters"]["stream"] = "sse"
-        client = httpx.Client(timeout=180)
+        client = httpx.Client(timeout=self._gen_timeout())
         try:
             req = client.build_request(
                 "POST",

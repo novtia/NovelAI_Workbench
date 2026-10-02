@@ -38,6 +38,30 @@ def unique_artist_keys(artists: Any) -> list[str]:
     return keys
 
 
+# 与前端 data/singleArtist.ts 的 ARTIST_RE 保持一致：`1.4::artist:x::`、`[artist:x]`、`artist:x`。
+ARTIST_RE = re.compile(
+    r"(\d+(?:\.\d+)?::)?\s*(?:\[artist:\s*([^\]]+?)\]|artist:\s*([^,\]\n]+?))(?:\s*::|(?=\s*,)|\s*$)",
+    re.I,
+)
+
+
+def extract_artists(text: str) -> tuple[list[str], str]:
+    """从 prompt 文本里抽出画师名（按 tag_key 去重、保序），并返回带权重的画师串。"""
+    names: list[str] = []
+    chunks: list[str] = []
+    seen: set[str] = set()
+    for m in ARTIST_RE.finditer(text or ""):
+        name = re.sub(r"\s+", " ", (m.group(2) or m.group(3) or "").strip())
+        key = tag_key(name)
+        if not name or not key or key in seen:
+            continue
+        seen.add(key)
+        names.append(name)
+        weight = (m.group(1) or "").strip()
+        chunks.append(f"{weight}artist:{name}::" if weight else f"artist:{name}")
+    return names, ", ".join(chunks)
+
+
 def is_test_set_id(album_id: str) -> bool:
     return str(album_id or "").startswith(TEST_SET_ID_PREFIX)
 

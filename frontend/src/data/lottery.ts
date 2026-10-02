@@ -14,6 +14,17 @@ export const DEFAULT_CONTROLS: LotteryControls = {
   boost: 0.4,
 };
 
+let controlsPrefs: (() => Partial<LotteryControls>) | null = null;
+
+/** 「设置 → 抽奖」的默认参数由状态层注入。 */
+export function setControlsDefaultsProvider(fn: (() => Partial<LotteryControls>) | null) {
+  controlsPrefs = fn;
+}
+
+export function defaultControls(): LotteryControls {
+  return { ...DEFAULT_CONTROLS, ...(controlsPrefs ? controlsPrefs() : {}) };
+}
+
 export const EMPTY_BOARD: LotteryBoard = {
   albumId: null,
   excluded: [],
@@ -151,7 +162,7 @@ export function clampControls(controls: LotteryControls, activeCount: number, pi
 
 export function normalizeBoard(raw: Record<string, unknown> | LotteryBoard | null | undefined): LotteryBoard {
   const data = (raw || {}) as Partial<LotteryBoard> & { weightCaps?: Record<string, number> };
-  const controls = { ...DEFAULT_CONTROLS, ...(data.controls || {}) };
+  const controls = { ...defaultControls(), ...(data.controls || {}) };
   return {
     id: data.id,
     albumId: data.albumId ?? null,

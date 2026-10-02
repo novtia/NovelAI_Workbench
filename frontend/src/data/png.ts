@@ -228,7 +228,7 @@ async function parseStealth(file: Blob) {
   }
 }
 
-function extractArtists(text: string) {
+export function extractArtists(text: string) {
   if (!text) return { names: [] as string[], line: "", chain: "" };
   const names: string[] = [];
   const chunks: string[] = [];
@@ -341,9 +341,8 @@ export async function sha256Hex(buffer: ArrayBuffer) {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export async function makeThumb(file: Blob) {
+export async function makeThumb(file: Blob, max = 320, quality = 0.82) {
   const bitmap = await createImageBitmap(file);
-  const max = 320;
   const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
   const w = Math.max(1, Math.round(bitmap.width * scale));
   const h = Math.max(1, Math.round(bitmap.height * scale));
@@ -353,7 +352,7 @@ export async function makeThumb(file: Blob) {
   const width = bitmap.width;
   const height = bitmap.height;
   bitmap.close();
-  const blob = await canvas.convertToBlob({ type: "image/webp", quality: 0.82 });
+  const blob = await canvas.convertToBlob({ type: "image/webp", quality });
   return { blob, width, height };
 }
 

@@ -102,7 +102,7 @@ async def stream_jobs(request: Request):
         try:
             while True:
                 try:
-                    payload = await asyncio.wait_for(q.get(), timeout=15)
+                    payload = await asyncio.wait_for(q.get(), timeout=svc.cfg("system", "ssePingSec", 15))
                     yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
                 except asyncio.TimeoutError:
                     yield ": ping\n\n"

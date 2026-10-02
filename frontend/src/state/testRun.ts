@@ -15,6 +15,7 @@ import type { TestTarget } from "@/data/testRun";
 import { useCollection } from "./collection";
 import { useJobsQuery, useParamSetsQuery } from "./queries";
 import { useSession } from "./session";
+import { confirmDialog } from "./confirm";
 import { pushToast } from "./toast";
 import { useTestRunStore } from "./testRunStore";
 
@@ -144,7 +145,11 @@ export function useTestRun() {
       pushToast("「单画师」图库里没有可生图的画师", "warn");
       return;
     }
-    if (!confirm(`将新建测试集，按图库顺序为 ${targets.length} 位画师各生成 1 张皮肤图（会消耗点数）。未生成完的画师继续显示默认图。继续？`)) return;
+    const ok = await confirmDialog(
+      `将新建测试集，按图库顺序为 ${targets.length} 位画师各生成 1 张皮肤图（会消耗点数）。未生成完的画师继续显示默认图。继续？`,
+      { title: "生成测试集", confirmText: "开始生成" },
+    );
+    if (!ok) return;
 
     store.setSubmitting("_creating");
     let set;
@@ -179,7 +184,11 @@ export function useTestRun() {
       pushToast("这个测试集已经全部生成完了", "ok");
       return;
     }
-    if (!confirm(`继续为剩下 ${targets.length} 位画师生成皮肤图（会消耗点数），用预设「${runPreset.name}」。继续？`)) return;
+    const ok = await confirmDialog(`继续为剩下 ${targets.length} 位画师生成皮肤图（会消耗点数），用预设「${runPreset.name}」。继续？`, {
+      title: "继续生成",
+      confirmText: "继续",
+    });
+    if (!ok) return;
     const id = testSet.id;
     stopped.delete(id);
     if (!run) store.addRun({ testSetId: id, presetId: runPreset.id, createdAt: Date.now() });
@@ -208,7 +217,7 @@ export function useTestRun() {
     if (!testSet) return;
     const n = testSet.count ?? 0;
     const msg = n ? `删除测试集「${testSet.name}」以及其中 ${n} 张图片？` : `删除测试集「${testSet.name}」？`;
-    if (!confirm(msg)) return;
+    if (!(await confirmDialog(msg, { title: "删除测试集", confirmText: "删除" }))) return;
     const id = testSet.id;
     try {
       stopped.add(id);

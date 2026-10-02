@@ -1,13 +1,13 @@
 import { memo, useEffect, useLayoutEffect, useRef } from "react";
-import { basketText, stripArtist, tagKey } from "@/data";
+import { basketName, basketText, tagKey } from "@/data";
 import { copyText } from "@/data/artwork";
 import type { BasketArtist } from "@/data/types";
-import { pushToast, useBasket, useSession } from "@/state";
+import { confirmDialog, getSettings, pushToast, useBasket, useSession, useSettings } from "@/state";
 import { ArtistHoverTrigger, armArtistLibrary, useArtistPreviews } from "@/ui/ArtistHover";
 
-/** 点单个画师名：直接复制 `artist:名字`。 */
+/** 点单个画师名：直接复制 `artist:名字`（格式按设置）。 */
 async function copyOne(name: string) {
-  const text = `artist:${stripArtist(name)}`;
+  const text = basketName(name, getSettings().basket);
   const ok = await copyText(text);
   pushToast(ok ? `已复制 ${text}` : "复制失败", ok ? "ok" : "error");
 }
@@ -60,6 +60,7 @@ export function BasketPopover() {
   const setOpen = useSession((s) => s.setBasketOpen);
   const { artists, count, remove, clear, copy } = useBasket();
   const previews = useArtistPreviews();
+  const fmt = useSettings((s) => s.basket);
 
   const popRef = useRef<HTMLElement>(null);
 
@@ -111,9 +112,9 @@ export function BasketPopover() {
   if (!open) return null;
 
   const removeOne = (key: string) => remove([key]);
-  const onClear = () => {
+  const onClear = async () => {
     if (!count) return;
-    if (window.confirm(`清空画师串里的 ${count} 位画师？`)) clear();
+    if (await confirmDialog(`清空画师串里的 ${count} 位画师？`, { title: "清空画师串", confirmText: "清空" })) clear();
   };
 
   return (
@@ -144,7 +145,7 @@ export function BasketPopover() {
           </div>
         )}
       </div>
-      {count ? <div className="bd-preview" title="将复制的内容">{basketText(artists)}</div> : null}
+      {count ? <div className="bd-preview" title="将复制的内容">{basketText(artists, fmt)}</div> : null}
       <footer className="bd-foot">
         <button type="button" className="bd-copy" disabled={!count} onClick={() => void copy()}>
           复制画师串

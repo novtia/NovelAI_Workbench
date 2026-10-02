@@ -171,3 +171,18 @@ def test_gallery_view_selection_is_persisted_in_database(tmp_path):
     gallery.select_view({"testSetId": test_set["id"]})
     gallery.delete_album(test_set["id"])
     assert gallery.view()["testSetId"] == ""
+
+
+def test_promote_extracts_artists_from_prompt(tmp_path):
+    gallery, generation, blobs = _services(tmp_path)
+    ensure_default_album(gallery)
+    album = {"id": "default"}
+    digest = blobs.put(_png(7))
+    prompt = "1.40::artist:ge_tianzun::, 0.35::artist:nnk_(nongnong)::, [artist:foo bar], 1girl"
+    items = generation.promote(album["id"], [digest], {"prompt": prompt, "name": "nai.png"})
+    assert items[0]["artists"] == ["ge_tianzun", "nnk_(nongnong)", "foo bar"]
+    assert items[0]["artistLine"].startswith("1.40::artist:ge_tianzun::")
+    # 已经带画师列表的不被覆盖
+    digest2 = blobs.put(_png(8))
+    items = generation.promote(album["id"], [digest2], {"prompt": prompt, "artists": ["solo"]})
+    assert items[0]["artists"] == ["solo"]

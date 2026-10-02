@@ -4,6 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>墨 · 江南水墨工作台</title>
+    <script>
+      // 首屏先按上次缓存的设置定主题，避免深色主题刷新时闪一下白（后端设置读回来后会再校准）
+      try {
+        var cached = JSON.parse(localStorage.getItem("wb.settings.cache") || "null");
+        var mode = cached && cached.appearance && cached.appearance.theme;
+        var dark = mode === "dark" || (mode === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.dataset.theme = dark ? "dark" : "light";
+        if (cached && cached.appearance && cached.appearance.font) document.documentElement.dataset.font = cached.appearance.font;
+      } catch (e) {}
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;600;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />

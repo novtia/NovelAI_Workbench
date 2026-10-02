@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { DEFAULT_CONTROLS, normalizeBoard } from "@/data/lottery";
+import { defaultControls, normalizeBoard } from "@/data/lottery";
+import "./settingsStore";
 import type { LotSave, LotteryBoard, LotteryControls } from "@/data/types";
 
 type SavedShot = { savedId: string; albumId: string };
@@ -43,7 +44,7 @@ export const useLotteryStore = create<LotteryState>((set, get) => ({
   excluded: [],
   pinned: [],
   weightCaps: {},
-  controls: { ...DEFAULT_CONTROLS },
+  controls: defaultControls(),
   presetId: "",
   boardVersion: -1,
   dirty: false,
@@ -75,7 +76,7 @@ export const useLotteryStore = create<LotteryState>((set, get) => ({
       excluded: normalized.excluded,
       pinned: normalized.pinned,
       weightCaps: normalized.weightCaps,
-      controls: { ...DEFAULT_CONTROLS, ...rest },
+      controls: { ...defaultControls(), ...rest },
       presetId: String(presetId || get().presetId || ""),
       boardVersion: normalized.version ?? 0,
       dirty: false,

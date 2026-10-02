@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useSyncExternalStore } from "react";
 import { JobsDock, QuotaBattery } from "../generation";
-import { getToasts, subscribeToasts, useBasketQuery, useJobsQuery, useSession } from "@/state";
+import { getToasts, subscribeToasts, useBasketQuery, useJobsQuery, useSession, useSettings } from "@/state";
 import { jobIsActive } from "@/data";
 import { WorkbenchHosts } from "./hosts";
 import { bindInkDrop, installInkTextures, paintBackdrop } from "@/ui/inkBackdrop";
@@ -9,6 +9,7 @@ import { bindInkFluid } from "@/ui/inkFluid";
 const GalleryView = lazy(() => import("../gallery").then((m) => ({ default: m.GalleryView })));
 const LotteryView = lazy(() => import("../lottery").then((m) => ({ default: m.LotteryView })));
 const StudioView = lazy(() => import("../generation/StudioView").then((m) => ({ default: m.StudioView })));
+const SettingsView = lazy(() => import("../settings/SettingsView").then((m) => ({ default: m.SettingsView })));
 
 const VIEWS = [
   { id: "gallery" as const, label: "图库", title: "图库", glyph: "藏" },
@@ -26,6 +27,9 @@ export function Workbench() {
   const jobsQ = useJobsQuery();
   const active = (jobsQ.data || []).filter((j) => jobIsActive(j));
 
+  const wantLiveInk = useSettings((s) => s.appearance.liveInk && !s.appearance.reduceMotion);
+  const showBattery = useSettings((s) => s.account.showBattery);
+
   const liveRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     document.documentElement.dataset.view = view;
@@ -34,16 +38,19 @@ export function Workbench() {
   useEffect(() => {
     installInkTextures();
     void paintBackdrop();
-    const offDrop = bindInkDrop();
+    return bindInkDrop();
+  }, []);
+
+  useEffect(() => {
+    if (!wantLiveInk) return;
     const offLive = liveRef.current ? bindInkFluid(liveRef.current) : null;
     // 活墨可用时，静态泼墨层不再显示（它只是兜底）
     document.documentElement.classList.toggle("ink-gl", Boolean(offLive));
     return () => {
       document.documentElement.classList.remove("ink-gl");
-      offDrop();
       offLive?.();
     };
-  }, []);
+  }, [wantLiveInk]);
 
   return (
     <>
@@ -94,7 +101,18 @@ export function Workbench() {
               {basketCount ? <span className="act-badge">{basketCount > 99 ? "99+" : basketCount}</span> : null}
             </button>
             <JobsDock />
-            <QuotaBattery />
+            {showBattery ? <QuotaBattery /> : null}
+            <button
+              className={`act-btn${view === "settings" ? " active" : ""}`}
+              type="button"
+              title="设置"
+              data-view="settings"
+              aria-current={view === "settings" ? "page" : undefined}
+              onClick={() => setView("settings")}
+            >
+              <span className="glyph">设</span>
+              <span className="lab">设置</span>
+            </button>
           </div>
         </nav>
         <main className="views">
@@ -102,6 +120,7 @@ export function Workbench() {
             {view === "gallery" ? <GalleryView /> : null}
             {view === "lottery" ? <LotteryView /> : null}
             {view === "studio" ? <StudioView /> : null}
+            {view === "settings" ? <SettingsView /> : null}
           </Suspense>
         </main>
         <WorkbenchHosts />

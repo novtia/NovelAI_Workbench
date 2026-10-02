@@ -15,7 +15,7 @@ from contexts.gallery.rules import (
     is_test_set_id,
     unique_artist_keys,
 )
-from kernel.blobs import BlobStore, make_thumb, png_size, sniff_mime
+from kernel.blobs import BlobStore, png_size, sniff_mime
 from kernel.bus import UnitOfWork
 from kernel.clock import now_ms, new_id
 from kernel.errors import DomainError
@@ -222,6 +222,7 @@ class GalleryService:
         include_deleted: bool = False,
         limit: int | None = None,
         offset: int = 0,
+        sort: str = "added_desc",
     ) -> list[dict[str, Any]]:
         album = self.get_album(album_id)
         if not album or (album["deleted"] and not include_deleted):
@@ -230,7 +231,7 @@ class GalleryService:
         args: list[Any] = [album_id]
         if not include_deleted:
             sql += " AND deleted=0"
-        sql += " ORDER BY added_at DESC"
+        sql += " ORDER BY added_at ASC, id ASC" if sort == "added_asc" else " ORDER BY added_at DESC, id DESC"
         if limit is not None:
             sql += " LIMIT ? OFFSET ?"
             args.extend([max(0, limit), max(0, offset)])
@@ -282,7 +283,7 @@ class GalleryService:
         if thumb:
             thumb_hash = self.blobs.put(thumb)
         else:
-            generated = make_thumb(data)
+            generated = self.blobs.thumb(data)
             if generated:
                 thumb_hash = self.blobs.put(generated)
         size = png_size(data)

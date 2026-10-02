@@ -41,11 +41,11 @@ export function ArtworkPendingCard({
 
   return (
     <div
-      className={`card pending is-${card.state}`}
-      style={{ animationDelay: `${Math.min(index, 12) * 30}ms`, "--p": p } as CSSProperties}
+      className={`card pending no-enter is-${card.state}`}
+      style={{ "--p": p } as CSSProperties}
       data-index={card.target?.index}
     >
-      <div className="thumb-wrap" style={src ? undefined : { aspectRatio: aspectOf(card, fallbackSize) }}>
+      <div className="thumb-wrap" style={{ aspectRatio: aspectOf(card, fallbackSize) }}>
         {src ? (
           <DrawLiveShot src={src} waiting={!live && !finalSrc} text={text} />
         ) : (

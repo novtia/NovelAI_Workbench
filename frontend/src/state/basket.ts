@@ -5,6 +5,8 @@ import { basketAdd, basketHasAll, basketRemove, basketText, normalizeBasketNames
 import { copyText } from "@/data/artwork";
 import { queryKeys } from "@/data/queryKeys";
 import type { BasketArtist } from "@/data/types";
+import { useSession } from "./session";
+import { getSettings } from "./settingsStore";
 import { pushToast } from "./toast";
 
 const EMPTY: BasketArtist[] = [];
@@ -60,6 +62,7 @@ export function useBasketActions() {
       if (fresh === currentList(qc)) return;
       const wanted = normalizeBasketNames(names).map((n) => n.name);
       mutate(qc, (l) => basketAdd(l, names), () => galleryApi.addToBasket(wanted), "加入画师串失败");
+      if (getSettings().basket.autoOpen) useSession.getState().setBasketOpen(true);
     },
     [qc],
   );
@@ -109,7 +112,7 @@ export function useBasketActions() {
       pushToast("画师串是空的", "warn");
       return false;
     }
-    const ok = await copyText(basketText(list));
+    const ok = await copyText(basketText(list, getSettings().basket));
     pushToast(ok ? `已复制画师串（${list.length} 位）` : "复制失败", ok ? "ok" : "error");
     return ok;
   }, [qc]);

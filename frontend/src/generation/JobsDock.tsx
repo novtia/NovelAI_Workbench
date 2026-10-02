@@ -1,7 +1,7 @@
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { generationApi } from "@/api";
 import { isSingleArtistAlbum, jobIsActive, jobProgressText, queryKeys } from "@/data";
-import { closeStudioMenus, pushToast, useJobsQuery, useSession, useStudioStore } from "@/state";
+import { closeStudioMenus, pushToast, useJobsQuery, useSession, useSettings, useStudioStore } from "@/state";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Album, Job } from "@/data/types";
 
@@ -30,6 +30,15 @@ export function JobsDock() {
   const rows = active.length ? active : jobs.slice(-6).reverse();
   const btnRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
+  const autoOpen = useSettings((s) => s.generation.autoOpenJobs);
+  const hadActive = useRef(false);
+
+  // 「有新任务时自动展开后台面板」：从没有进行中的任务变成有时展开一次
+  useEffect(() => {
+    const has = active.length > 0;
+    if (has && !hadActive.current && autoOpen) setJobsOpen(true);
+    hadActive.current = has;
+  }, [active.length, autoOpen, setJobsOpen]);
 
   useLayoutEffect(() => {
     if (!jobsOpen || !btnRef.current || !popRef.current) return;

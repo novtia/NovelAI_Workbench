@@ -254,8 +254,8 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border: 0; bord
 .g-testbar .mini { height: 34px; }
 .g-scroll { flex: 1; overflow: auto; padding: 30px 32px 70px; }
 /* 所有收藏夹都按行排：第 1 张在左上，向右依次排，排满再换行（不用 columns 瀑布流，它是先竖着填满一列） */
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); column-gap: 28px; align-items: start; }
-.grid.compact { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); column-gap: 14px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--card-min, 230px), 1fr)); column-gap: 28px; align-items: start; }
+.grid.compact { grid-template-columns: repeat(auto-fill, minmax(var(--card-min-compact, 150px), 1fr)); column-gap: 14px; }
 .grid[hidden] { display: none; }
 .grid .card {
   break-inside: avoid; margin: 0 0 30px; display: block; position: relative; cursor: pointer; outline: none;
@@ -462,6 +462,11 @@ pre.prompt {
 .grid .card.pending:hover { transform: none; box-shadow: 0 0 0 1px var(--line), 0 16px 28px -20px rgba(40, 30, 10, .5); }
 .card.pending .thumb-wrap { min-height: 60px; }
 .card.pending .draw-shot { padding: 0; background: transparent; }
+/* 占位框的高度由 aspect-ratio 固定；预览图铺满它，图片加载前后卡片高度不变，下面的行不会被顶着跳 */
+.card.pending .draw-shot { position: absolute; inset: 0; width: auto; }
+.card.pending .draw-shot img { width: 100%; height: 100%; object-fit: cover; }
+/* 测试集里占位 → 预览 → 成图是同一个位置原地换内容，不要每次换内容都重播入场动画 */
+.grid .card.no-enter { animation: none; }
 .card.pending .pending-ph {
   position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--mono); font-size: 11px; color: var(--ink-4);
   letter-spacing: .12em; border: 1px dashed var(--line-3);
@@ -917,6 +922,9 @@ dialog.modal form { padding: 28px 30px 24px; }
 dialog.modal h3 { margin: 0 0 20px; font-family: var(--brush); font-weight: 400; font-size: 30px; line-height: 1; }
 dialog.modal input[type=text] { width: 100%; height: 42px; border: 0; border-bottom: 1.5px solid var(--ink); background: transparent; font-size: 16px; outline: none; padding: 0 2px; }
 dialog.modal input[type=text]:focus { border-bottom-color: var(--zhu); }
+dialog.confirm-modal { max-width: min(460px, calc(100vw - 48px)); }
+dialog.confirm-modal h3 { margin-bottom: 14px; }
+.confirm-msg { margin: 0; font-size: 14px; line-height: 1.7; color: var(--ink-2); white-space: pre-line; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
 .meta-dialog { width: 580px; padding: 30px 30px 26px !important; }
 .meta-close { position: absolute; right: 12px; top: 12px; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 2px; background: var(--paper-3); z-index: 1; }

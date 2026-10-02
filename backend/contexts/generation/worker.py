@@ -54,7 +54,7 @@ def run_job(svc: GenerationService, job_id: str) -> None:
             et = str(chunk.get("event_type") or "")
             sample = int(chunk.get("samp_ix") or 0)
             image = chunk.get("image") if isinstance(chunk.get("image"), str) else ""
-            if et == "intermediate" and image:
+            if et == "intermediate" and image and svc.cfg("generation", "streamPreview", True):
                 step = chunk.get("step_ix")
                 text = _progress_text(sample, step, steps, n_samples)
                 raw = decode_image_b64(image)
@@ -113,15 +113,31 @@ def run_job(svc: GenerationService, job_id: str) -> None:
                 pass
 
 
+MAX_WORKERS = 3
+
+
 def start_worker(svc: GenerationService) -> None:
+    """起 MAX_WORKERS 个线程，实际并发数由设置 generation.concurrency 动态限制（默认 1）。"""
+    gate = threading.Condition()
+    running = 0
+
     def loop():
+        nonlocal running
         while True:
             job_id = svc.work_queue.get()
+            with gate:
+                while running >= int(svc.cfg("generation", "concurrency", 1)):
+                    gate.wait(1.0)
+                running += 1
             try:
                 run_job(svc, job_id)
             except Exception:
                 pass
             finally:
+                with gate:
+                    running -= 1
+                    gate.notify_all()
                 svc.work_queue.task_done()
 
-    threading.Thread(target=loop, name="nai-jobs", daemon=True).start()
+    for i in range(MAX_WORKERS):
+        threading.Thread(target=loop, name=f"nai-jobs-{i}", daemon=True).start()

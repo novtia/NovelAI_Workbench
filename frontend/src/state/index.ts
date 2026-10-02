@@ -15,3 +15,5 @@ export { useTestRun } from "./testRun";
 export { useTestRunStore } from "./testRunStore";
 export { useStudioActions, useStudioSync, saveStudioCurrent, closeStudioMenus, openStudioPop, closeMetaDialog } from "./studio";
 export { useStudioStore } from "./studioStore";
+export { confirmDialog } from "./confirm";
+export { useSettingsStore, useSettings, getSettings } from "./settingsStore";

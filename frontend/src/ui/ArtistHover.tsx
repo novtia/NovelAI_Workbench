@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { galleryApi } from "@/api";
 import { artistLibraryNames, indexArtistPreviews, isSingleArtistAlbum, queryKeys, stripArtist, tagKey } from "@/data";
 import type { Artwork } from "@/data/types";
-import { useAlbumsQuery, useSession } from "@/state";
+import { getSettings, useAlbumsQuery, useSession } from "@/state";
 import { BasketAddButton } from "./BasketAddButton";
 
 type HoverState = {
@@ -125,7 +125,7 @@ export function ArtistHoverProvider({ children }: { children: ReactNode }) {
       const key = tagKey(name);
       const items = previewsRef.current.get(key) || [];
       cancelHide();
-      if (!key || !items.length) {
+      if (!key || !items.length || !getSettings().gallery.hoverPreview) {
         setState(null);
         return;
       }

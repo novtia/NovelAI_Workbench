@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from random import Random
-from typing import Any
+from typing import Any, Callable
 
 from contexts.gallery.application import GalleryService
 from contexts.lottery.algorithm import draw_from_pool, parse_entries, pool_hash, tag_key
@@ -19,6 +19,15 @@ class LotteryService:
         self.uow = uow
         self.store = store
         self.gallery = gallery
+        # 「设置 → 抽奖」里的默认参数，由装配处注入；只影响还没保存过的抽奖台和缺失的字段。
+        self.default_controls: Callable[[], dict[str, Any]] | None = None
+
+    def _defaults(self) -> dict[str, Any]:
+        out = dict(DEFAULT_CONTROLS)
+        if self.default_controls:
+            preferred = self.default_controls()
+            out.update({k: v for k, v in preferred.items() if k in DEFAULT_CONTROLS})
+        return out
 
     def board(self) -> dict[str, Any]:
         with self.store.connect() as conn:
@@ -32,7 +41,7 @@ class LotteryService:
                 "excluded": [],
                 "pinned": [],
                 "weightCaps": {},
-                "controls": dict(DEFAULT_CONTROLS),
+                "controls": self._defaults(),
                 "version": 0,
             }
         return {
@@ -41,7 +50,7 @@ class LotteryService:
             "excluded": json.loads(row["excluded_json"] or "[]"),
             "pinned": json.loads(row["pinned_json"] or "[]"),
             "weightCaps": json.loads(row["weight_caps_json"] or "{}"),
-            "controls": {**DEFAULT_CONTROLS, **json.loads(row["controls_json"] or "{}")},
+            "controls": {**self._defaults(), **json.loads(row["controls_json"] or "{}")},
             "version": row["version"],
         }
 

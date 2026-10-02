@@ -6,7 +6,9 @@ import { uniqueArtistKeys } from "./singleArtist";
 
 type Prepared = { name: string; type: string; hash: string; params: ImageMeta; thumb: ArrayBuffer; width: number; height: number };
 
-function prepareInWorker(file: File, worker: Worker, id: number) {
+type ThumbOpts = { thumbSize?: number; thumbQuality?: number };
+
+function prepareInWorker(file: File, worker: Worker, id: number, thumb: ThumbOpts) {
   return new Promise<Prepared>((resolve, reject) => {
     const onMessage = (e: MessageEvent<Prepared & { id: number; error?: string }>) => {
       if (e.data.id !== id) return;
@@ -16,7 +18,7 @@ function prepareInWorker(file: File, worker: Worker, id: number) {
     };
     worker.addEventListener("message", onMessage);
     void file.arrayBuffer().then((buffer) => {
-      worker.postMessage({ id, buffer, name: file.name, type: file.type }, [buffer]);
+      worker.postMessage({ id, buffer, name: file.name, type: file.type, ...thumb }, [buffer]);
     });
   });
 }
@@ -27,7 +29,7 @@ export async function importImageFiles(
   fileList: Iterable<File>,
   albumId: string,
   onProgress: (done: number, total: number) => void,
-  opts?: { singleArtist?: boolean },
+  opts?: { singleArtist?: boolean; concurrency?: number; thumbSize?: number; thumbQuality?: number },
 ): Promise<ImportResult> {
   const files = [...fileList].filter(isImageFile);
   if (!files.length) return { added: 0, dup: 0, noMeta: 0, rejected: 0 };
@@ -39,14 +41,16 @@ export async function importImageFiles(
   let rejected = 0;
   let seq = 0;
   onProgress(0, files.length);
-  const workers = [0, 1].map(() => new Worker(new URL("./import.worker.ts", import.meta.url), { type: "module" }));
+  const concurrency = Math.max(1, Math.min(6, Math.round(opts?.concurrency || 2)));
+  const thumb: ThumbOpts = { thumbSize: opts?.thumbSize, thumbQuality: opts?.thumbQuality };
+  const workers = Array.from({ length: Math.min(concurrency, files.length) }, () => new Worker(new URL("./import.worker.ts", import.meta.url), { type: "module" }));
 
   try {
-  await mapPool(files, 2, async (file) => {
+  await mapPool(files, concurrency, async (file) => {
     const worker = workers[seq % workers.length];
     const id = ++seq;
     try {
-      const prepared = await prepareInWorker(file, worker, id);
+      const prepared = await prepareInWorker(file, worker, id, thumb);
       if (await galleryApi.hashExists(albumId, prepared.hash)) {
         dup += 1;
         return;

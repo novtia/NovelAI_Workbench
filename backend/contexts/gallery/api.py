@@ -127,9 +127,9 @@ def restore_album(album_id: str, request: Request):
 
 
 @router.get("/api/albums/{album_id}/items")
-def list_items(album_id: str, request: Request, limit: int | None = None, offset: int = 0):
+def list_items(album_id: str, request: Request, limit: int | None = None, offset: int = 0, sort: str = "added_desc"):
     try:
-        items = _svc(request).list_items(album_id, limit=limit, offset=offset)
+        items = _svc(request).list_items(album_id, limit=limit, offset=offset, sort=sort)
     except DomainError as exc:
         return _err(exc)
     return {"items": items}

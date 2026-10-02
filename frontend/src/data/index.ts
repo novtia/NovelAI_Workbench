@@ -18,7 +18,8 @@ export {
   uniqueArtistKeys,
 } from "./singleArtist";
 export type { ArtistColumn, ArtistSections, ArtistSpan, ArtistToken } from "./singleArtist";
-export { basketAdd, basketHasAll, basketRemove, basketText, normalizeBasketNames } from "./artistBasket";
+export { basketAdd, basketHasAll, basketName, basketRemove, basketText, normalizeBasketNames } from "./artistBasket";
+export type { BasketFormat } from "./artistBasket";
 export { buildSkinLayout, buildTestTargets, indexSkins, missingTargets, testJobKey } from "./testRun";
 export type { SkinGroup, SkinLayout, SkinProgress, SkinSlot, TestCard, TestCardState, TestTarget } from "./testRun";
 export {
@@ -36,7 +37,7 @@ export {
   suggestQueryFromSegment,
 } from "./artistCards";
 export type { ArtistCard, PromptSegment, SuggestQuery } from "./artistCards";
-export { isImageFile, makeThumb, parseImageMeta, reencodePngClean, sha256Hex, triggerBlobDownload } from "./png";
+export { extractArtists, isImageFile, makeThumb, parseImageMeta, reencodePngClean, sha256Hex, triggerBlobDownload } from "./png";
 export type { CharCaption, ImageMeta } from "./png";
 export {
   asMeta,
@@ -101,6 +102,7 @@ export {
   clampPanel,
   loadDraft,
   persistDraft,
+  setFormDefaultsProvider,
   loadSelectedSet,
   persistSelectedSet,
   LS_DRAFT,
@@ -109,8 +111,19 @@ export {
 } from "./studio";
 export { queryKeys } from "./queryKeys";
 export {
+  DEFAULT_SETTINGS,
+  SECTION_IDS,
+  applyPatch,
+  formatBytes,
+  mergePatch,
+  mergeSettings,
+} from "./settings";
+export type { SectionId, Settings, SettingsPatch, SystemInfo, ThemeMode } from "./settings";
+export {
   BAR_COLORS,
   DEFAULT_CONTROLS,
+  defaultControls,
+  setControlsDefaultsProvider,
   EMPTY_BOARD,
   applyJobToBatches,
   batchIndex,

@@ -1,6 +1,18 @@
+import { useSettingsStore } from "@/state/settingsStore";
 import { useStudioStore } from "@/state/studioStore";
 import { PANEL, clampPanel } from "@/data/studio";
 import { ACTIVITY_RAIL } from "@/ui/inkBackdrop";
+
+/** 写回 store；设置里开着「记住面板宽度」时同时存进后端设置，刷新后还在。 */
+function commitWidth(side: "left" | "hist", value: number) {
+  const s = useStudioStore.getState();
+  if (side === "left") s.setLeftW(value);
+  else s.setHistW(value);
+  const settings = useSettingsStore.getState();
+  if (settings.settings.layout.rememberWidths) {
+    settings.update({ layout: side === "left" ? { leftWidth: value } : { histWidth: value } });
+  }
+}
 
 /**
  * 拖拽期间不碰 React / zustand：只在 rAF 里直接改 #view-studio 上的 CSS 变量，
@@ -60,20 +72,14 @@ export function SplitHandle({ side }: { side: "left" | "hist" }) {
           root?.style.setProperty(cssVar, `${value}px`);
           document.body.classList.remove("is-resizing");
           el.classList.remove("is-on");
-          const s = useStudioStore.getState();
-          if (side === "left") s.setLeftW(value);
-          else s.setHistW(value);
+          commitWidth(side, value);
         };
         el.addEventListener("pointermove", move);
         el.addEventListener("pointerup", finish);
         el.addEventListener("pointercancel", finish);
         el.addEventListener("lostpointercapture", finish);
       }}
-      onDoubleClick={() => {
-        const s = useStudioStore.getState();
-        if (side === "left") s.setLeftW(PANEL.leftDef);
-        else s.setHistW(PANEL.histDef);
-      }}
+      onDoubleClick={() => commitWidth(side, side === "left" ? PANEL.leftDef : PANEL.histDef)}
     />
   );
 }

@@ -1,0 +1,30 @@
+/* 由「设置」驱动的全局外观：<html> 上的 data-* 属性由 ui/applySettings.ts 写入 */
+
+/* 深色：整页反相 + 色相回转，图片/视频再反相一次还原（宣纸配色里有大量硬编码色，用变量覆盖覆盖不全） */
+html[data-theme="dark"] { filter: invert(1) hue-rotate(180deg); background: #fff; }
+html[data-theme="dark"] img,
+html[data-theme="dark"] video { filter: invert(1) hue-rotate(180deg); }
+
+html[data-font="sans"] {
+  --serif: "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", "Source Han Sans SC", system-ui, sans-serif;
+}
+
+html[data-grain="off"] .bg-grain { display: none; }
+html[data-artists="off"] .grid .artists { display: none; }
+
+.g-more { text-align: center; color: var(--ink-4); font-size: 12px; letter-spacing: .2em; padding: 24px 0 8px; }
+
+html[data-labels="off"] .act-btn .lab { display: none; }
+html[data-labels="off"] .act-btn { height: 54px; }
+
+html[data-motion="reduce"] *,
+html[data-motion="reduce"] *::before,
+html[data-motion="reduce"] *::after {
+  animation-duration: .001ms !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: .001ms !important;
+  transition-delay: 0s !important;
+  scroll-behavior: auto !important;
+}
+html[data-motion="reduce"] .bg-ink-live { display: none; }

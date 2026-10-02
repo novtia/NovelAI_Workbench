@@ -4,6 +4,7 @@ import { queryKeys } from "@/data/queryKeys";
 import { isTestSetAlbum } from "@/data/singleArtist";
 import type { Album } from "@/data/types";
 import { useSession } from "./session";
+import { useSettings } from "./settingsStore";
 import { useStudioStore } from "./studioStore";
 
 const regularAlbums = (albums: Album[]) => albums.filter((a) => !isTestSetAlbum(a));
@@ -36,12 +37,13 @@ export function useJobsQuery() {
 export function useNaiStatusQuery() {
   const view = useSession((s) => s.view);
   const quotaOpen = useStudioStore((s) => s.quotaOpen);
-  const enabled = view === "studio" || quotaOpen;
+  const enabled = view === "studio" || view === "settings" || quotaOpen;
+  const refreshSec = useSettings((s) => s.account.quotaRefreshSec);
   return useQuery({
     queryKey: queryKeys.naiStatus,
     queryFn: generationApi.tokenStatus,
     enabled,
-    refetchInterval: enabled ? 60000 : false,
+    refetchInterval: enabled ? refreshSec * 1000 : false,
   });
 }
 

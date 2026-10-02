@@ -23,6 +23,7 @@ import {
   estimateTokens,
   TOKEN_LIMIT,
 } from "@/data";
+import { useSettings } from "@/state/settingsStore";
 import { armArtistLibrary, useArtistHover, useArtistLibrary, useArtistPreviews } from "@/ui/ArtistHover";
 import {
   buildEditor,
@@ -530,10 +531,11 @@ export function PromptWell({
 /** 只统计传进来的这一个输入框；悬停显示它自己占用的 token。 */
 export const TokenBar = memo(function TokenBar({ text, label }: { text: string; label?: string }) {
   const n = estimateTokens(text);
-  const tip = `${label ? `${label} ` : ""}占用约 ${n} tokens · 总上限 ${TOKEN_LIMIT}${n > TOKEN_LIMIT ? "（已超出）" : ""}`;
+  const warn = useSettings((s) => s.generation.tokenWarn) && n > TOKEN_LIMIT;
+  const tip = `${label ? `${label} ` : ""}占用约 ${n} tokens · 总上限 ${TOKEN_LIMIT}${warn ? "（已超出）" : ""}`;
   const p = tokenFillPercent(text);
   return (
-    <div className={`token-bar${n > TOKEN_LIMIT ? " over" : ""}`} data-tip={tip} aria-label={tip}>
+    <div className={`token-bar${warn ? " over" : ""}`} data-tip={tip} aria-label={tip}>
       <span className="track">
         {/* 渐变按整条轨道铺开，填充多少就露出多少，不会因为填充短就整段变红。 */}
         <i style={{ width: `${p}%`, backgroundSize: p ? `${10000 / p}% 100%` : undefined }} />

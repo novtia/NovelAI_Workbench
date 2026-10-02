@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { galleryApi } from "@/api";
-export type ViewId = "gallery" | "lottery" | "studio";
+export type ViewId = "gallery" | "lottery" | "studio" | "settings";
 export type AlbumDialogState = {
   mode: "create" | "rename";
   albumId?: string;
@@ -28,7 +28,6 @@ type SessionState = {
   /** 画师串抽屉是否打开，只放内存，刷新后默认关闭。 */
   basketOpen: boolean;
   query: string;
-  compact: boolean;
   dialog: AlbumDialogState | null;
   overlay: OverlayCopy;
   progress: ImportProgress;
@@ -41,8 +40,6 @@ type SessionState = {
   setBasketOpen: (open: boolean) => void;
   toggleBasket: () => void;
   setQuery: (query: string) => void;
-  setCompact: (compact: boolean) => void;
-  toggleCompact: () => void;
   openCreateDialog: () => void;
   openRenameDialog: (albumId: string, name: string) => void;
   setDialogName: (name: string) => void;
@@ -68,7 +65,7 @@ function persistSelection(albumId: string, testSetId: string, presetId: string) 
 
 function hashView(): ViewId {
   const raw = location.hash.replace("#", "");
-  if (raw === "lottery" || raw === "studio" || raw === "gallery") return raw;
+  if (raw === "lottery" || raw === "studio" || raw === "gallery" || raw === "settings") return raw;
   return "gallery";
 }
 
@@ -81,7 +78,6 @@ export const useSession = create<SessionState>((set) => ({
   openId: null,
   basketOpen: false,
   query: "",
-  compact: false,
   dialog: null,
   overlay: EMPTY_OVERLAY,
   progress: { show: false, done: 0, total: 0 },
@@ -111,8 +107,6 @@ export const useSession = create<SessionState>((set) => ({
   setBasketOpen: (basketOpen) => set({ basketOpen }),
   toggleBasket: () => set((s) => ({ basketOpen: !s.basketOpen })),
   setQuery: (query) => set({ query }),
-  setCompact: (compact) => set({ compact }),
-  toggleCompact: () => set((s) => ({ compact: !s.compact })),
   openCreateDialog: () => set({ dialog: { mode: "create", name: "" } }),
   openRenameDialog: (albumId, name) => set({ dialog: { mode: "rename", albumId, name } }),
   setDialogName: (name) => set((s) => (s.dialog ? { dialog: { ...s.dialog, name } } : s)),

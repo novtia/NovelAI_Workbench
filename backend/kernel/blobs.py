@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 from pathlib import Path
+from typing import Callable
 
 from PIL import Image
 
@@ -12,6 +13,12 @@ class BlobStore:
     def __init__(self, root: Path):
         self.root = root
         self.root.mkdir(parents=True, exist_ok=True)
+        # 返回 (最大边, WEBP 质量)；由设置服务注入，未注入时用默认值。
+        self.thumb_provider: Callable[[], tuple[int, int]] | None = None
+
+    def thumb(self, data: bytes) -> bytes | None:
+        size, quality = self.thumb_provider() if self.thumb_provider else (420, 82)
+        return make_thumb(data, size, quality)
 
     def path_for(self, digest: str) -> Path:
         digest = digest.lower()
@@ -65,14 +72,14 @@ def sniff_mime(data: bytes) -> str:
     return "application/octet-stream"
 
 
-def make_thumb(data: bytes, max_size: int = 420) -> bytes | None:
+def make_thumb(data: bytes, max_size: int = 420, quality: int = 82) -> bytes | None:
     try:
         image = Image.open(io.BytesIO(data))
         image.thumbnail((max_size, max_size))
         if image.mode not in ("RGB", "RGBA"):
             image = image.convert("RGBA" if "A" in image.getbands() else "RGB")
         out = io.BytesIO()
-        image.save(out, format="WEBP", quality=82, method=0)
+        image.save(out, format="WEBP", quality=int(quality), method=0)
         return out.getvalue()
     except Exception:
         return None

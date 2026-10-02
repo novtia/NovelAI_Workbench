@@ -1,3 +1,5 @@
+import { getSettings } from "./settingsStore";
+
 type Toast = { id: number; text: string; kind: "ok" | "warn" | "error" };
 
 let seq = 1;
@@ -15,7 +17,7 @@ export function pushToast(text: string, kind: Toast["kind"] = "ok") {
   window.setTimeout(() => {
     toasts = toasts.filter((t) => t.id !== id);
     emit();
-  }, 3200);
+  }, getSettings().appearance.toastMs);
 }
 
 export function getToasts() {

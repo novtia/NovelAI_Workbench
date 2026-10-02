@@ -16,9 +16,25 @@ export function normalizeBasketNames(names: unknown): Array<{ key: string; name:
   return out;
 }
 
-/** 复制用的画师串：`artist:a, artist:b`，按加入顺序，没有权重。 */
-export function basketText(list: Array<Pick<BasketArtist, "name">>) {
-  return list.map((a) => `artist:${stripArtist(a.name)}`).join(", ");
+export type BasketFormat = {
+  separator?: "comma" | "newline" | "space";
+  underscoreToSpace?: boolean;
+  escapeParens?: boolean;
+};
+
+const SEPARATORS = { comma: ", ", newline: "\n", space: " " } as const;
+
+/** 单个画师复制成 `artist:名字`，按设置处理下划线与括号。 */
+export function basketName(name: string, fmt: BasketFormat = {}) {
+  let n = stripArtist(name);
+  if (fmt.underscoreToSpace) n = n.replace(/_/g, " ");
+  if (fmt.escapeParens) n = n.replace(/\\?([()])/g, "\\$1");
+  return `artist:${n}`;
+}
+
+/** 复制用的画师串：默认 `artist:a, artist:b`，按加入顺序，没有权重。 */
+export function basketText(list: Array<Pick<BasketArtist, "name">>, fmt: BasketFormat = {}) {
+  return list.map((a) => basketName(a.name, fmt)).join(SEPARATORS[fmt.separator || "comma"]);
 }
 
 /** 乐观更新：把 names 里还没有的画师追加到末尾。 */

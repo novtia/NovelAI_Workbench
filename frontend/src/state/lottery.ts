@@ -37,6 +37,8 @@ import { useCollection } from "./collection";
 import { useJobsQuery, useLotteryBatchesQuery, useLotteryBoardQuery, useParamSetsQuery } from "./queries";
 import { useLotteryStore } from "./lotteryStore";
 import { useSession } from "./session";
+import { getSettings } from "./settingsStore";
+import { confirmDialog } from "./confirm";
 import { pushToast } from "./toast";
 
 let persistTimer = 0;
@@ -383,6 +385,7 @@ export function useLottery() {
       pushToast((await copyText(text)) ? "已复制画师串" : "复制失败", text ? "ok" : "warn");
     },
     removeBatch: async (batch: DrawBatch, n: number) => {
+      if (getSettings().lottery.confirmDelete && !(await confirmDialog(`删除第 ${n} 批抽奖结果？`, { title: "删除抽奖批次", confirmText: "删除" }))) return;
       await lotteryApi.deleteBatch(batch.id);
       await qc.invalidateQueries({ queryKey: queryKeys.lotteryBatches });
       pushToast(`已删除第 ${n} 批`, "ok");
@@ -393,6 +396,7 @@ export function useLottery() {
         pushToast("找不到这条抽奖串", "warn");
         return;
       }
+      if (getSettings().lottery.confirmDelete && !(await confirmDialog("删除这条抽奖串？", { title: "删除抽奖串", confirmText: "删除" }))) return;
       await lotteryApi.removeDraw(batch.id, id);
       await qc.invalidateQueries({ queryKey: queryKeys.lotteryBatches });
       pushToast("已删除这条抽奖串", "ok");
