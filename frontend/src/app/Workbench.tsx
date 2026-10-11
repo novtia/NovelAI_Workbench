@@ -41,8 +41,7 @@ export function Workbench() {
   const ThemeIcon = isDark ? NAV_ICONS.themeToLight : NAV_ICONS.themeToDark;
 
   function toggleTheme(e: MouseEvent<HTMLButtonElement>) {
-    const next = isDark ? "light" : "dark";
-    inkSwitchTheme(e.currentTarget, () => flushSync(() => setSetting("appearance", "theme", next)));
+    inkSwitchTheme(e.currentTarget, (theme) => flushSync(() => setSetting("appearance", "theme", theme)));
   }
 
   const liveRef = useRef<HTMLCanvasElement>(null);
