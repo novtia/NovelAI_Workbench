@@ -1,7 +1,7 @@
-import { create } from "zustand";
-import { defaultForm, defaultImportOpts, loadDraft, loadSelectedSet } from "@/data/studio";
+import { createTabScopedStore } from "./scoped";
+import { defaultEnhanceOpts, defaultForm, defaultImportOpts, loadDraft, loadSelectedSet } from "@/data/studio";
 import { getSettings } from "./settingsStore";
-import type { StudioForm, StudioImportOpts, StudioPop, StudioShot } from "@/data/types";
+import type { EditorMode, EnhanceOpts, I2iBase, StudioForm, StudioImportOpts, StudioPop, StudioShot } from "@/data/types";
 
 export type StudioDd = "model" | "mode" | "qtags" | "preset" | "";
 
@@ -12,6 +12,11 @@ export type StudioState = {
   aiOpen: boolean;
   aiSettled: boolean;
   i2iOpen: boolean;
+  /** 图生图底图（可带蒙版）；有底图时「生成」走 img2img / infill。不进草稿。 */
+  i2i: I2iBase | null;
+  enhance: EnhanceOpts;
+  /** 全屏编辑器：null 表示关闭。 */
+  editor: EditorMode | null;
   directing: boolean;
   activeChar: number;
   currentSetId: string;
@@ -46,6 +51,10 @@ export type StudioState = {
   setAiOpen: (aiOpen: boolean) => void;
   setAiSettled: (aiSettled: boolean) => void;
   setI2iOpen: (i2iOpen: boolean) => void;
+  setI2i: (i2i: I2iBase | null) => void;
+  patchI2i: (patch: Partial<I2iBase>) => void;
+  patchEnhance: (patch: Partial<EnhanceOpts>) => void;
+  setEditor: (editor: EditorMode | null) => void;
   setDirecting: (directing: boolean) => void;
   setActiveChar: (activeChar: number) => void;
   setCurrentSetId: (currentSetId: string) => void;
@@ -70,15 +79,21 @@ export type StudioState = {
   setJobsOpen: (jobsOpen: boolean) => void;
 };
 
-const draft = typeof localStorage !== "undefined" && getSettings().generation.draftSave ? loadDraft() : null;
+function initialDraft(tabId: string) {
+  return typeof localStorage !== "undefined" && getSettings().generation.draftSave ? loadDraft(tabId) : null;
+}
 
-export const useStudioStore = create<StudioState>((set, get) => ({
-  form: draft || defaultForm(),
+/** 每个标签一份：表单、预览、弹层、面板宽度等。 */
+export const useStudioStore = createTabScopedStore<StudioState>((tabId) => (set, get) => ({
+  form: initialDraft(tabId) || defaultForm(),
   promptTab: "base",
   charTabs: {},
   aiOpen: false,
   aiSettled: false,
   i2iOpen: false,
+  i2i: null,
+  enhance: defaultEnhanceOpts(),
+  editor: null,
   directing: false,
   activeChar: 0,
   currentSetId: typeof localStorage !== "undefined" ? loadSelectedSet() : "",
@@ -113,6 +128,10 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   setAiOpen: (aiOpen) => set({ aiOpen, aiSettled: false }),
   setAiSettled: (aiSettled) => set({ aiSettled }),
   setI2iOpen: (i2iOpen) => set({ i2iOpen }),
+  setI2i: (i2i) => set({ i2i }),
+  patchI2i: (patch) => set((s) => (s.i2i ? { i2i: { ...s.i2i, ...patch } } : {})),
+  patchEnhance: (patch) => set((s) => ({ enhance: { ...s.enhance, ...patch } })),
+  setEditor: (editor) => set({ editor }),
   setDirecting: (directing) => set({ directing }),
   setActiveChar: (activeChar) => set({ activeChar }),
   setCurrentSetId: (currentSetId) => set({ currentSetId }),

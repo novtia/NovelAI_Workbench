@@ -1,12 +1,14 @@
-import { SAMPLER_LABEL } from "@/data/studio";
+import { isMediumEffort, SAMPLER_LABEL } from "@/data/studio";
 import { accountLabel, costLabel, genLabel, formatTokenStatus } from "@/data";
 import { useShallow } from "zustand/react/shallow";
-import { openStudioPop, useNaiStatusQuery, useStudioActions, useStudioStore } from "@/state";
+import { openStudioPop, openTokenPop, useNaiStatusQuery, useStudioActions, useStudioEstimate, useStudioStore } from "@/state";
 import { IconBolt, IconCollapse, IconExpand, IconReset, IconSeed, IconX } from "./icons";
 
 export function ParamDock() {
   const form = useStudioStore(
     useShallow((s) => ({
+      model: s.form.model,
+      effort: s.form.effort,
       seed: s.form.seed,
       steps: s.form.steps,
       scale: s.form.scale,
@@ -20,8 +22,17 @@ export function ParamDock() {
   const genProgress = useStudioStore((s) => s.genProgress);
   const aiOpen = useStudioStore((s) => s.aiOpen);
   const aiSettled = useStudioStore((s) => s.aiSettled);
-  const { patch, generate, resetParams, setAiOpen } = useStudioActions();
+  const { patch, generate, enhanceCurrent, resetParams, setAiOpen } = useStudioActions();
   const status = useNaiStatusQuery().data || null;
+  // 增强面板开着时，生图按钮就是“增强图片”，点数跟着面板参数变。
+  const enhancing = useStudioStore((s) => s.pop === "enhance");
+  const estimate = useStudioEstimate();
+  const cost = estimate ? (enhancing ? estimate.enhance : estimate.generate) : null;
+  const medium = isMediumEffort(form);
+  const steps = medium ? 14 : form.steps;
+  const sampler = medium ? "k_euler_ancestral" : form.sampler;
+  const cfgRescale = medium ? 0 : form.cfgRescale;
+  const noiseSchedule = medium ? "karras" : form.noiseSchedule;
   const random = form.seed < 0;
   const opus = Boolean(status?.subscription?.opus);
   const pct = status?.subscription?.usagePercent;
@@ -50,7 +61,7 @@ export function ParamDock() {
                 <span className="lab">引导</span>
                 <span className="lab">种子</span>
                 <span className="lab">采样器</span>
-                <input className="val" type="number" min={1} max={50} value={form.steps} onChange={(e) => patch({ steps: Number(e.target.value) })} />
+                <input className="val" type="number" min={1} max={50} value={steps} disabled={medium} title={medium ? "节约模式固定 14 步" : undefined} onChange={(e) => patch({ steps: Number(e.target.value) })} />
                 <input className="val" type="number" min={0} max={30} step={0.1} value={form.scale} onChange={(e) => patch({ scale: Number(e.target.value) })} />
                 <div className={`val seed-box${random ? " is-random" : ""}`} id="seed-box">
                   <button className="seed-toggle" type="button" title={random ? "生成并锁定种子" : "恢复随机种子"} onClick={() => (random ? rollSeed() : patch({ seed: -1 }))}>
@@ -63,18 +74,21 @@ export function ParamDock() {
                   <button
                     type="button"
                     id="sampler-label"
+                    disabled={medium}
+                    title={medium ? "节约模式固定 Euler Ancestral" : undefined}
                     onClick={(e) => {
                       e.stopPropagation();
+                      if (medium) return;
                       openStudioPop("sampler", e.currentTarget, true);
                     }}
                   >
-                    {SAMPLER_LABEL[form.sampler] || form.sampler}
+                    {SAMPLER_LABEL[sampler] || sampler}
                   </button>
                 </div>
               </div>
               <div className="cfg">
                 <span>CFG 重缩放</span>
-                <input type="number" min={0} max={1} step={0.05} value={form.cfgRescale} onChange={(e) => patch({ cfgRescale: Number(e.target.value) })} />
+                <input type="number" min={0} max={1} step={0.05} value={cfgRescale} disabled={medium} title={medium ? "节约模式不支持 CFG 重缩放" : undefined} onChange={(e) => patch({ cfgRescale: Number(e.target.value) })} />
               </div>
             </div>
             <button className={`play${aiOpen ? " on" : ""}`} type="button" title="展开参数设置" onClick={() => setAiOpen(true)}>
@@ -96,8 +110,8 @@ export function ParamDock() {
             <label className="ai-field">
               步数
               <div className="ai-slide">
-                <input className="ai-box" type="number" min={1} max={50} step={1} value={form.steps} onChange={(e) => patch({ steps: Number(e.target.value) })} />
-                <input type="range" min={1} max={50} step={1} value={form.steps} onChange={(e) => patch({ steps: Number(e.target.value) })} />
+                <input className="ai-box" type="number" min={1} max={50} step={1} value={steps} disabled={medium} onChange={(e) => patch({ steps: Number(e.target.value) })} />
+                <input type="range" min={1} max={50} step={1} value={steps} disabled={medium} onChange={(e) => patch({ steps: Number(e.target.value) })} />
               </div>
             </label>
             <label className="ai-field">
@@ -142,12 +156,15 @@ export function ParamDock() {
                 <button
                   className="ai-sampler"
                   type="button"
+                  disabled={medium}
+                  title={medium ? "节约模式固定 Euler Ancestral" : undefined}
                   onClick={(e) => {
                     e.stopPropagation();
+                    if (medium) return;
                     openStudioPop("sampler", e.currentTarget, true);
                   }}
                 >
-                  {SAMPLER_LABEL[form.sampler] || form.sampler}
+                  {SAMPLER_LABEL[sampler] || sampler}
                 </button>
               </label>
             </div>
@@ -156,7 +173,7 @@ export function ParamDock() {
               <div className="extra show">
                 <label>
                   调度
-                  <select value={form.noiseSchedule} onChange={(e) => patch({ noiseSchedule: e.target.value })}>
+                  <select value={noiseSchedule} disabled={medium} onChange={(e) => patch({ noiseSchedule: e.target.value })}>
                     <option value="karras">karras</option>
                     <option value="exponential">exponential</option>
                     <option value="polyexponential">polyexponential</option>
@@ -173,8 +190,8 @@ export function ParamDock() {
             <label className="ai-field">
               CFG 重缩放
               <div className="ai-slide">
-                <input className="ai-box" type="number" min={0} max={1} step={0.05} value={form.cfgRescale} onChange={(e) => patch({ cfgRescale: Number(e.target.value) })} />
-                <input type="range" min={0} max={1} step={0.05} value={form.cfgRescale} onChange={(e) => patch({ cfgRescale: Number(e.target.value) })} />
+                <input className="ai-box" type="number" min={0} max={1} step={0.05} value={cfgRescale} disabled={medium} onChange={(e) => patch({ cfgRescale: Number(e.target.value) })} />
+                <input type="range" min={0} max={1} step={0.05} value={cfgRescale} disabled={medium} onChange={(e) => patch({ cfgRescale: Number(e.target.value) })} />
               </div>
             </label>
           </div>
@@ -187,8 +204,7 @@ export function ParamDock() {
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              const trig = document.getElementById("st-account");
-              if (trig) openStudioPop("token", trig);
+              openTokenPop();
             }}
           >
             详情
@@ -197,10 +213,16 @@ export function ParamDock() {
         <i className="bar" style={{ width: opus && pct != null ? `${Math.max(0, Math.min(100, Number(pct)))}%` : "0%" }} />
       </div>
       <p className="gen-bg-hint">后台执行 · 切换页面不会中断</p>
-      <button className={`gen${busy ? " busy" : ""}`} type="button" onClick={() => void generate()} disabled={busy}>
-        <span>{genLabel(form.nSamples, busy, genProgress || (busy ? "排队中" : ""))}</span>
+      <button
+        className={`gen${busy ? " busy" : ""}${enhancing ? " enhancing" : ""}`}
+        type="button"
+        onClick={() => void (enhancing ? enhanceCurrent() : generate())}
+        disabled={busy}
+        title={estimate ? "Anlas 为按官方公式的估算值" : undefined}
+      >
+        <span>{enhancing && !busy ? "增强图片" : genLabel(form.nSamples, busy, genProgress || (busy ? "排队中" : ""))}</span>
         <span className="cost">
-          {costLabel(status)}
+          {cost ?? costLabel(status)}
           <IconBolt />
         </span>
       </button>

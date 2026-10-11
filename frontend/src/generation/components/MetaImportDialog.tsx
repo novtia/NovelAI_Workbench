@@ -11,7 +11,7 @@ export function MetaImportDialog() {
   const metaForm = useStudioStore((s) => s.metaForm);
   const importOpts = useStudioStore((s) => s.importOpts);
   const setImportOpts = useStudioStore((s) => s.setImportOpts);
-  const { importMeta, soon } = useStudioActions();
+  const { importMeta, soon, setI2iFromDropped } = useStudioActions();
   const ref = useRef<HTMLDialogElement>(null);
   const ok = metaStatus === "ok" && Boolean(metaForm);
 
@@ -48,13 +48,13 @@ export function MetaImportDialog() {
       <h3>要对这张图做什么？</h3>
       <div className="meta-preview">{metaUrl ? <img src={metaUrl} alt="" /> : null}</div>
       <div className="meta-tools">
-        <button type="button" onClick={() => soon("第二波接入：图生图 / Vibe / 精确参考")}>
+        <button type="button" onClick={() => void setI2iFromDropped()}>
           图生图
         </button>
-        <button type="button" onClick={() => soon("第二波接入：图生图 / Vibe / 精确参考")}>
+        <button type="button" onClick={() => soon("Vibe Transfer 暂未接入")}>
           Vibe Transfer
         </button>
-        <button type="button" onClick={() => soon("第二波接入：图生图 / Vibe / 精确参考")}>
+        <button type="button" onClick={() => soon("精确参考暂未接入")}>
           精确参考
         </button>
       </div>

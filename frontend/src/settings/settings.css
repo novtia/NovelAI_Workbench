@@ -12,7 +12,8 @@
   border-radius: 2px; color: var(--ink-2); transition: background .2s;
 }
 .s-nav-item:hover { background: rgba(21, 20, 15, .045); }
-.s-nav-glyph { font-family: var(--brush); font-size: 22px; line-height: 1; width: 24px; text-align: center; color: var(--ink-3); }
+.s-nav-glyph { display: grid; place-items: center; width: 24px; height: 24px; color: var(--ink-3); }
+.s-nav-glyph svg { width: 20px; height: 20px; stroke-width: 1.6; }
 .s-nav-title { flex: 1; font-size: 14px; }
 .s-nav-n { font-family: var(--mono); font-size: 10px; min-width: 18px; padding: 1px 5px; text-align: center; border-radius: 9px; background: var(--zhu-soft); color: var(--zhu); }
 .s-nav-item.active { color: var(--ink); }

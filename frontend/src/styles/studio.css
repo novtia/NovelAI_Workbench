@@ -37,3 +37,600 @@ body.is-resizing .overlay {
 #view-studio .st-app {
   min-height: 0;
 }
+
+/* ---------- 画布工具栏：没有可用图时置灰 ---------- */
+.tbtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.tbtn:disabled:hover {
+  background: rgba(250, 246, 238, 0.92);
+  color: var(--ink-2);
+}
+
+/* 按钮旁边的 Anlas 估算 */
+.tcost {
+  font-size: 11px;
+  font-family: var(--mono);
+  line-height: 1;
+  color: var(--huang);
+}
+.tbtn:hover .tcost {
+  color: inherit;
+}
+.tbtn-sep {
+  width: 1px;
+  height: 18px;
+  align-self: center;
+  margin: 0 4px;
+  background: var(--line-2);
+}
+
+/* ---------- 预览画布：中键/空白处拖拽平移，滚轮缩放 ---------- */
+.frame-wrap.canvas-mode {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  display: block;
+  z-index: 0;
+}
+.cv {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.cv:active {
+  cursor: grabbing;
+}
+.cv-world {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+.cv-world.ease {
+  transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.cv-cell {
+  position: absolute;
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  background: var(--paper-3);
+  box-shadow: 0 0 0 1px var(--line), 0 10px 18px -14px rgba(30, 20, 8, 0.45);
+}
+.cv-cell img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+button.cv-cell {
+  cursor: pointer;
+}
+.cv-cell.original {
+  cursor: pointer;
+}
+.cv-hud {
+  position: absolute;
+  right: 18px;
+  top: 14px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cv-hud .sbtn {
+  width: 32px;
+  height: 32px;
+}
+.cv-hud .sbtn svg {
+  width: 14px;
+  height: 14px;
+}
+.enh-go .cost {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  opacity: 0.85;
+}
+.enh-go .cost svg {
+  width: 11px;
+  height: 11px;
+}
+.var-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 3px 7px;
+  border-radius: 3px;
+  background: rgba(30, 26, 20, 0.78);
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+}
+
+/* ---------- 图生图底图面板 ---------- */
+.i2i-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+}
+.i2i-mini {
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--line-2);
+  border-radius: 13px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  white-space: nowrap;
+  transition: 0.2s;
+}
+.i2i-mini:hover:not(:disabled) {
+  background: var(--ink);
+  color: var(--paper-3);
+  border-color: var(--ink);
+}
+.i2i-mini:disabled,
+.i2i-actions .ico:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.i2i-actions {
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.i2i-card {
+  padding: 12px;
+  background: var(--paper-3);
+  box-shadow: 0 0 0 1px var(--line);
+  border-radius: 2px;
+}
+.i2i-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.i2i-thumb {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  flex: none;
+  overflow: hidden;
+  background: var(--silk);
+  box-shadow: 0 0 0 1px var(--line-2);
+}
+.i2i-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.i2i-thumb .i2i-maskimg {
+  mix-blend-mode: screen;
+  opacity: 0.55;
+}
+.i2i-field {
+  margin-bottom: 8px;
+}
+.i2i-field:last-child {
+  margin-bottom: 0;
+}
+
+/* ---------- 增强面板 ---------- */
+.enhance-pop {
+  width: 340px;
+  padding: 12px 14px 14px;
+}
+.enh-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.enh-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+.enh-title svg {
+  width: 16px;
+  height: 16px;
+}
+.enh-body {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+}
+.enh-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.enh-col.grow {
+  flex: 1;
+}
+.enh-col input[type="range"] {
+  width: 100%;
+}
+.enh-label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--ink-3);
+}
+.enh-label b {
+  color: var(--ink);
+  font-family: var(--mono);
+  margin-left: 4px;
+}
+.enh-adv {
+  margin: 10px 0 8px;
+  font-size: 12px;
+  color: var(--ink-3);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.enh-adv:hover {
+  color: var(--zhu);
+}
+.enh-advanced {
+  margin-bottom: 4px;
+}
+.enh-tip {
+  margin: 4px 0 10px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ink-4);
+}
+.enh-go {
+  width: 100%;
+  justify-content: center;
+}
+
+/* ---------- 全屏图片编辑器 ---------- */
+/* 编辑器铺满生图室（#view-studio 自己是 position:absolute 的层）。
+   不能用 position:fixed：深色模式下 #app 带 filter，fixed 会以 #app 为参照，顶栏会被标签栏盖住。
+   配色一律用主题变量：深色主题是整个 #app 反相出来的，写死的深色会被反相成浅色。 */
+.ied {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper-2);
+  color: var(--ink);
+}
+.ied-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
+  background: var(--paper-3);
+  border-bottom: 1px solid var(--line);
+}
+/* canvas / 颜色框不会被主题里「图片再反相一次」的规则还原，这里补上，深色主题下画出来的颜色才是真实颜色 */
+html[data-ui="dark"] .ied canvas,
+html[data-ui="dark"] .ied-color {
+  filter: invert(1) hue-rotate(180deg);
+}
+.ied-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.ied .seg-bar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.ied-color {
+  width: 34px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--line-2);
+  background: transparent;
+  cursor: pointer;
+}
+.ied-size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-family: var(--mono);
+  color: var(--ink-3);
+}
+.ied-size input {
+  width: 140px;
+}
+.ied-x {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 2px;
+  color: var(--ink-3);
+}
+.ied-x:hover {
+  background: var(--ink);
+  color: var(--paper-3);
+}
+.ied-x svg {
+  width: 16px;
+  height: 16px;
+}
+.ied-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
+.ied-error {
+  color: var(--ink-3);
+  font-size: 13px;
+}
+.ied-board {
+  position: relative;
+  background: #fff;
+  box-shadow: 0 0 0 1px var(--line-2), 0 24px 60px -28px rgba(30, 20, 8, 0.55);
+  touch-action: none;
+}
+.ied-img,
+.ied-layer,
+.ied-hit {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  user-select: none;
+}
+.ied-img {
+  object-fit: fill;
+  pointer-events: none;
+}
+.ied-layer {
+  pointer-events: none;
+}
+.ied-hit {
+  cursor: crosshair;
+}
+.ied-bottom {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 14px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--paper-3);
+  box-shadow: 0 0 0 1px var(--line-2);
+}
+.ied-bottom button {
+  height: 32px;
+  min-width: 32px;
+  padding: 0 8px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 4px;
+  color: var(--ink-2);
+}
+.ied-bottom button:hover:not(:disabled) {
+  background: var(--ink);
+  color: var(--paper-3);
+}
+.ied-bottom button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.ied-bottom svg {
+  width: 17px;
+  height: 17px;
+}
+.ied-text {
+  font-size: 12.5px;
+  letter-spacing: 0.08em;
+}
+.ied-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 6px;
+  background: var(--line-2);
+}
+
+/* 顶部栏：颜色 + 吸管、笔尖形状、导出 */
+.ied-swatch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.ied-dropper {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--paper-3);
+  box-shadow: 0 0 0 1px var(--line-2);
+  color: var(--ink-2);
+}
+.ied-dropper svg {
+  width: 11px;
+  height: 11px;
+}
+.ied-dropper:hover,
+.ied-dropper.on {
+  background: var(--ink);
+  color: var(--paper-3);
+}
+.ied-size {
+  min-width: 190px;
+}
+.ied-tips {
+  display: inline-flex;
+  gap: 4px;
+}
+.ied-tips button {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--ink-3);
+}
+.ied-tips button svg {
+  width: 16px;
+  height: 16px;
+}
+.ied-tips button:hover,
+.ied-tips button.on {
+  background: var(--ink);
+  color: var(--paper-3);
+}
+.ied-x:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* 底部工具条：左边绘制与选择，右边调整 / 清空 / 导入 / 撤销重做 */
+.ied-bottom {
+  width: min(780px, calc(100% - 32px));
+  position: relative;
+}
+.ied-bottom button.on {
+  background: var(--ink);
+  color: var(--paper-3);
+}
+.ied-spacer {
+  flex: 1;
+  min-width: 24px;
+}
+
+/* 画板叠层：合成层（底图 + 涂画，可整体预览调整滤镜）、选区、浮动块、笔刷圈 */
+.ied-comp {
+  position: absolute;
+  inset: 0;
+}
+.ied-sel {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.ied-ants {
+  stroke: #111;
+  stroke-width: 1.5px;
+  stroke-dasharray: 6 4;
+  filter: drop-shadow(0 0 1px #fff);
+  animation: iedAnts 0.6s linear infinite;
+}
+@keyframes iedAnts {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+.ied-float {
+  box-shadow: 0 0 0 1px rgba(47, 111, 237, 0.9);
+}
+.ied-float.persistent {
+  box-shadow: 0 0 0 2px #2f6fed;
+}
+.ied-ring {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 50%;
+  border: 1px solid #fff;
+  box-shadow: 0 0 0 1px #000;
+  pointer-events: none;
+  opacity: 0;
+}
+.ied-floatbar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--paper-3);
+  box-shadow: 0 0 0 1px var(--line-2);
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.ied-adjust {
+  position: absolute;
+  right: 18px;
+  bottom: 12px;
+  z-index: 3;
+  width: 280px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--paper-3);
+  box-shadow: 0 0 0 1px var(--line-2), 0 16px 30px -18px rgba(30, 20, 8, 0.5);
+}
+.ied-adjust-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.ied-adjust-row {
+  display: grid;
+  grid-template-columns: 52px 1fr 34px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.ied-adjust-row em {
+  font-style: normal;
+  font-family: var(--mono);
+  text-align: right;
+}
+.ied-adjust-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-size: 11.5px;
+  color: var(--ink-4);
+}
+.ied-adjust-foot span {
+  display: inline-flex;
+  gap: 6px;
+}

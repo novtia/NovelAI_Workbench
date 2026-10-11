@@ -14,6 +14,7 @@ import { saveLotteryPreview } from "./lottery";
 import { useLotteryStore } from "./lotteryStore";
 import { saveStudioCurrent } from "./studio";
 import { useStudioStore } from "./studioStore";
+import { useUiStore } from "./uiStore";
 
 export function useCommands() {
   const qc = useQueryClient();
@@ -43,21 +44,22 @@ export function useCommands() {
   }
 
   async function importFiles(fileList: Iterable<File>) {
-    const { session, album, albumId } = read();
+    const { album, albumId } = read();
     if (!albumId) return;
     const list = [...fileList];
     if (!list.length) {
       pushToast("没有可导入的图片", "warn");
       return;
     }
-    session.setProgress(true, 0, list.length);
-    const result = await importImageFiles(list, albumId, (done, total) => session.setProgress(true, done, total), {
+    const ui = useUiStore.getState();
+    ui.setProgress(true, 0, list.length);
+    const result = await importImageFiles(list, albumId, (done, total) => ui.setProgress(true, done, total), {
       singleArtist: isSingleArtistAlbum(album),
       concurrency: getSettings().system.importConcurrency,
       thumbSize: getSettings().gallery.thumbSize,
       thumbQuality: getSettings().gallery.thumbQuality / 100,
     });
-    session.setProgress(false);
+    ui.setProgress(false);
     await refresh();
     const bits = [`导入 ${result.added} 张`];
     if (result.dup) bits.push(`跳过 ${result.dup} 张重复`);

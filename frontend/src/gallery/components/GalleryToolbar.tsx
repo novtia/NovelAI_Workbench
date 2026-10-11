@@ -2,10 +2,8 @@ import { isSingleArtistAlbum } from "@/data";
 import { useCommands, useCollection, useSession, useSettings, useSettingsStore } from "@/state";
 import { IconPlus } from "@/generation/components/icons";
 
-const VOLUME = ["〇", "壹", "贰", "叁", "肆", "伍", "陆", "柒", "捌", "玖", "拾"];
-
 export function GalleryToolbar() {
-  const { album, albums, testSet, items, filtered, query } = useCollection();
+  const { album, testSet, items, filtered, query } = useCollection();
   const compact = useSettings((s) => s.gallery.density === "compact");
   const setQuery = useSession((s) => s.setQuery);
   const setSetting = useSettingsStore((s) => s.set);
@@ -13,12 +11,9 @@ export function GalleryToolbar() {
   const { pickFiles, clearCurrentAlbum } = useCommands();
   const has = items.length > 0;
   const count = query.trim() ? `${filtered.length} / ${items.length} 张` : `${items.length} 张`;
-  const volume = VOLUME[albums.findIndex((a) => a.id === album?.id) + 1] || "〇";
-
   return (
     <div className={`g-toolbar${isSingleArtistAlbum(album) ? " has-testbar" : ""}`}>
       <div className="g-title">
-        <span className="kicker">{testSet ? `卷${volume} · TEST SET` : `卷${volume} · GALLERY`}</span>
         <h2 className="album-title">{testSet?.name || album?.name || "收藏夹"}</h2>
         <span className="count">{has ? count : "0 张"}</span>
       </div>

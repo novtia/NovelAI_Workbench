@@ -84,6 +84,7 @@ SCHEMA: dict[str, dict[str, Spec]] = {
     },
     "generation": {
         "model": _choice("nai-diffusion-5-full", "nai-diffusion-5-full", "nai-diffusion-5-curated"),
+        "effort": _choice("high", "high", "medium"),
         "v5Mode": _choice("anime", "anime", "furry"),
         "quality": _choice("gallery", "off", "official", "gallery"),
         "preset": _choice("Normal", "Small", "Normal", "Large"),

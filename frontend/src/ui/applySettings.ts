@@ -11,7 +11,11 @@ export function resolveTheme(mode: ThemeMode): "light" | "dark" {
 export function applySettingsToDom(s: Settings, root: HTMLElement = document.documentElement) {
   const a = s.appearance;
   const g = s.gallery;
-  root.dataset.theme = resolveTheme(a.theme);
+  const theme = resolveTheme(a.theme);
+  root.dataset.theme = theme;
+  // 背景层和界面的深浅（见 styles/theme.css）；都跟着主题走
+  root.dataset.bg = theme;
+  root.dataset.ui = theme;
   root.dataset.font = a.font;
   root.dataset.grain = a.grain ? "on" : "off";
   root.dataset.motion = a.reduceMotion ? "reduce" : "full";

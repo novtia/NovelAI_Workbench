@@ -15,7 +15,8 @@ import { SamplerPop } from "../components/SamplerPop";
 import { SplitHandle } from "../components/SplitHandle";
 import { StudioAlbumPop } from "../components/StudioAlbumPop";
 import { DownloadPop } from "../components/DownloadPop";
-import { StudioHeader } from "../components/StudioHeader";
+import { EnhancePop } from "../components/EnhancePop";
+import { ImageEditor } from "../components/ImageEditor";
 import { StudioStage } from "../components/StudioStage";
 import { TokenPop } from "../components/TokenPop";
 
@@ -41,7 +42,7 @@ export function StudioSkeleton() {
       const t = e.target as HTMLElement | null;
       if (
         t?.closest(
-          ".dd, .pop-panel, [data-toggle], #sampler-label, #ai-sampler, .gender, #char-add, #st-account, #st-menu, #st-quota-detail, #btn-save-gallery, #btn-download, #st-param-set-btn, #act-battery, #act-quota-pop, #act-jobs, #act-jobs-pop",
+          ".dd, .pop-panel, [data-toggle], #sampler-label, #ai-sampler, .gender, #char-add, #st-quota-detail, #btn-save-gallery, #btn-download, #tool-enhance, #st-param-set-btn, #act-battery, #act-quota-pop, #act-jobs, #act-jobs-pop",
         )
       ) {
         return;
@@ -65,7 +66,6 @@ export function StudioSkeleton() {
     >
       <div className="st-app">
         <aside className="left">
-          <StudioHeader />
           <div className="left-scroll">
             <ModelRow />
             <PromptCard />
@@ -85,6 +85,8 @@ export function StudioSkeleton() {
       <GenderPop />
       <StudioAlbumPop />
       <DownloadPop />
+      <EnhancePop />
+      <ImageEditor />
       <ParamSetPop />
     </section>
   );

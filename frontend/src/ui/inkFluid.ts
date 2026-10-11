@@ -6,6 +6,8 @@
  * WebGL2，半精度浮点纹理；不支持时返回 null，由静态泼墨底兜底。
  */
 
+import { INK_LIGHT, TEA_LIGHT, darkTheme, themeWipe, wipeSize } from "./themeWipe";
+
 const SPLAT_MAX = 16;
 const DYE_LONG = 512;
 const VEL_LONG = 128;
@@ -144,6 +146,14 @@ uniform sampler2D uBase;
 uniform vec2 uTexel;
 uniform float uAsp;
 uniform float uT;
+// ---- 主题切换：墨迹扩散 ----
+uniform sampler2D uBlot;   // 泼墨遮罩图（alpha），与界面的 CSS 遮罩是同一张
+uniform vec4 uWipe;        // x, y, 边长（CSS 像素），w>0.5 表示正在扩散
+uniform vec2 uView;        // 视口 CSS 尺寸
+uniform vec3 uInkA;        // 旧主题的墨色 / 茶色（前沿之外）
+uniform vec3 uInkB;        // 新主题的墨色 / 茶色（前沿之内）
+uniform vec3 uTeaA;
+uniform vec3 uTeaB;
 void main() {
   vec2 d = texture(uDye, vUv).xy + texture(uBase, vUv).xy;
   float dl = texture(uDye, vUv - vec2(uTexel.x, 0.0)).x;
@@ -154,11 +164,28 @@ void main() {
   // 纸纤维让墨色不那么均匀
   float grain = 0.86 + 0.28 * vnoise(vUv * vec2(uAsp, 1.0) * 140.0) * vnoise(vUv * vec2(uAsp, 1.0) * 37.0 + 4.0);
   float ink = clamp(d.x, 0.0, 1.0);
+
+  vec3 inkCol = uInkA;
+  vec3 teaCol = uTeaA;
+  float reveal = 0.0;
+  float rim = 0.0;
+  if (uWipe.w > 0.5) {
+    // 像素在视口里的位置（CSS 像素，y 向下），换算到遮罩图的 uv；流动的墨让前沿随墨的浓淡轻轻起伏
+    vec2 px = vec2(vUv.x * uView.x, (1.0 - vUv.y) * uView.y);
+    vec2 bu = (px - uWipe.xy) / uWipe.z + 0.5;
+    bu += vec2(dr - dl, db - dt) * 0.012 + (d.x - 0.35) * 0.004;
+    if (bu.x > 0.0 && bu.x < 1.0 && bu.y > 0.0 && bu.y < 1.0) reveal = texture(uBlot, bu).a;
+    // 前沿上的一圈湿墨边：墨在这里最浓，向两侧晕开
+    float edge = reveal * (1.0 - reveal) * 4.0;
+    rim = edge * edge;
+    inkCol = mix(uInkA, uInkB, reveal);
+    teaCol = mix(uTeaA, uTeaB, reveal);
+  }
+
   // 浓度落差大的地方（被推开后堆起的边）墨色更深，像水墨的湿边
   float aInk = clamp((ink * 0.52 + grad * 3.2) * grain, 0.0, 0.7);
+  aInk = clamp(aInk + rim * 0.5, 0.0, 0.85);
   float aTea = clamp(d.y, 0.0, 1.0) * 0.17;
-  vec3 inkCol = vec3(0.102, 0.114, 0.106);
-  vec3 teaCol = vec3(0.541, 0.416, 0.212);
   float a = 1.0 - (1.0 - aInk) * (1.0 - aTea);
   vec3 rgb = inkCol * aInk + teaCol * aTea * (1.0 - aInk);
   outColor = vec4(rgb, a);
@@ -199,7 +226,7 @@ export function bindInkFluid(canvas: HTMLCanvasElement): (() => void) | null {
     pBase = program(FS_BASE, ["uT", "uAsp"]);
     pVel = program(FS_VEL, ["uVel", "uDecay", "uAsp", "uR", "uCount", "uSplat", "uStr"]);
     pDye = program(FS_DYE, ["uDye", "uVel", "uBase", "uDt", "uT", "uAsp", "uRelax"]);
-    pDisp = program(FS_DISPLAY, ["uDye", "uBase", "uTexel", "uAsp", "uT"]);
+    pDisp = program(FS_DISPLAY, ["uDye", "uBase", "uTexel", "uAsp", "uT", "uBlot", "uWipe", "uView", "uInkA", "uInkB", "uTeaA", "uTeaB"]);
   } catch {
     return null;
   }
@@ -335,7 +362,8 @@ export function bindInkFluid(canvas: HTMLCanvasElement): (() => void) | null {
     prev = now;
     t += dt * TIME_SCALE;
     if (!dye || !vel || !base) return;
-    if (document.hidden || document.body.classList.contains("is-resizing") || document.documentElement.dataset.view !== "studio") {
+    // 动态墨背景是全局的：所有页面、拖拽分栏时都照常渲染；只在窗口隐藏时暂停
+    if (document.hidden) {
       prev = now;
       return;
     }
@@ -380,9 +408,30 @@ export function bindInkFluid(canvas: HTMLCanvasElement): (() => void) | null {
     swap(dye);
 
     // 3) 上屏
-    display();
+    display(now);
   }
-  function display() {
+
+  // ---- 主题切换的泼墨遮罩纹理（来自 themeWipe.source） ----
+  let blotTex: WebGLTexture | null = null;
+  let blotVersion = -1;
+  function syncBlot(): boolean {
+    if (!themeWipe.source) return false;
+    if (blotVersion !== themeWipe.sourceVersion) {
+      if (!blotTex) blotTex = gl!.createTexture();
+      gl!.activeTexture(gl!.TEXTURE0 + 3);
+      gl!.bindTexture(gl!.TEXTURE_2D, blotTex);
+      gl!.pixelStorei(gl!.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+      gl!.texImage2D(gl!.TEXTURE_2D, 0, gl!.RGBA, gl!.RGBA, gl!.UNSIGNED_BYTE, themeWipe.source);
+      gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_MIN_FILTER, gl!.LINEAR);
+      gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_MAG_FILTER, gl!.LINEAR);
+      gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_WRAP_S, gl!.CLAMP_TO_EDGE);
+      gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_WRAP_T, gl!.CLAMP_TO_EDGE);
+      blotVersion = themeWipe.sourceVersion;
+    }
+    return Boolean(blotTex);
+  }
+
+  function display(now = performance.now()) {
     if (!dye) return;
     gl!.useProgram(pDisp.p);
     bindTex(0, dye.a);
@@ -392,6 +441,22 @@ export function bindInkFluid(canvas: HTMLCanvasElement): (() => void) | null {
     gl!.uniform2f(pDisp.u.uTexel, 1 / dye.w, 1 / dye.h);
     gl!.uniform1f(pDisp.u.uAsp, asp);
     gl!.uniform1f(pDisp.u.uT, t);
+
+    // 主题切换：前沿之外画旧主题的墨色，之内画新主题的墨色；平时两边都是原来的浅色墨（深色靠 CSS 滤镜）
+    const wiping = themeWipe.active && syncBlot();
+    const from = themeWipe.from === "dark" ? darkTheme(INK_LIGHT) : INK_LIGHT;
+    const to = themeWipe.to === "dark" ? darkTheme(INK_LIGHT) : INK_LIGHT;
+    const teaFrom = themeWipe.from === "dark" ? darkTheme(TEA_LIGHT) : TEA_LIGHT;
+    const teaTo = themeWipe.to === "dark" ? darkTheme(TEA_LIGHT) : TEA_LIGHT;
+    gl!.uniform3fv(pDisp.u.uInkA, wiping ? from : INK_LIGHT);
+    gl!.uniform3fv(pDisp.u.uInkB, wiping ? to : INK_LIGHT);
+    gl!.uniform3fv(pDisp.u.uTeaA, wiping ? teaFrom : TEA_LIGHT);
+    gl!.uniform3fv(pDisp.u.uTeaB, wiping ? teaTo : TEA_LIGHT);
+    gl!.uniform4f(pDisp.u.uWipe, themeWipe.x, themeWipe.y, wiping ? wipeSize(now) : 1, wiping ? 1 : 0);
+    gl!.uniform2f(pDisp.u.uView, window.innerWidth, window.innerHeight);
+    gl!.activeTexture(gl!.TEXTURE0 + 3);
+    if (blotTex) gl!.bindTexture(gl!.TEXTURE_2D, blotTex);
+    gl!.uniform1i(pDisp.u.uBlot, 3);
     gl!.bindFramebuffer(gl!.FRAMEBUFFER, null); // 先切到屏幕再清，否则会把刚算好的墨场清掉
     gl!.clear(gl!.COLOR_BUFFER_BIT);
     draw(null, canvas.width, canvas.height);
@@ -433,6 +498,7 @@ export function bindInkFluid(canvas: HTMLCanvasElement): (() => void) | null {
       gl!.deleteTexture(base.tex);
       gl!.deleteFramebuffer(base.fbo);
     }
+    if (blotTex) gl!.deleteTexture(blotTex);
     dye = vel = base = null;
   };
 }

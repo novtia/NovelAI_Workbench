@@ -1,5 +1,16 @@
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
-import type { Artwork, Character, GenderId, StudioDownloadKind, StudioForm, StudioImportOpts, StudioShot, TokenStatus } from "./types";
+import type {
+  Artwork,
+  Character,
+  EnhanceOpts,
+  GenderId,
+  I2iBase,
+  StudioDownloadKind,
+  StudioForm,
+  StudioImportOpts,
+  StudioShot,
+  TokenStatus,
+} from "./types";
 
 export const LS_DRAFT = "nai-v5-draft";
 export const LS_IMPORT_OPTS = "nai-v5-import-opts";
@@ -26,6 +37,21 @@ export const MODEL_LABEL: Record<string, string> = {
   "nai-diffusion-5-full": "V5 完整",
   "nai-diffusion-5-curated": "V5 精选",
 };
+export const EFFORT_LABEL = { high: "通常", medium: "节约" } as const;
+export const MEDIUM_MODEL = "nai-diffusion-5-full-medium";
+
+export function isMediumEffort(form: { model?: string; effort?: string }) {
+  return form.model === "nai-diffusion-5-full" && form.effort === "medium";
+}
+
+function uiModel(raw: string) {
+  return raw.includes("curated") ? "nai-diffusion-5-curated" : "nai-diffusion-5-full";
+}
+
+function effortFrom(model: unknown, effort: unknown): StudioForm["effort"] {
+  if (String(model || "").includes("medium") || effort === "medium") return "medium";
+  return "high";
+}
 export const MODE_LABEL = { anime: "动漫", furry: "兽人" } as const;
 export const SAMPLER_LABEL: Record<string, string> = {
   k_euler_ancestral: "Euler Ancestral",
@@ -78,6 +104,7 @@ export function defaultForm(): StudioForm {
     uc: UC[g.ucPreset],
     characters: [],
     model: g.model,
+    effort: g.effort,
     v5Mode: g.v5Mode,
     quality: g.quality,
     width,
@@ -115,6 +142,7 @@ export function formToPayload(form: StudioForm, extras: Record<string, unknown> 
     uc: form.uc,
     characters: enabledCharacters(form),
     model: form.model,
+    effort: form.effort,
     width: form.width,
     height: form.height,
     sampler: form.sampler,
@@ -129,6 +157,106 @@ export function formToPayload(form: StudioForm, extras: Record<string, unknown> 
     useCoords: form.useCoords,
     straightAlpha: form.straightAlpha,
     ...extras,
+  };
+}
+
+/** Enhance 的 Magnitude(1~5) 对应的 strength，和后端 ENHANCE_STRENGTH 保持一致（官方只实测过 2 -> 0.5）。 */
+export const ENHANCE_STRENGTH: Record<number, number> = { 1: 0.4, 2: 0.5, 3: 0.6, 4: 0.7, 5: 0.8 };
+export const ENHANCE_AMOUNT_LABEL = { "1x": "1x", "1.5x": "1.5x", max: "Max" } as const;
+
+export function clampMagnitude(n: number) {
+  const v = Math.round(Number(n));
+  return Number.isFinite(v) ? Math.max(1, Math.min(5, v)) : 2;
+}
+
+export function defaultEnhanceOpts(): EnhanceOpts {
+  return { upscaleAmount: "max", magnitude: 2, advanced: false, strength: ENHANCE_STRENGTH[2], noise: 0 };
+}
+
+export function defaultI2iBase(base: Pick<I2iBase, "hash" | "url" | "width" | "height">): I2iBase {
+  return { ...base, strength: 0.7, noise: 0, inpaintStrength: 1 };
+}
+
+/** 图生图 / 局部重绘：有蒙版走 infill，没有走 img2img。 */
+export function i2iJobPayload(form: StudioForm, i2i: I2iBase): Record<string, unknown> {
+  const infill = Boolean(i2i.maskHash);
+  return formToPayload(form, {
+    kind: infill ? "infill" : "img2img",
+    imageHash: i2i.hash,
+    strength: i2i.strength,
+    noise: i2i.noise,
+    ...(infill ? { maskHash: i2i.maskHash, inpaintStrength: i2i.inpaintStrength } : {}),
+  });
+}
+
+/** 增强：点开面板的参数，或「增强细节」一键默认值（upscaleAmount=1x）。 */
+export function enhanceJobPayload(form: StudioForm, hash: string, opts: EnhanceOpts): Record<string, unknown> {
+  return formToPayload(form, {
+    kind: "enhance",
+    imageHash: hash,
+    nSamples: 1,
+    upscaleAmount: opts.upscaleAmount,
+    magnitude: clampMagnitude(opts.magnitude),
+    ...(opts.advanced ? { strength: opts.strength, noise: opts.noise } : {}),
+  });
+}
+
+export function upscaleJobPayload(hash: string, scale: 2 | 4, inherit: Record<string, unknown>) {
+  return { kind: "upscale", imageHash: hash, scale, inherit };
+}
+
+/** Generate Variations：同一张图 img2img，后端固定出 3 张、随机新 seed；strength / noise 缺省用后端常量。 */
+export function variationJobPayload(form: StudioForm, hash: string): Record<string, unknown> {
+  return formToPayload(form, { kind: "variation", imageHash: hash, nSamples: 3, seed: -1 });
+}
+
+export type HistoryCard = { key: string; item: StudioShot; badge: string; src: string };
+
+/** 历史栏：同一组变体收成一张，缩略图固定用原图，右下角标 x4。 */
+export function historyCards(session: StudioShot[]): HistoryCard[] {
+  const seen = new Set<string>();
+  const cards: HistoryCard[] = [];
+  for (const item of session) {
+    const jobId = item.jobId || "";
+    if (item.meta?.requestType === "variation" && jobId) {
+      if (seen.has(jobId)) continue;
+      seen.add(jobId);
+      const shots = session.filter((x) => x.jobId === jobId && x.meta?.requestType === "variation");
+      const source = String(shots[0]?.meta?.sourceHash || "");
+      const total = shots.length + (source ? 1 : 0);
+      cards.push({
+        key: jobId,
+        item: shots[0],
+        badge: total > 1 ? `x${total}` : "",
+        src: source ? `/api/blobs/${source}` : "",
+      });
+      continue;
+    }
+    cards.push({ key: item.id, item, badge: "", src: "" });
+  }
+  return cards;
+}
+
+/** 变体结果网格：同一个任务的所有格子，加上原图。 */
+export function variationGroup(session: StudioShot[], current: StudioShot | null): { sourceHash: string; shots: StudioShot[] } | null {
+  if (!current || current.meta?.requestType !== "variation" || !current.jobId) return null;
+  const sourceHash = String(current.meta.sourceHash || "");
+  if (!sourceHash) return null;
+  const shots = session.filter((x) => x.jobId === current.jobId);
+  return shots.length ? { sourceHash, shots } : null;
+}
+
+/** 表单里还没写 prompt 时，增强 / 重绘沿用这张图自己的 prompt、负面和角色。 */
+export function formForShot(form: StudioForm, meta: Record<string, unknown> | null | undefined): StudioForm {
+  if (form.prompt.trim() || !meta) return form;
+  const own = formFromMeta(meta);
+  if (!own.prompt) return form;
+  return {
+    ...form,
+    prompt: own.prompt,
+    uc: own.uc ?? form.uc,
+    characters: own.characters?.length ? own.characters : form.characters,
+    quality: "off",
   };
 }
 
@@ -320,7 +448,8 @@ export function formFromItem(item: Artwork): Partial<StudioForm> {
     prompt: String(p.prompt || v4?.caption?.base_caption || ""),
     uc: String(p.uc || v4neg?.caption?.base_caption || UC.heavy),
     characters: charactersFromParams(p),
-    model: String(p.model || "").includes("curated") ? "nai-diffusion-5-curated" : "nai-diffusion-5-full",
+    model: uiModel(String(p.model || "")),
+    effort: effortFrom(p.model, p.effort),
     width: num(p.width, item.width || 832),
     height: num(p.height, item.height || 1216),
     sampler: String(p.sampler || "k_euler_ancestral"),
@@ -344,7 +473,8 @@ export function formFromMeta(meta: Record<string, unknown> | null | undefined): 
     prompt,
     uc: String(src.uc || ""),
     characters: charactersFromParams(src),
-    model: String(src.model || "").includes("curated") ? "nai-diffusion-5-curated" : "nai-diffusion-5-full",
+    model: uiModel(String(src.model || comment.model || "")),
+    effort: effortFrom(src.model || comment.model, src.effort ?? comment.effort),
     width: src.width != null ? Number(src.width) : undefined,
     height: src.height != null ? Number(src.height) : undefined,
     sampler: src.sampler ? String(src.sampler) : undefined,
@@ -426,6 +556,7 @@ export function mergeStudioForm(
     next.characters = opts.mergeChars ? [...next.characters, ...mapped].slice(0, MAX_CHARS) : mapped;
   }
   if (data.model && MODEL_LABEL[data.model]) next.model = data.model;
+  if (data.effort === "high" || data.effort === "medium") next.effort = data.effort;
   if (data.sampler && SAMPLER_LABEL[data.sampler]) next.sampler = data.sampler;
   if (data.noiseSchedule) next.noiseSchedule = data.noiseSchedule;
   if (data.steps != null && Number.isFinite(Number(data.steps))) next.steps = Number(data.steps);
@@ -584,9 +715,22 @@ export function clampPanel(value: number, min: number, max: number) {
   return Math.round(Math.max(min, Math.min(max, value)));
 }
 
-export function loadDraft(): StudioForm | null {
+/** 草稿的存储 key：首个标签沿用旧 key，其余标签各自一份。 */
+export function draftKey(tabId?: string) {
+  return !tabId || tabId === "main" ? LS_DRAFT : `${LS_DRAFT}:${tabId}`;
+}
+
+export function removeTabDraft(tabId: string) {
   try {
-    const raw = localStorage.getItem(LS_DRAFT);
+    if (tabId && tabId !== "main") localStorage.removeItem(draftKey(tabId));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function loadDraft(tabId?: string): StudioForm | null {
+  try {
+    const raw = localStorage.getItem(draftKey(tabId));
     if (!raw) return null;
     return mergeStudioForm(defaultForm(), JSON.parse(raw) as Partial<StudioForm>, { replace: true });
   } catch {
@@ -594,9 +738,9 @@ export function loadDraft(): StudioForm | null {
   }
 }
 
-export function persistDraft(form: StudioForm) {
+export function persistDraft(form: StudioForm, tabId?: string) {
   try {
-    localStorage.setItem(LS_DRAFT, JSON.stringify(cloneForm(form)));
+    localStorage.setItem(draftKey(tabId), JSON.stringify(cloneForm(form)));
   } catch {
     /* ignore */
   }

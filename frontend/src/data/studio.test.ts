@@ -126,6 +126,20 @@ describe("studio data", () => {
     expect(form.prompt).toBe("girl");
     expect(form.cfgRescale).toBe(0.3);
     expect(form.characters?.[0]?.prompt).toBe("red hair");
+    expect(form.effort).toBe("high");
     expect(hasImportableMeta({ prompt: "girl" })).toBe(true);
+  });
+
+  it("maps the distilled model back onto V5 Full 节约", () => {
+    const form = mergeStudioForm(
+      defaultForm(),
+      formFromMeta({ model: "nai-diffusion-5-full-medium", prompt: "hat", uc: "lowres", steps: 14, sampler: "k_euler" }),
+      { replace: true },
+    );
+    expect(form.model).toBe("nai-diffusion-5-full");
+    expect(form.effort).toBe("medium");
+    const payload = formToPayload({ ...form, uc: "lowres", sampler: "k_euler", steps: 28 });
+    expect(payload.effort).toBe("medium");
+    expect(payload.model).toBe("nai-diffusion-5-full");
   });
 });

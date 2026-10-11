@@ -11,7 +11,21 @@ from typing import Any, Callable
 from contexts.gallery.application import GalleryService
 from contexts.gallery.rules import extract_artists
 from contexts.generation.domain import GenerationJob, ParamSet
-from contexts.generation.nai_client import NaiError, NaiGateway, TokenVault, decode_image_b64, token_hint
+from contexts.generation.nai_client import (
+    JOB_KINDS,
+    NaiError,
+    NaiGateway,
+    TokenVault,
+    VARIATION_SAMPLES,
+    build_image_payload,
+    build_payload,
+    decode_image_b64,
+    estimate_costs,
+    image_to_png,
+    plan_size,
+    token_hint,
+    uses_medium,
+)
 from kernel.blobs import BlobStore, png_size
 from kernel.bus import UnitOfWork
 from kernel.clock import new_hex, new_id, now_ms
@@ -110,6 +124,10 @@ class GenerationService:
         self._status_at = now
         return out
 
+    def estimate(self, body: dict[str, Any]) -> dict[str, Any]:
+        """画布工具栏的 Anlas 估算；只是估算，以订阅余额的实际变化为准。"""
+        return estimate_costs(body if isinstance(body, dict) else {})
+
     def preview_path(self, job_id: str, sample: int) -> Path:
         folder = self.blobs.root.parent / "previews"
         folder.mkdir(parents=True, exist_ok=True)
@@ -202,23 +220,43 @@ class GenerationService:
         data.pop("albumId", None)
         data.pop("tempId", None)
         data.pop("tempIds", None)
+        kind = str(data.get("kind") or "generate")
+        if kind not in JOB_KINDS:
+            raise DomainError("不支持的任务类型")
+        data["kind"] = kind
+        size: tuple[int, int] | None = None
+        if kind != "generate":
+            size = self._validate_image_job(kind, data)
         job_id = new_hex(16)
         created = now_ms()
-        try:
-            steps = max(1, min(50, int(data.get("steps") or 28)))
-        except (TypeError, ValueError):
-            steps = 28
+        if uses_medium(data) and kind != "infill":
+            steps = 14
+        else:
+            try:
+                steps = max(1, min(50, int(data.get("steps") or 28)))
+            except (TypeError, ValueError):
+                steps = 28
         try:
             n_samples = max(1, min(4, int(data.get("nSamples") or 1)))
         except (TypeError, ValueError):
             n_samples = 1
+        if kind in {"enhance", "upscale"}:
+            n_samples = 1
+        elif kind == "variation":
+            n_samples = VARIATION_SAMPLES
+        progress: dict[str, Any] = {"step": None, "steps": steps, "sample": 0, "nSamples": n_samples, "text": "排队中", "kind": kind}
+        if size:
+            progress["width"], progress["height"] = size
+        if kind != "generate":
+            # 前端画布用它在结果旁边放一张带 ORIGINAL 角标的原图。
+            progress["sourceHash"] = data.get("imageHash")
         job = self.uow.load(GenerationJob, job_id)
         job.queue(
             {
                 "source": source,
                 "payload": data,
                 "client": client,
-                "progress": {"step": None, "steps": steps, "sample": 0, "nSamples": n_samples, "text": "排队中"},
+                "progress": progress,
                 "createdAt": created,
             }
         )
@@ -227,6 +265,71 @@ class GenerationService:
         self.sse.emit({"type": "job", "job": public})
         self.work_queue.put(job_id)
         return public
+
+    def _blob_size(self, digest: str) -> tuple[int, int]:
+        data = self.blobs.get(digest)
+        if not data:
+            raise DomainError("底图不存在，请重新选择", 404)
+        size = png_size(data)
+        if size:
+            return size
+        try:
+            from PIL import Image
+            import io
+
+            with Image.open(io.BytesIO(data)) as img:
+                return img.size
+        except Exception as exc:
+            raise DomainError("无法读取底图") from exc
+
+    def _validate_image_job(self, kind: str, data: dict[str, Any]) -> tuple[int, int]:
+        image_hash = str(data.get("imageHash") or "").strip().lower()
+        if not image_hash:
+            raise DomainError("缺少底图")
+        data["imageHash"] = image_hash
+        width, height = self._blob_size(image_hash)
+        if kind == "infill":
+            mask_hash = str(data.get("maskHash") or "").strip().lower()
+            if not mask_hash or not self.blobs.exists(mask_hash):
+                raise DomainError("局部重绘需要蒙版")
+            data["maskHash"] = mask_hash
+        else:
+            data.pop("maskHash", None)
+        return plan_size(kind, data, width, height)
+
+    def prepare_request(self, body: dict[str, Any]) -> tuple[dict, dict]:
+        """按任务类型构造发给 NovelAI 的请求；图片和蒙版从 blob 读取。"""
+        kind = str(body.get("kind") or "generate")
+        if kind == "generate":
+            return build_payload(body)
+        image = self.blobs.get(str(body.get("imageHash") or ""))
+        if not image:
+            raise NaiError(404, "底图已不存在")
+        mask = None
+        if kind == "infill":
+            mask = self.blobs.get(str(body.get("maskHash") or ""))
+            if not mask:
+                raise NaiError(404, "蒙版已不存在")
+        return build_image_payload(body, image, mask)
+
+    def store_upload(self, data: bytes) -> dict[str, Any]:
+        """前端上传的底图 / 蒙版：统一转成 PNG 后入库。"""
+        if not data:
+            raise DomainError("没有收到图片")
+        if len(data) > 48 * 1024 * 1024:
+            raise DomainError("图片太大", 413)
+        try:
+            png = data if png_size(data) else image_to_png(data)
+        except NaiError as exc:
+            raise DomainError(exc.message) from exc
+        digest = self.blobs.put(png)
+        size = png_size(png)
+        return {
+            "blobHash": digest,
+            "url": f"/api/blobs/{digest}",
+            "width": size[0] if size else None,
+            "height": size[1] if size else None,
+        }
 
     def list_jobs(self) -> list[dict[str, Any]]:
         keep = int(self.cfg("generation", "jobsKeep", 80))

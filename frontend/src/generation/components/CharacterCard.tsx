@@ -1,11 +1,13 @@
 import { memo } from "react";
 import { inferGender } from "@/data";
+import { isMediumEffort } from "@/data/studio";
 import { useStudioActions, useStudioStore } from "@/state";
 import type { Character } from "@/data/types";
 import { GenderSvg, IconCheck, IconDown, IconTrash, IconUp } from "./icons";
 import { PromptWell, TokenBar } from "./PromptWell";
 
 export const CharacterCard = memo(function CharacterCard({ ch, index }: { ch: Character; index: number }) {
+  const medium = useStudioStore((s) => isMediumEffort(s.form));
   const tab = useStudioStore((s) => s.charTabs[index] || "prompt");
   const setCharTab = useStudioStore((s) => s.setCharTab);
   const { patch, mutateChar } = useStudioActions();
@@ -59,7 +61,10 @@ export const CharacterCard = memo(function CharacterCard({ ch, index }: { ch: Ch
         </div>
         <div className="prompt-box sm">
           {tab === "uc" ? (
-            <PromptWell value={ch.uc} onChange={(v) => mutateChar(index, (c) => ({ ...c, uc: v }))} placeholder="Negative / UC" />
+            <>
+              <PromptWell value={ch.uc} locked={medium} onChange={(v) => mutateChar(index, (c) => ({ ...c, uc: v }))} placeholder="Negative / UC" />
+              {medium ? <p className="uc-lock">节约模式不会发送角色负面提示。</p> : null}
+            </>
           ) : (
             <PromptWell
               value={ch.prompt}

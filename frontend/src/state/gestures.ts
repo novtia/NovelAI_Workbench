@@ -3,6 +3,7 @@ import { filesFromClipboard, filesFromDataTransfer, hasDropPayload, readStudioSh
 import { useCollection } from "./collection";
 import { useCommands } from "./commands";
 import { useSession } from "./session";
+import { useUiStore } from "./uiStore";
 
 export function useImportGestures() {
   const { ingestDropped } = useCommands();
@@ -15,10 +16,11 @@ export function useImportGestures() {
       if (!hasDropPayload(e)) return;
       e.preventDefault();
       const s = useSession.getState();
+      const ui = useUiStore.getState();
       if (s.view === "studio") {
-        s.showOverlay("松开以载入元数据", "将解析 PNG / WEBP 中的 NAI 生成参数");
+        ui.showOverlay("松开以载入元数据", "将解析 PNG / WEBP 中的 NAI 生成参数");
       } else {
-        s.showOverlay(`松开以导入到「${albumName || "收藏夹"}」`, "PNG / WEBP，将自动解析 NAI 参数");
+        ui.showOverlay(`松开以导入到「${albumName || "收藏夹"}」`, "PNG / WEBP，将自动解析 NAI 参数");
       }
     }
     function onDragOver(e: DragEvent) {
@@ -28,7 +30,7 @@ export function useImportGestures() {
     }
     async function onDrop(e: DragEvent) {
       e.preventDefault();
-      useSession.getState().hideOverlay();
+      useUiStore.getState().hideOverlay();
       const shot = readStudioShotDrag(e.dataTransfer);
       if (shot) {
         await ingestRef.current([], shot);
@@ -52,8 +54,9 @@ export function useImportGestures() {
         s.closeDialog();
         return;
       }
-      if (s.overlay.show) {
-        s.hideOverlay();
+      const ui = useUiStore.getState();
+      if (ui.overlay.show) {
+        ui.hideOverlay();
         return;
       }
       s.setOpenId(null);

@@ -1,17 +1,18 @@
 import { copyText } from "@/data";
-import { QUALITY_LABEL, UC } from "@/data/studio";
+import { isMediumEffort, QUALITY_LABEL, UC } from "@/data/studio";
 import { useShallow } from "zustand/react/shallow";
 import { pushToast, useStudioActions, useStudioStore } from "@/state";
 import { IconChevron, IconCopy, IconX } from "./icons";
 import { PromptWell, TokenBar } from "./PromptWell";
 
 export function PromptCard() {
-  const form = useStudioStore(useShallow((s) => ({ prompt: s.form.prompt, uc: s.form.uc, straightAlpha: s.form.straightAlpha, quality: s.form.quality })));
+  const form = useStudioStore(useShallow((s) => ({ prompt: s.form.prompt, uc: s.form.uc, straightAlpha: s.form.straightAlpha, quality: s.form.quality, model: s.form.model, effort: s.form.effort })));
   const promptTab = useStudioStore((s) => s.promptTab);
   const openDd = useStudioStore((s) => s.openDd);
   const setPromptTab = useStudioStore((s) => s.setPromptTab);
   const setOpenDd = useStudioStore((s) => s.setOpenDd);
   const patch = useStudioActions().patch;
+  const medium = isMediumEffort(form);
   const active = promptTab === "uc" ? form.uc : form.prompt;
 
   return (
@@ -37,7 +38,7 @@ export function PromptCard() {
       </div>
       <div className="prompt-box">
         {promptTab === "uc" ? (
-          <PromptWell value={form.uc} onChange={(v) => patch({ uc: v })} placeholder="Negative / UC" />
+          <PromptWell value={form.uc} locked={medium} onChange={(v) => patch({ uc: v })} placeholder="Negative / UC" />
         ) : (
           <PromptWell value={form.prompt} onChange={(v) => patch({ prompt: v })} placeholder="画师串、场景、画质、自然语言…" />
         )}
@@ -65,7 +66,10 @@ export function PromptCard() {
             </div>
           </div>
         </div>
-        <div className="prompt-tools" hidden={promptTab !== "uc"}>
+        <div className="prompt-tools" hidden={promptTab !== "uc" || !medium}>
+          <p className="uc-lock">节约模式不会发送负面提示。想去掉某个元素，在主体提示词里写 -3::hat::。</p>
+        </div>
+        <div className="prompt-tools" hidden={promptTab !== "uc" || medium}>
           <div className="gen-presets">
             <button type="button" onClick={() => patch({ uc: UC.heavy })}>
               Heavy

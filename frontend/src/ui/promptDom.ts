@@ -1,4 +1,4 @@
-import { formatArtistCard, formatWeight, splitPromptSegments, type ArtistCard } from "@/data/artistCards";
+import { formatArtistCard, formatArtistGroup, formatWeight, splitPromptSegments, type ArtistCard } from "@/data/artistCards";
 import { highlight, weightStyle } from "@/data/studio";
 
 /**
@@ -34,6 +34,12 @@ export function cardName(el: HTMLElement) {
   return el.dataset.name || "";
 }
 
+/** 卡片里的全部画师名（多画师共用权重时不止一个）。 */
+export function cardNames(el: HTMLElement) {
+  const list = (el.dataset.names || "").split("\n").filter(Boolean);
+  return list.length ? list : [cardName(el)].filter(Boolean);
+}
+
 function paintCard(el: HTMLElement, weight: number | null) {
   el.dataset.weight = weight == null ? "" : String(weight);
   el.style.background = weight == null ? NEUTRAL_BG : weightStyle(weight);
@@ -53,12 +59,16 @@ function button(act: "dec" | "inc", label: string, title: string) {
   return b;
 }
 
-export function createCardEl(card: Pick<ArtistCard, "raw" | "name" | "weight">) {
+export function createCardEl(card: Pick<ArtistCard, "raw" | "name" | "weight"> & Partial<Pick<ArtistCard, "names" | "inner">>) {
+  const names = card.names?.length ? card.names : [card.name];
   const el = document.createElement("span");
   el.className = CARD_CLASS;
   el.contentEditable = "false";
   el.dataset.raw = card.raw;
-  el.dataset.name = card.name;
+  el.dataset.name = names[0];
+  el.dataset.names = names.join("\n");
+  // 多画师共用权重时，改权重要保留原内容，所以把 inner 记下来。
+  if (names.length > 1 && card.inner) el.dataset.inner = card.inner;
 
   const input = document.createElement("input");
   input.type = "text";
@@ -67,12 +77,18 @@ export function createCardEl(card: Pick<ArtistCard, "raw" | "name" | "weight">) 
   input.autocomplete = "off";
   input.spellcheck = false;
   input.placeholder = "1";
-  input.setAttribute("aria-label", `${card.name} 权重`);
+  input.setAttribute("aria-label", `${names.join(", ")} 权重`);
 
-  const name = document.createElement("span");
-  name.className = "ac-name";
-  name.setAttribute("data-artist-hover", "");
-  name.textContent = `artist:${card.name}`;
+  const nameEls: Node[] = [];
+  names.forEach((n, i) => {
+    if (i) nameEls.push(document.createTextNode(", "));
+    const name = document.createElement("span");
+    name.className = "ac-name";
+    name.setAttribute("data-artist-hover", "");
+    name.dataset.name = n;
+    name.textContent = i ? n : `artist:${n}`;
+    nameEls.push(name);
+  });
 
   // 删除按钮悬浮在卡片右上角，不占宽度，只在悬停时出现。
   const del = document.createElement("button");
@@ -81,17 +97,18 @@ export function createCardEl(card: Pick<ArtistCard, "raw" | "name" | "weight">) 
   del.dataset.act = "del";
   del.tabIndex = -1;
   del.title = "删除";
-  del.setAttribute("aria-label", `删除 ${card.name}`);
+  del.setAttribute("aria-label", `删除 ${names.join(", ")}`);
   del.textContent = "×";
 
-  el.append(button("dec", "−", "减 0.1"), input, button("inc", "+", "加 0.1"), name, del);
+  el.append(button("dec", "−", "减 0.1"), input, button("inc", "+", "加 0.1"), ...nameEls, del);
   paintCard(el, card.weight);
   return el;
 }
 
 /** 改权重：重写这张卡的原文（null 表示去掉权重）。 */
 export function setCardWeight(el: HTMLElement, weight: number | null) {
-  el.dataset.raw = formatArtistCard(cardName(el), weight);
+  const inner = el.dataset.inner;
+  el.dataset.raw = inner ? formatArtistGroup(inner, weight) : formatArtistCard(cardName(el), weight);
   paintCard(el, weight);
 }
 
@@ -351,5 +368,5 @@ export function revealCaret(root: HTMLElement) {
 }
 
 export function currentCardNames(root: HTMLElement) {
-  return Array.from(root.querySelectorAll<HTMLElement>(`.${CARD_CLASS}`)).map(cardName);
+  return Array.from(root.querySelectorAll<HTMLElement>(`.${CARD_CLASS}`)).flatMap(cardNames);
 }

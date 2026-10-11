@@ -1,5 +1,5 @@
 import { request } from "./client";
-import type { Job, ParamSet, StudioForm, TokenStatus } from "@/data/types";
+import type { AnlasEstimate, Job, ParamSet, StudioForm, TokenStatus } from "@/data/types";
 
 export async function tokenStatus() {
   return request<TokenStatus>("/api/nai/status");
@@ -41,6 +41,21 @@ export async function deleteParamSet(id: string) {
 export async function submitJob(body: Record<string, unknown>) {
   const data = await request<{ job: Job }>("/api/nai/jobs", { method: "POST", body: JSON.stringify(body) });
   return data.job;
+}
+
+export async function estimateCost(body: Record<string, unknown>) {
+  return request<AnlasEstimate>("/api/nai/estimate", { method: "POST", body: JSON.stringify(body) });
+}
+
+export type UploadedBlob = { blobHash: string; url: string; width: number | null; height: number | null };
+
+/** 上传底图 / 蒙版：请求体直接是图片，后端统一转 PNG 入库。 */
+export async function uploadBlob(blob: Blob) {
+  return request<UploadedBlob>("/api/blobs", {
+    method: "POST",
+    body: blob,
+    headers: { "Content-Type": blob.type || "image/png" },
+  });
 }
 
 export async function cancelJob(id: string) {

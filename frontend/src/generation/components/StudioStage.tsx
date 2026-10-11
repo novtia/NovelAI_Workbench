@@ -1,18 +1,19 @@
 import { clipPrompt, inferGender } from "@/data";
-import { openStudioPop, pushToast, useStudioActions, useStudioStore } from "@/state";
+import { openStudioPop, pushToast, useStudioActions, useStudioEstimate, useStudioStore } from "@/state";
+import { StudioCanvas } from "./StudioCanvas";
 import {
-  Icon1x,
-  Icon4x,
+  IconBrush,
   IconCheck,
-  IconDirector,
   GenderSvg,
   IconDownload,
   IconEnhance,
   IconFolderPlus,
   IconHeart,
-  IconOutpaint,
-  IconPencil,
+  IconInpaint,
   IconTrash,
+  IconUpscale,
+  IconVariations,
+  IconWand,
 } from "./icons";
 
 export function StudioStage() {
@@ -23,18 +24,30 @@ export function StudioStage() {
   const width = useStudioStore((s) => s.form.width);
   const height = useStudioStore((s) => s.form.height);
   const seed = useStudioStore((s) => s.form.seed);
+  const hasSession = useStudioStore((s) => s.session.length > 0);
   const current = useStudioStore((s) => s.session.find((x) => x.id === s.currentId) || null);
   const liveUrl = useStudioStore((s) => s.liveUrl);
-  const { mutateChar, confirmPositions, deleteCurrent, soon } = useStudioActions();
+  const busy = useStudioStore((s) => s.busy);
+  const hasI2i = useStudioStore((s) => Boolean(s.i2i));
+  const { mutateChar, confirmPositions, deleteCurrent, upscaleCurrent, variationCurrent, useAsBase, openEditor } = useStudioActions();
   const form = { characters, width, height, seed };
+  // 变体 / 放大 / 增强都作用在当前这张已经出完的图上；编辑器没有当前图时也可以接着编辑已有底图。
+  const ready = Boolean(current && !current.pending && current.blobHash) && !busy;
+  const editReady = (ready || hasI2i) && !busy;
   const previewUrl = current?.pending ? liveUrl || current.thumbUrl || "" : current?.url || current?.thumbUrl || "";
   const hasPreview = Boolean(previewUrl);
-  const sizeLabel = `${form.width} × ${form.height}`;
   const watchingPending = Boolean(current?.pending);
-  const w = !watchingPending && current?.width ? current.width : form.width;
-  const h = !watchingPending && current?.height ? current.height : form.height;
+  // 左下角显示当前这张图的实际像素；还没有图时沿用表单尺寸。
+  const w = current?.width || form.width;
+  const h = current?.height || form.height;
+  const sizeLabel = `${w} × ${h}`;
+  // 有图时中间是无限画布；构图模式要在单张图上拖角色位置，仍用单图框。
+  const showCanvas = hasSession && !directing;
   const showDots = watchingPending && !previewUrl;
   const seedText = current?.meta?.seed != null && Number(current.meta.seed) >= 0 ? String(current.meta.seed) : form.seed >= 0 ? String(form.seed) : "随机";
+
+  const estimate = useStudioEstimate();
+  const cost = (n?: number) => (typeof n === "number" ? <span className="tcost">{n}</span> : null);
 
   return (
     <section
@@ -42,25 +55,50 @@ export function StudioStage() {
       id="st-stage"
     >
       <div className="canvas-tools" id="canvas-tools">
-        <button className="tbtn" type="button" title="增强" onClick={() => soon()}>
+        <button
+          className="tbtn"
+          id="tool-enhance"
+          type="button"
+          title="Enhance 增强：放大并重新细化"
+          disabled={!ready}
+          onClick={(e) => {
+            e.stopPropagation();
+            openStudioPop("enhance", e.currentTarget);
+          }}
+        >
           <IconEnhance />
         </button>
-        <button className="tbtn" type="button" title="放大 4 倍" onClick={() => soon()}>
-          <Icon4x />
-          4x
+        <button
+          className="tbtn"
+          id="tool-variation"
+          type="button"
+          title="Generate Variations 生成变体：同一张图再出 3 张"
+          disabled={!ready}
+          onClick={() => void variationCurrent()}
+        >
+          <IconVariations />
+          {cost(estimate?.variation)}
         </button>
-        <button className="tbtn" type="button" title="放大 1 倍" onClick={() => soon()}>
-          <Icon1x />
-          1x
+        <button
+          className="tbtn"
+          id="tool-upscale"
+          type="button"
+          title="Upscale 放大 2 倍（不改画面）"
+          disabled={!ready}
+          onClick={() => void upscaleCurrent()}
+        >
+          <IconUpscale />
+          {cost(estimate?.upscale)}
         </button>
-        <button className="tbtn" type="button" title="Director 工具" onClick={() => soon()}>
-          <IconDirector />
+        <span className="tbtn-sep" />
+        <button className="tbtn" id="tool-base" type="button" title="Use as Base Image 设为底图" disabled={!ready} onClick={useAsBase}>
+          <IconWand />
         </button>
-        <button className="tbtn" type="button" title="局部重绘" onClick={() => soon()}>
-          <IconPencil />
+        <button className="tbtn" id="tool-edit" type="button" title="Edit Image 编辑图片" disabled={!editReady} onClick={() => openEditor("draw")}>
+          <IconBrush />
         </button>
-        <button className="tbtn" type="button" title="扩图" onClick={() => soon()}>
-          <IconOutpaint />
+        <button className="tbtn" id="tool-inpaint" type="button" title="Inpaint Image 局部重绘" disabled={!editReady} onClick={() => openEditor("mask")}>
+          <IconInpaint />
         </button>
       </div>
       <div className="dir-chips" id="dir-chips">
@@ -75,7 +113,10 @@ export function StudioStage() {
             ),
           )}
       </div>
-      <div className="frame-wrap">
+      <div className={`frame-wrap${showCanvas ? " canvas-mode" : ""}`}>
+        {showCanvas ? (
+          <StudioCanvas fw={form.width} fh={form.height} />
+        ) : (
         <div
           className={`frame-box${w > h ? " landscape" : w === h ? " square" : ""}${!previewUrl && !showDots ? " empty" : ""}`}
           id="frame-box"
@@ -137,6 +178,7 @@ export function StudioStage() {
               })}
           </div>
         </div>
+        )}
       </div>
       <div className="stage-bl">
         <span className="mchip">{sizeLabel}</span>

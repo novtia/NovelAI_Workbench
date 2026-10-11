@@ -7,7 +7,12 @@ export type ArtistCard = {
   start: number;
   end: number;
   raw: string;
+  /** 第一个画师名（兼容单画师场景）。 */
   name: string;
+  /** 卡片里的全部画师名；`1.1::artist:a, b::` 这种共用权重的写法会有多个。 */
+  names: string[];
+  /** 不含权重和闭合 `::` 的内容，如 `artist:a, b`；改权重时原样保留。 */
+  inner: string;
   weight: number | null;
   bracket: boolean;
 };
@@ -16,12 +21,14 @@ export type PromptSegment = { type: "text"; value: string } | { type: "card"; ca
 
 /**
  * 只认三种写法：
- *   1) 0.92::artist:name ::   （带权重，必须闭合 ::）
+ *   1) 0.92::artist:name ::   （带权重，必须闭合 ::；里面可以是用逗号隔开的多个画师共用权重）
  *   2) [artist:name]
  *   3) artist:name            （后面是逗号或结尾）
  */
+// 加权组的内容：不能跨越 `::`，也不能吞掉下一个「数字::」权重起点。
+const GROUP_INNER = String.raw`(?:(?!::)(?!(?<![A-Za-z0-9_.])-?\d+(?:\.\d+)?::)[^\]\n])+?`;
 const CARD_SOURCE =
-  String.raw`(?<![A-Za-z0-9_.])(-?\d+(?:\.\d+)?)::[ \t]*artist:[ \t]*([^,\]\n]+?)[ \t]*::` +
+  String.raw`(?<![A-Za-z0-9_.])(-?\d+(?:\.\d+)?)::[ \t]*(artist:[ \t]*${GROUP_INNER})[ \t]*::` +
   String.raw`|\[[ \t]*artist:[ \t]*([^\]\n]+?)[ \t]*\]` +
   String.raw`|(?<![A-Za-z0-9_])artist:[ \t]*([^,\]\n:]+?)(?=[ \t]*(?:,|$))`;
 
@@ -40,13 +47,16 @@ export function findArtistCards(text: string): ArtistCard[] {
     }
     const weighted = m[1] != null;
     const bracket = m[3] != null;
-    const name = (m[2] ?? m[3] ?? m[4] ?? "").trim();
-    if (!name) continue;
+    const body = (m[2] ?? m[3] ?? m[4] ?? "").trim();
+    const names = (weighted ? body.split(/[,，]/) : [body]).map(stripArtist).filter(Boolean);
+    if (!names.length) continue;
     cards.push({
       start: m.index,
       end: m.index + m[0].length,
       raw: m[0],
-      name,
+      name: names[0],
+      names,
+      inner: weighted ? body : `artist:${names[0]}`,
       weight: weighted ? Number(m[1]) : null,
       bracket,
     });
@@ -85,6 +95,13 @@ export function formatArtistCard(name: string, weight: number | null) {
   const n = stripArtist(name);
   if (weight == null || !Number.isFinite(weight)) return `artist:${n}`;
   return `${formatWeight(weight)}::artist:${n}${/\d$/.test(n) ? " " : ""}::`;
+}
+
+/** 多画师共用权重的卡片写回原文：保留原内容，只换权重；无权重时直接是原内容。 */
+export function formatArtistGroup(inner: string, weight: number | null) {
+  const s = String(inner ?? "").trim();
+  if (weight == null || !Number.isFinite(weight)) return s;
+  return `${formatWeight(weight)}::${s}${/\d$/.test(s) ? " " : ""}::`;
 }
 
 /** 加减权重。没有权重时从 1 起算；下限 0。 */

@@ -36,12 +36,14 @@ import { emit } from "./bus";
 import { useCollection } from "./collection";
 import { useJobsQuery, useLotteryBatchesQuery, useLotteryBoardQuery, useParamSetsQuery } from "./queries";
 import { useLotteryStore } from "./lotteryStore";
+import { currentTabId, runInTab } from "./scoped";
 import { useSession } from "./session";
 import { getSettings } from "./settingsStore";
 import { confirmDialog } from "./confirm";
 import { pushToast } from "./toast";
 
-let persistTimer = 0;
+/** 每个标签各自一个保存防抖，免得 A 标签的保存被 B 标签取消。 */
+const persistTimers = new Map<string, number>();
 let latestLottery: any = {};
 
 function drawKey(batchId: string, drawId: string) {
@@ -59,7 +61,13 @@ export function useLotterySync() {
   const hydrate = useLotteryStore((s) => s.hydrate);
   const version = useLotteryStore((s) => s.boardVersion);
   const dirty = useLotteryStore((s) => s.dirty);
-  useEffect(() => () => window.clearTimeout(persistTimer), []);
+  useEffect(
+    () => () => {
+      for (const timer of persistTimers.values()) window.clearTimeout(timer);
+      persistTimers.clear();
+    },
+    [],
+  );
   useEffect(() => {
     const board = boardQ.data;
     if (!board || dirty) return;
@@ -69,6 +77,7 @@ export function useLotterySync() {
 }
 
 export async function saveLotteryPreview(qc: QueryClient, targetAlbumId: string, ctx: LotSave, albums: Array<{ id: string; name: string }>, extras?: { draw?: DrawResult; form?: Partial<StudioForm> }) {
+  const tabId = currentTabId();
   const item = ctx.item;
   const hash = item.blobHash || item.id || "";
   if (!hash) {
@@ -106,7 +115,8 @@ export async function saveLotteryPreview(qc: QueryClient, targetAlbumId: string,
     })) as Array<{ id?: string; albumId?: string }>;
     const rec = saved[0];
     if (rec?.id) {
-      useLotteryStore.getState().markSaved(hash, { savedId: rec.id, albumId: rec.albumId || targetAlbumId });
+      const savedId = rec.id;
+      runInTab(tabId, () => useLotteryStore.getState().markSaved(hash, { savedId, albumId: rec.albumId || targetAlbumId }));
       await Promise.all([
         qc.invalidateQueries({ queryKey: queryKeys.albums }),
         qc.invalidateQueries({ queryKey: queryKeys.items(targetAlbumId) }),
@@ -154,6 +164,7 @@ export function useLottery() {
     }>,
     immediate = true,
   ) {
+    const tabId = currentTabId();
     const s = useLotteryStore.getState();
     const excludedNext = next?.excluded ?? s.excluded;
     const pinnedNext = next?.pinned ?? s.pinned;
@@ -177,15 +188,18 @@ export function useLottery() {
           }),
         );
         qc.setQueryData(queryKeys.lotteryBoard, board);
-        useLotteryStore.getState().setBoardVersion(board.version ?? 0);
-        useLotteryStore.getState().setDirty(false);
+        runInTab(tabId, () => {
+          useLotteryStore.getState().setBoardVersion(board.version ?? 0);
+          useLotteryStore.getState().setDirty(false);
+        });
       } catch (err) {
         pushToast(err instanceof Error ? err.message : "抽奖台保存失败", "error");
       }
     };
-    window.clearTimeout(persistTimer);
+    window.clearTimeout(persistTimers.get(tabId));
+    persistTimers.delete(tabId);
     if (immediate) await run();
-    else persistTimer = window.setTimeout(() => void run(), 280);
+    else persistTimers.set(tabId, window.setTimeout(() => void run(), 280));
   }
 
   function pendingDraws(batch?: DrawBatch) {

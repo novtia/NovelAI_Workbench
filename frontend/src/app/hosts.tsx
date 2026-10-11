@@ -1,11 +1,11 @@
 import { BasketPopover } from "../basket/BasketPopover";
-import { useCommands, useSession } from "@/state";
+import { useCommands, useUiStore } from "@/state";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 
 export function WorkbenchHosts() {
-  const overlay = useSession((s) => s.overlay);
-  const hideOverlay = useSession((s) => s.hideOverlay);
-  const progress = useSession((s) => s.progress);
+  const overlay = useUiStore((s) => s.overlay);
+  const hideOverlay = useUiStore((s) => s.hideOverlay);
+  const progress = useUiStore((s) => s.progress);
   const { importFiles } = useCommands();
   const pct = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
 

@@ -5,8 +5,6 @@ import { isTestSetAlbum } from "@/data/singleArtist";
 import type { Album } from "@/data/types";
 import { useSession } from "./session";
 import { useSettings } from "./settingsStore";
-import { useStudioStore } from "./studioStore";
-
 const regularAlbums = (albums: Album[]) => albums.filter((a) => !isTestSetAlbum(a));
 const testSetAlbums = (albums: Album[]) => albums.filter((a) => isTestSetAlbum(a));
 
@@ -35,15 +33,22 @@ export function useJobsQuery() {
 }
 
 export function useNaiStatusQuery() {
-  const view = useSession((s) => s.view);
-  const quotaOpen = useStudioStore((s) => s.quotaOpen);
-  const enabled = view === "studio" || view === "settings" || quotaOpen;
+  // 账号/额度是全局信息：应用一加载就自动获取，并按设置的间隔在所有页面后台刷新（不再依赖当前页面或点击电池）。
   const refreshSec = useSettings((s) => s.account.quotaRefreshSec);
   return useQuery({
     queryKey: queryKeys.naiStatus,
     queryFn: generationApi.tokenStatus,
-    enabled,
-    refetchInterval: enabled ? refreshSec * 1000 : false,
+    refetchInterval: refreshSec * 1000,
+  });
+}
+
+/** 画布工具栏的 Anlas 估算；参数变了才重新请求，估算本身几乎不变。 */
+export function useEstimateQuery(body: Record<string, unknown>) {
+  return useQuery({
+    queryKey: ["nai-estimate", body] as const,
+    queryFn: () => generationApi.estimateCost(body),
+    staleTime: 5 * 60 * 1000,
+    placeholderData: (prev) => prev,
   });
 }
 

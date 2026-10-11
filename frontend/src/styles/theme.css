@@ -1,9 +1,66 @@
 /* 由「设置」驱动的全局外观：<html> 上的 data-* 属性由 ui/applySettings.ts 写入 */
 
-/* 深色：整页反相 + 色相回转，图片/视频再反相一次还原（宣纸配色里有大量硬编码色，用变量覆盖覆盖不全） */
-html[data-theme="dark"] { filter: invert(1) hue-rotate(180deg); background: #fff; }
-html[data-theme="dark"] img,
-html[data-theme="dark"] video { filter: invert(1) hue-rotate(180deg); }
+/* 深色：反相 + 色相回转，图片/视频再反相一次还原（宣纸配色里有大量硬编码色，用变量覆盖覆盖不全）。
+   滤镜不挂在 html/body 上，而是分别挂在「背景层」和「界面 #app」上：
+     data-bg ：背景层（纸、墨、活墨画布、纸纹）当前的样子
+     data-ui ：界面（#app 及挂在 body 下的浮层）当前的样子
+   平时两者都等于 data-theme。 */
+/* 底色只由 html 提供（body 透明），深色时直接给成反相后的纸色：#f1ebde → #191306 */
+html { background: var(--paper); }
+html body { background: transparent; }
+html[data-bg="dark"] { background: #191306; }
+html[data-bg="dark"] :is(.bg-paper, .bg-ink, .bg-ink-live, .bg-grain) { filter: invert(1) hue-rotate(180deg); }
+html[data-ui="dark"] :is(#app, .artist-hover-pop, .artist-suggest, .ink-drop) { filter: invert(1) hue-rotate(180deg); }
+html[data-ui="dark"] img,
+html[data-ui="dark"] video { filter: invert(1) hue-rotate(180deg); }
+
+/* ---- 主题切换：墨迹扩散（由 ui/themeInk.ts 驱动，<html> 上有 .ink-running 时生效） ----
+   用 View Transitions 给「静态的纸/纸纹」和「界面 #app」各拍新旧两张图，新图盖在旧图上，只是套了一张泼墨形状的遮罩，
+   遮罩从点击处放大——界面和纸面在同一条墨迹边缘上同步换色（界面里的图片也不会变成底片）。
+   「活墨画布」单独命名：它不套遮罩，永远是实时画面，扩散由它自己的 WebGL 着色器画（前沿内新主题的墨、前沿外旧主题的墨、
+   前沿上一圈湿墨边），所以背景的墨一直在流动，并且和界面共用同一张遮罩图、同一个半径。 */
+html.ink-running .bg-ink-live { view-transition-name: ink-bg; filter: none !important; }
+html.ink-running #app { view-transition-name: ink-ui; }
+
+html.ink-running::view-transition-group(*),
+html.ink-running::view-transition-image-pair(*) { animation: none; }
+html.ink-running::view-transition-old(*),
+html.ink-running::view-transition-new(*) { animation: none; mix-blend-mode: normal; }
+
+/* 活墨画布：新画面一出来就从旧快照快速交叠成实时画面（取不到新画面的那一小段时间里，旧快照撑着，墨不会消失）。
+   两张图用 plus-lighter 叠加，交叠过程里墨的浓度不会变淡。 */
+@keyframes ink-bg-out { to { opacity: 0; } }
+@keyframes ink-bg-in { from { opacity: 0; } }
+html.ink-running::view-transition-old(ink-bg) { animation: ink-bg-out .22s linear forwards; mix-blend-mode: plus-lighter; }
+html.ink-running::view-transition-new(ink-bg) { animation: ink-bg-in .22s linear; mix-blend-mode: plus-lighter; }
+
+/* 界面 #app 的快照背景是透明的：新界面半透明的地方会透出下面的旧界面，所以旧界面要用「反向遮罩」挖掉墨迹已到之处
+   （一层铺满的遮罩 exclude 掉泼墨遮罩 = 泼墨遮罩的反相）。纸面快照自带不透明底色，不需要。 */
+html.ink-running::view-transition-old(ink-ui) {
+  -webkit-mask-image: linear-gradient(#000, #000), var(--ink-blot);
+  mask-image: linear-gradient(#000, #000), var(--ink-blot);
+  -webkit-mask-repeat: no-repeat, no-repeat;
+  mask-repeat: no-repeat, no-repeat;
+  -webkit-mask-size: 100% 100%, var(--ink-s) var(--ink-s);
+  mask-size: 100% 100%, var(--ink-s) var(--ink-s);
+  -webkit-mask-position: 0 0, calc(var(--ink-x) - var(--ink-s) / 2) calc(var(--ink-y) - var(--ink-s) / 2);
+  mask-position: 0 0, calc(var(--ink-x) - var(--ink-s) / 2) calc(var(--ink-y) - var(--ink-s) / 2);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+/* 纸面和界面：新图用泼墨遮罩盖在旧图上 */
+html.ink-running::view-transition-new(root),
+html.ink-running::view-transition-new(ink-ui) {
+  -webkit-mask-image: var(--ink-blot);
+  mask-image: var(--ink-blot);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: var(--ink-s) var(--ink-s);
+  mask-size: var(--ink-s) var(--ink-s);
+  -webkit-mask-position: calc(var(--ink-x) - var(--ink-s) / 2) calc(var(--ink-y) - var(--ink-s) / 2);
+  mask-position: calc(var(--ink-x) - var(--ink-s) / 2) calc(var(--ink-y) - var(--ink-s) / 2);
+}
 
 html[data-font="sans"] {
   --serif: "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", "Source Han Sans SC", system-ui, sans-serif;

@@ -58,11 +58,13 @@ export function PromptWell({
   onChange,
   placeholder,
   hidden,
+  locked,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   hidden?: boolean;
+  locked?: boolean;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -302,6 +304,7 @@ export function PromptWell({
   }, []);
 
   function onInput(e: FormEvent<HTMLDivElement>) {
+    if (locked) return;
     if ((e.target as HTMLElement).closest(".artist-card")) return;
     const ne = e.nativeEvent as InputEvent;
     const type = ne.inputType || "";
@@ -312,6 +315,7 @@ export function PromptWell({
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (locked) return;
     const t = e.target as HTMLElement;
     if (t.matches("input.ac-w")) {
       const input = t as HTMLInputElement;
@@ -448,7 +452,7 @@ export function PromptWell({
   function onMouseOver(e: MouseEvent<HTMLDivElement>) {
     const name = (e.target as HTMLElement).closest<HTMLElement>(".ac-name");
     const card = name?.closest<HTMLElement>(".artist-card");
-    if (card) hover.show(cardName(card), card.getBoundingClientRect());
+    if (card && name) hover.show(name.dataset.name || cardName(card), card.getBoundingClientRect());
   }
 
   function onMouseOut(e: MouseEvent<HTMLDivElement>) {
@@ -463,8 +467,8 @@ export function PromptWell({
     <div className="prompt-well" hidden={hidden}>
       <div
         ref={rootRef}
-        className="prompt-ed"
-        contentEditable
+        className={`prompt-ed${locked ? " is-locked" : ""}`}
+        contentEditable={!locked}
         suppressContentEditableWarning
         spellCheck={false}
         translate="no"

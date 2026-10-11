@@ -6,6 +6,7 @@ import { useJobsQuery } from "./queries";
 import { jobIsActive } from "@/data";
 import { useLotterySync } from "./lottery";
 import { useSession } from "./session";
+import { isViewId } from "./tabs";
 import { useStudioSync } from "./studio";
 import { getSettings, useSettingsStore } from "./settingsStore";
 import { useStudioStore } from "./studioStore";
@@ -49,9 +50,7 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onHash = () => {
       const raw = location.hash.replace("#", "");
-      if (raw === "lottery" || raw === "studio" || raw === "gallery" || raw === "settings") {
-        useSession.setState({ view: raw });
-      }
+      if (isViewId(raw) && raw !== useSession.getState().view) useSession.getState().setView(raw);
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);

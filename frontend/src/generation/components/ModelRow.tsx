@@ -1,10 +1,10 @@
-import { MODE_LABEL, MODEL_LABEL } from "@/data/studio";
+import { isMediumEffort, MODE_LABEL, MODEL_LABEL } from "@/data/studio";
 import { useShallow } from "zustand/react/shallow";
 import { openStudioPop, useParamSetsQuery, useStudioActions, useStudioStore } from "@/state";
 import { IconChevron, IconSpark } from "./icons";
 
 export function ModelRow() {
-  const form = useStudioStore(useShallow((s) => ({ model: s.form.model, v5Mode: s.form.v5Mode })));
+  const form = useStudioStore(useShallow((s) => ({ model: s.form.model, v5Mode: s.form.v5Mode, effort: s.form.effort })));
   const openDd = useStudioStore((s) => s.openDd);
   const currentSetId = useStudioStore((s) => s.currentSetId);
   const setOpenDd = useStudioStore((s) => s.setOpenDd);
@@ -26,6 +26,22 @@ export function ModelRow() {
           ))}
         </div>
       </div>
+      {form.model === "nai-diffusion-5-full" ? (
+        <>
+          <span className="k">力度</span>
+          <div
+            className="effort-toggle"
+            title="节约模式使用蒸馏模型，固定 14 步和 Euler Ancestral，不发送负面提示，大约少用 42% 额度。引导仍可调。"
+          >
+            <button type="button" className={isMediumEffort(form) ? "" : "on"} onClick={() => patch({ effort: "high" })}>
+              通常
+            </button>
+            <button type="button" className={isMediumEffort(form) ? "on" : ""} onClick={() => patch({ effort: "medium" })}>
+              节约
+            </button>
+          </div>
+        </>
+      ) : null}
       <span className="k">模式</span>
       <div className={`dd${openDd === "mode" ? " open" : ""}`} id="dd-mode">
         <button className="pill" type="button" onClick={() => setOpenDd(openDd === "mode" ? "" : "mode")}>

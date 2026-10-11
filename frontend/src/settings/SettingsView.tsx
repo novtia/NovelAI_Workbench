@@ -1,11 +1,25 @@
 import { useMemo, useState } from "react";
+import type { LucideIcon } from "lucide-react";
 import { DEFAULT_SETTINGS, type SectionId } from "@/data/settings";
 import { confirmDialog } from "@/state/confirm";
 import { useSettingsStore } from "@/state/settingsStore";
 import { pushToast } from "@/state/toast";
+import { NAV_ICONS } from "@/ui/navIcons";
 import { SECTIONS, allItems, findSection, matchesQuery } from "./catalog";
 import { Card, SettingRow } from "./controls";
 import { LotteryApplyPanel, SystemPanel, TokenPanel } from "./panels";
+
+/** 设置分区 → 导航图标 */
+const SECTION_ICONS: Record<SectionId, LucideIcon> = {
+  appearance: NAV_ICONS.appearance,
+  gallery: NAV_ICONS.gallery,
+  generation: NAV_ICONS.studio,
+  lottery: NAV_ICONS.lottery,
+  basket: NAV_ICONS.basket,
+  layout: NAV_ICONS.layout,
+  account: NAV_ICONS.account,
+  system: NAV_ICONS.system,
+};
 
 export function SettingsView() {
   const [active, setActive] = useState<SectionId>("appearance");
@@ -58,6 +72,7 @@ export function SettingsView() {
         <nav className="s-nav" aria-label="设置分类">
           {SECTIONS.map((s) => {
             const n = changedCount(s.id);
+            const Icon = SECTION_ICONS[s.id];
             return (
               <button
                 key={s.id}
@@ -68,7 +83,9 @@ export function SettingsView() {
                   setQuery("");
                 }}
               >
-                <span className="s-nav-glyph">{s.glyph}</span>
+                <span className="s-nav-glyph" aria-hidden="true">
+                  <Icon />
+                </span>
                 <span className="s-nav-title">{s.title}</span>
                 {n ? <span className="s-nav-n" title={`${n} 项已修改`}>{n}</span> : null}
               </button>

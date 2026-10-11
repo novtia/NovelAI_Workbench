@@ -51,6 +51,8 @@ export type StudioForm = {
   uc: string;
   characters: Character[];
   model: string;
+  /** V5 完整的力度。节约会改走蒸馏模型，精选模型忽略这个字段。 */
+  effort: "high" | "medium";
   v5Mode: "anime" | "furry";
   quality: "off" | "official" | "gallery";
   width: number;
@@ -72,7 +74,7 @@ export type Job = {
   id: string;
   source: string;
   status: string;
-  progress: { step?: number | null; steps?: number; sample?: number; nSamples?: number; text?: string };
+  progress: { step?: number | null; steps?: number; sample?: number; nSamples?: number; text?: string; kind?: string; width?: number; height?: number; sourceHash?: string };
   items: Array<{ id?: string; blobHash?: string; url?: string; thumbUrl?: string; width?: number; height?: number }>;
   meta: Record<string, unknown>;
   error?: string | null;
@@ -217,6 +219,39 @@ export type StudioImportOpts = {
   clean: boolean;
 };
 
-export type StudioPop = "token" | "sampler" | "gender" | "album" | "paramSet" | "download" | null;
+export type StudioPop = "token" | "sampler" | "gender" | "album" | "paramSet" | "download" | "enhance" | null;
 
 export type StudioDownloadKind = "original" | "clean";
+
+/** 图生图底图。图片和蒙版都已经上传到后端 blob，这里只存哈希和预览地址。 */
+export type I2iBase = {
+  hash: string;
+  url: string;
+  width: number;
+  height: number;
+  strength: number;
+  noise: number;
+  /** 有蒙版就走局部重绘。 */
+  maskHash?: string;
+  maskUrl?: string;
+  inpaintStrength: number;
+};
+
+export type EnhanceAmount = "1x" | "1.5x" | "max";
+
+export type EnhanceOpts = {
+  upscaleAmount: EnhanceAmount;
+  /** 官方 Magnitude 1~5，对应一组 strength/noise。 */
+  magnitude: number;
+  /** Show Advanced：直接填 strength / noise。 */
+  advanced: boolean;
+  strength: number;
+  noise: number;
+};
+
+export type EditorMode = "draw" | "mask";
+
+export type JobKind = "generate" | "img2img" | "variation" | "infill" | "enhance" | "upscale";
+
+/** 工具栏按钮旁边显示的 Anlas 估算（后端 /api/nai/estimate）。 */
+export type AnlasEstimate = { generate: number; variation: number; upscale: number; enhance: number; upscaleScale: number; estimated: boolean };

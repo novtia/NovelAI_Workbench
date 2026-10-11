@@ -1,4 +1,4 @@
-import { MODEL_LABEL, MODE_LABEL, PRESET_LABEL, QUALITY_LABEL, SAMPLER_LABEL } from "@/data/studio";
+import { EFFORT_LABEL, MODEL_LABEL, MODE_LABEL, PRESET_LABEL, QUALITY_LABEL, SAMPLER_LABEL } from "@/data/studio";
 import type { SectionId, Settings } from "@/data/settings";
 
 export type Option = { value: string | number | boolean; label: string };
@@ -28,7 +28,6 @@ export type SettingGroup = { title: string; items: SettingItem[]; custom?: "toke
 export type SectionMeta = {
   id: SectionId;
   title: string;
-  glyph: string;
   desc: string;
   groups: SettingGroup[];
   /** 该分区末尾附加的自定义面板 */
@@ -41,7 +40,6 @@ export const SECTIONS: SectionMeta[] = [
   {
     id: "appearance",
     title: "外观",
-    glyph: "色",
     desc: "主题、字体、动效与提示时长。",
     groups: [
       {
@@ -134,7 +132,6 @@ export const SECTIONS: SectionMeta[] = [
   {
     id: "gallery",
     title: "图库",
-    glyph: "藏",
     desc: "卡片密度、排序分页、缩略图与删除确认。",
     groups: [
       {
@@ -258,7 +255,6 @@ export const SECTIONS: SectionMeta[] = [
   {
     id: "generation",
     title: "生图",
-    glyph: "绘",
     desc: "新建生图表单的默认值、草稿、后台队列与预览。",
     groups: [
       {
@@ -269,6 +265,15 @@ export const SECTIONS: SectionMeta[] = [
             key: "model",
             label: "默认模型",
             control: { kind: "segmented", options: opts(MODEL_LABEL) },
+          },
+          {
+            section: "generation",
+            key: "effort",
+            label: "V5 完整默认力度",
+            hint: "节约使用蒸馏模型 nai-diffusion-5-full-medium：固定 14 步、Euler Ancestral，不发送负面提示。只在模型为 V5 完整时生效。",
+            keywords: "medium high effort 节约",
+            disabledWhen: (s) => s.generation.model !== "nai-diffusion-5-full",
+            control: { kind: "segmented", options: opts(EFFORT_LABEL) },
           },
           {
             section: "generation",
@@ -431,7 +436,6 @@ export const SECTIONS: SectionMeta[] = [
   {
     id: "lottery",
     title: "抽奖",
-    glyph: "签",
     desc: "抽奖台的默认参数与删除确认。",
     groups: [
       {
@@ -464,7 +468,6 @@ export const SECTIONS: SectionMeta[] = [
   {
     id: "basket",
     title: "画师串",
-    glyph: "串",
     desc: "复制格式与面板行为。",
     groups: [
       {
@@ -516,7 +519,6 @@ export const SECTIONS: SectionMeta[] = [
   {
     id: "layout",
     title: "布局",
-    glyph: "局",
     desc: "生图室面板宽度。",
     groups: [
       {
@@ -549,7 +551,6 @@ export const SECTIONS: SectionMeta[] = [
   {
     id: "account",
     title: "账号与额度",
-    glyph: "账",
     desc: "NovelAI Token 与额度显示。",
     groups: [
       { title: "NovelAI Token", items: [], custom: "token" },
@@ -583,7 +584,6 @@ export const SECTIONS: SectionMeta[] = [
   {
     id: "system",
     title: "数据与系统",
-    glyph: "库",
     desc: "存储信息、完整性、备份、导入导出设置。",
     extra: "system",
     groups: [

@@ -11,6 +11,8 @@
         var mode = cached && cached.appearance && cached.appearance.theme;
         var dark = mode === "dark" || (mode === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
         document.documentElement.dataset.theme = dark ? "dark" : "light";
+        document.documentElement.dataset.bg = dark ? "dark" : "light";
+        document.documentElement.dataset.ui = dark ? "dark" : "light";
         if (cached && cached.appearance && cached.appearance.font) document.documentElement.dataset.font = cached.appearance.font;
       } catch (e) {}
     </script>

@@ -5,6 +5,7 @@ import {
   filterArtistNames,
   findArtistCards,
   formatArtistCard,
+  formatArtistGroup,
   joinPromptSegments,
   parseWeightInput,
   splitPromptSegments,
@@ -32,6 +33,22 @@ describe("artist cards", () => {
     expect(cards.map((c) => c.name)).toEqual(["tarapisu153", "nnk_(nongnong)", "toma_(toma50)"]);
     expect(cards[0].weight).toBe(0.45);
     expect(cards[2].weight).toBeNull();
+  });
+
+  it("lets several artists share one weight", () => {
+    const text = "1.4::artist:wakaba ::, 1.1::artist:thirty 8ght, thirty8ght::, 0.78::artist:foo::, 5::flat_color::,";
+    const cards = findArtistCards(text);
+    expect(cards.map((c) => c.raw)).toEqual([
+      "1.4::artist:wakaba ::",
+      "1.1::artist:thirty 8ght, thirty8ght::",
+      "0.78::artist:foo::",
+    ]);
+    expect(cards[1].names).toEqual(["thirty 8ght", "thirty8ght"]);
+    expect(cards[1].weight).toBe(1.1);
+    expect(formatArtistGroup(cards[1].inner, 1.2)).toBe("1.20::artist:thirty 8ght, thirty8ght::");
+    expect(formatArtistGroup("artist:a, b2", 0.9)).toBe("0.90::artist:a, b2 ::");
+    // 下一个权重起点不能被吞进上一个组
+    expect(findArtistCards("0.5::artist:a, 1girl, 0.3::artist:b::").map((c) => c.raw)).toEqual(["artist:a", "0.3::artist:b::"]);
   });
 
   it("keeps weight-only groups and plain text as text", () => {

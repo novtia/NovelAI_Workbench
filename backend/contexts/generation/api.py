@@ -74,6 +74,17 @@ def delete_set(sid: str, request: Request):
     return Response(status_code=204)
 
 
+@router.post("/api/blobs")
+async def upload_blob(request: Request):
+    """上传底图或蒙版：请求体就是图片本身（image/png 等），返回 blob 哈希。"""
+    data = await request.body()
+    try:
+        rec = await asyncio.to_thread(_svc(request).store_upload, data)
+    except DomainError as exc:
+        return _err(exc)
+    return JSONResponse(rec, status_code=201)
+
+
 @router.post("/api/nai/jobs")
 async def create_job(request: Request):
     body = await request.json()
@@ -84,6 +95,12 @@ async def create_job(request: Request):
     except DomainError as exc:
         return _err(exc)
     return JSONResponse({"job": job}, status_code=202)
+
+
+@router.post("/api/nai/estimate")
+async def estimate(request: Request):
+    body = await request.json()
+    return _svc(request).estimate(body if isinstance(body, dict) else {})
 
 
 @router.get("/api/nai/jobs")

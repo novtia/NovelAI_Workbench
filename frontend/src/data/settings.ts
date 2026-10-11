@@ -26,6 +26,7 @@ export type Settings = {
   };
   generation: {
     model: "nai-diffusion-5-full" | "nai-diffusion-5-curated";
+    effort: "high" | "medium";
     v5Mode: "anime" | "furry";
     quality: "off" | "official" | "gallery";
     preset: "Small" | "Normal" | "Large";
@@ -107,6 +108,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   generation: {
     model: "nai-diffusion-5-full",
+    effort: "high",
     v5Mode: "anime",
     quality: "gallery",
     preset: "Normal",

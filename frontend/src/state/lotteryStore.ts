@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import { createTabScopedStore } from "./scoped";
 import { defaultControls, normalizeBoard } from "@/data/lottery";
 import "./settingsStore";
 import type { LotSave, LotteryBoard, LotteryControls } from "@/data/types";
@@ -39,7 +39,8 @@ type LotteryState = {
   snapshot: () => LotteryBoard;
 };
 
-export const useLotteryStore = create<LotteryState>((set, get) => ({
+/** 每个标签一份抽奖台界面状态；抽奖盘本身以后端为准。 */
+export const useLotteryStore = createTabScopedStore<LotteryState>(() => (set, get) => ({
   poolQuery: "",
   excluded: [],
   pinned: [],
