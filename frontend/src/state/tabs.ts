@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { removeTabDraft } from "@/data/studio";
 import { disposeTab, MAIN_TAB_ID, setActiveTab } from "./scoped";
 
-export type ViewId = "gallery" | "lottery" | "studio" | "settings";
+export type ViewId = "gallery" | "lottery" | "studio" | "history" | "settings";
 
 export type Tab = { id: string; view: ViewId };
 

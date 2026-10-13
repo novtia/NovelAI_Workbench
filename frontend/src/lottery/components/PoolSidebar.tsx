@@ -21,9 +21,9 @@ export function PoolSidebar() {
       <div className="pool-list">
         {!pool.length && (
           <PoolEmpty>
-            当前收藏夹还没有画师。
+            「单画师」收藏夹里还没有画师。
             <br />
-            导入带画师串的图片后，这里会出现可抽的画师池。
+            往「单画师」导入或生成画师图后，这里会出现可抽的画师池。
           </PoolEmpty>
         )}
         {pool.length > 0 && !visible.length && <PoolEmpty>没有匹配的画师。</PoolEmpty>}

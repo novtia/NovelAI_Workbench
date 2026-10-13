@@ -112,19 +112,47 @@ export function setCardWeight(el: HTMLElement, weight: number | null) {
   paintCard(el, weight);
 }
 
-export function buildEditor(root: HTMLElement, value: string) {
+/**
+ * 实时渲染时，光标正在编辑的那一段 tag 先不要变成卡片，否则打到一半（`artist:fo|`）就被抢走了：
+ *  - 光标严格落在 tag 中间：一律保留成文字；
+ *  - 光标正好在末尾：只有无权重、无括号的 `artist:name`（后面还可能继续打字）保留成文字，
+ *    写完了的 `0.5::artist:x::` / `[artist:x]` 立刻变卡片。
+ */
+export function stillTyping(card: { start: number; end: number; weight: number | null; bracket: boolean }, caret: number | null | undefined) {
+  if (caret == null) return false;
+  if (caret > card.start && caret < card.end) return true;
+  return caret === card.end && card.weight == null && !card.bracket;
+}
+
+export function buildEditor(root: HTMLElement, value: string, opts?: { caret?: number | null }) {
   root.textContent = "";
   for (const seg of splitPromptSegments(value)) {
-    if (seg.type === "card") {
+    if (seg.type === "card" && !stillTyping(seg.card, opts?.caret)) {
       root.appendChild(createCardEl(seg.card));
       continue;
     }
     const tpl = document.createElement("template");
-    tpl.innerHTML = highlight(seg.value);
+    tpl.innerHTML = highlight(seg.type === "card" ? seg.card.raw : seg.value);
     root.appendChild(tpl.content);
   }
   root.appendChild(endEl());
   refreshEmpty(root);
+}
+
+/** 如果按当前文字重新渲染，结果和现在的 DOM 不一样（该变卡片、权重色该变了），才需要重建。 */
+export function needsRender(root: HTMLElement, value: string, caret: number | null) {
+  const probe = document.createElement("div");
+  buildEditor(probe, value, { caret });
+  return probe.innerHTML !== root.innerHTML;
+}
+
+/** 编辑器外面真正在滚动的那一层（重建 DOM 时用它保住滚动位置）。 */
+export function scrollParentOf(root: HTMLElement) {
+  let box: HTMLElement | null = root;
+  while (box && !(box.scrollHeight > box.clientHeight && /(auto|scroll)/.test(getComputedStyle(box).overflowY))) {
+    box = box.parentElement;
+  }
+  return box;
 }
 
 export function refreshEmpty(root: HTMLElement, known?: string) {

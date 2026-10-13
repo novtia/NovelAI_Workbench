@@ -4,13 +4,15 @@
    滤镜不挂在 html/body 上，而是分别挂在「背景层」和「界面 #app」上：
      data-bg ：背景层（纸、墨、活墨画布、纸纹）当前的样子
      data-ui ：界面（#app 及挂在 body 下的浮层）当前的样子
-   平时两者都等于 data-theme。 */
+   平时两者都等于 data-theme。
+   <dialog>.showModal() 会进入浏览器的 top layer，不再受 #app 上滤镜的影响，所以 dialog.modal 要自己套一次滤镜；
+   否则深色下弹窗是浅色的，而里面的图片却被上面的 img 规则反相成了底片。 */
 /* 底色只由 html 提供（body 透明），深色时直接给成反相后的纸色：#f1ebde → #191306 */
 html { background: var(--paper); }
 html body { background: transparent; }
 html[data-bg="dark"] { background: #191306; }
 html[data-bg="dark"] :is(.bg-paper, .bg-ink, .bg-ink-live, .bg-grain) { filter: invert(1) hue-rotate(180deg); }
-html[data-ui="dark"] :is(#app, .artist-hover-pop, .artist-suggest, .ink-drop) { filter: invert(1) hue-rotate(180deg); }
+html[data-ui="dark"] :is(#app, .artist-hover-pop, .artist-suggest, .ink-drop, dialog.modal) { filter: invert(1) hue-rotate(180deg); }
 html[data-ui="dark"] img,
 html[data-ui="dark"] video { filter: invert(1) hue-rotate(180deg); }
 

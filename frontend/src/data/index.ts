@@ -20,6 +20,7 @@ export {
 export type { ArtistColumn, ArtistSections, ArtistSpan, ArtistToken } from "./singleArtist";
 export { basketAdd, basketHasAll, basketName, basketRemove, basketText, normalizeBasketNames } from "./artistBasket";
 export type { BasketFormat } from "./artistBasket";
+export { ARTIST_TEST_PRESET_ID, ARTIST_TEST_PRESET_NAME, artistQuickPayload, artistTestForm, quickJobTarget, resolveArtistTestForm } from "./artistTest";
 export { buildSkinLayout, buildTestTargets, indexSkins, missingTargets, testJobKey } from "./testRun";
 export type { SkinGroup, SkinLayout, SkinProgress, SkinSlot, TestCard, TestCardState, TestTarget } from "./testRun";
 export {

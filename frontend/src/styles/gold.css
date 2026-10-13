@@ -1,0 +1,124 @@
+/* 烫金主题（<html data-theme="gold">，由 ui/applySettings.ts 写入）。
+
+   和「墨夜」不同，烫金不用整页滤镜反相，而是直接换一套配色变量：纯黑的底，界面上所有字、线、图标都是刺眼的金色。
+   app.css 里的半透明叠色都是 rgba(var(--ink-rgb), .x) 这样写的，所以悬停底、分隔线、毛玻璃也会跟着变成金色。
+   图片不受影响（没有滤镜）。
+   背景的「墨」换成棱镜七色灵气：由 ui/inkFluid.ts 的着色器直接画（没有滤镜），这里只负责把宣纸、泼墨、纸纹撤掉，
+   并给「不能跑活墨」（没有 WebGL / 关了活墨 / 减少动效）时留一层静态的七色光兜底。 */
+
+html[data-theme="gold"] {
+  color-scheme: dark;
+
+  /* 底与面：黑里带一点点暖，免得和金色之间太「冷」 */
+  --paper: #050403;
+  --paper-2: #110d06;
+  --paper-3: #0d0904;
+  --silk: #1a1309;
+  /* 字与线：由亮到暗的一组金，最亮的 --ink 是烫金箔的高光 */
+  --ink: #ffd95c;
+  --ink-2: #f6c63f;
+  --ink-3: #d09b24;
+  --ink-4: #926b19;
+  --ink-5: #4f3a12;
+  --ink-rgb: 255, 208, 70;
+  --paper-rgb: 10, 8, 4;
+  --paper3-rgb: 14, 10, 5;
+  --glow-rgb: 46, 32, 8;
+  /* 强调色：偏橙的亮金，压在它上面的字用近黑的深褐 */
+  --zhu: #ffb824;
+  --zhu-2: #ffe27a;
+  --zhu-rgb: 255, 184, 36;
+  --on-zhu: #1a1000;
+  --dai: #d6a02a;
+  --qing: #f3d062;
+  --ochre: #ff9f1c;
+  --huang: #fff1a6;
+  --shadow: 0 0 26px -8px rgba(255, 184, 40, .4);
+}
+
+/* ---- 背景：纯黑 + 七色灵气 ---- */
+html[data-bg="gold"] { background: #040302; }
+html[data-bg="gold"] .bg-paper,
+html[data-bg="gold"] .bg-ink { background-image: none; }
+html[data-bg="gold"] .bg-ink { display: none; }
+/* 纸纹换成发亮的细点，像金箔上的颗粒 */
+html[data-bg="gold"] .bg-grain { filter: invert(1) sepia(1) saturate(4); opacity: .1; mix-blend-mode: screen; }
+/* 兜底：没有活墨时，右下角一扇七色光（和着色器里的光扇同一个方向） */
+html[data-bg="gold"]:not(.ink-gl) .bg-paper {
+  background:
+    radial-gradient(70% 55% at 100% 104%, rgba(255, 255, 255, .22), transparent 60%),
+    conic-gradient(from 185deg at 104% 106%, #ff2a3a, #ff8a1f, #ffe81a, #2bff5a, #19e6ff, #335bff, #a23bff, #ff2a3a);
+  -webkit-mask-image: radial-gradient(95% 85% at 100% 100%, rgba(0, 0, 0, .55), transparent 72%);
+  mask-image: radial-gradient(95% 85% at 100% 100%, rgba(0, 0, 0, .55), transparent 72%);
+}
+
+/* ---- 界面：金色发光 ---- */
+/* 字：一圈极细的亮边 + 淡淡的光晕，黑底上才「刺」得起来 */
+html[data-theme="gold"] #app { text-shadow: 0 0 .6px rgba(255, 224, 120, .6), 0 0 9px rgba(255, 168, 28, .3); }
+html[data-theme="gold"] :is(input, textarea, select) { text-shadow: none; caret-color: var(--zhu); }
+html[data-theme="gold"] ::placeholder { color: var(--ink-4); }
+
+/* 烫金箔：标题、徽标上一道缓缓扫过的高光 */
+@keyframes goldFoil { to { background-position: -420px 0; } }
+html[data-theme="gold"] .pane-title {
+  background: linear-gradient(100deg, #9a6400 0, #ffd95c 70px, #fff8d2 120px, #ffc42e 180px, #b57700 260px, #ffe27a 340px, #9a6400 420px) 0 0 / 420px 100% repeat-x;
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent; text-shadow: none;
+  filter: drop-shadow(0 0 7px rgba(255, 176, 36, .55));
+  animation: goldFoil 5s linear infinite;
+}
+html[data-theme="gold"] .act-logo {
+  background: linear-gradient(135deg, #fff1a6 0%, #ffc42e 40%, #c98400 100%);
+  box-shadow: 0 0 22px rgba(255, 184, 36, .65), inset 0 0 0 2px rgba(255, 246, 200, .7);
+  text-shadow: none;
+}
+html[data-theme="gold"] .kicker,
+html[data-theme="gold"] .pane-no { text-shadow: 0 0 10px rgba(255, 184, 36, .7); }
+
+/* 侧栏当前项：原来是一团黑墨，换成一团发光的金 */
+html[data-theme="gold"] .act-btn::before {
+  background: linear-gradient(135deg, #fff1a6, #ffbd2b 55%, #d98a00);
+  -webkit-mask: var(--blob) center / contain no-repeat;
+  mask: var(--blob) center / contain no-repeat;
+  filter: drop-shadow(0 0 9px rgba(255, 184, 36, .75));
+}
+html[data-theme="gold"] .act-btn.active .glyph { text-shadow: none; }
+html[data-theme="gold"] .act-btn:not(.active):hover .glyph svg { filter: drop-shadow(0 0 5px rgba(255, 190, 50, .65)); }
+
+/* 按钮：主按钮是一块实心的烫金，悬停时整块变亮发光 */
+html[data-theme="gold"] .btn-primary {
+  background: linear-gradient(135deg, #ffe27a, #ffb824 55%, #f09a0c);
+  box-shadow: 0 0 20px -3px rgba(255, 184, 36, .6), inset 0 0 0 1px rgba(255, 248, 210, .65);
+  text-shadow: none;
+}
+html[data-theme="gold"] .btn-primary:hover {
+  background: linear-gradient(135deg, #fff6c4, #ffd95c 55%, #ffb824);
+  box-shadow: 0 0 30px 0 rgba(255, 196, 50, .85), inset 0 0 0 1px rgba(255, 252, 230, .9);
+}
+html[data-theme="gold"] .btn:hover,
+html[data-theme="gold"] .mini:hover:not(:disabled),
+html[data-theme="gold"] .icon-btn:hover,
+html[data-theme="gold"] .tbtn:hover { box-shadow: 0 0 18px -2px rgba(255, 196, 50, .6); text-shadow: none; }
+html[data-theme="gold"] .gen { background: linear-gradient(135deg, #ffe27a, #ffb824 60%, #f09a0c); box-shadow: 0 0 26px -4px rgba(255, 184, 36, .6); text-shadow: none; }
+html[data-theme="gold"] .gen:hover:not(:disabled) { background: linear-gradient(135deg, #fff6c4, #ffd95c 60%, #ffb824); box-shadow: 0 0 36px 0 rgba(255, 196, 50, .85); }
+html[data-theme="gold"] .gen.busy { background: linear-gradient(135deg, #c9962a, #9d7016); box-shadow: none; }
+html[data-theme="gold"] .gen::before { background: radial-gradient(closest-side, rgba(255, 255, 255, .75), transparent); }
+html[data-theme="gold"] .toast { box-shadow: 0 0 30px -6px rgba(255, 184, 36, .6); text-shadow: none; }
+
+/* 卡片与浮层：细金线 + 悬停时发光 */
+html[data-theme="gold"] .grid .card { box-shadow: 0 0 0 1px var(--line-2), 0 16px 28px -20px #000; }
+html[data-theme="gold"] .grid .card:hover,
+html[data-theme="gold"] .grid .card:focus-visible { box-shadow: 0 0 0 1px rgba(255, 217, 92, .85), 0 0 30px -2px rgba(255, 184, 36, .5); }
+html[data-theme="gold"] .grid .card.sel { box-shadow: 0 0 0 2px var(--zhu), 0 0 34px -2px rgba(255, 184, 36, .6); }
+html[data-theme="gold"] dialog.modal { box-shadow: 0 0 0 1px var(--line-3), 0 0 60px -10px rgba(255, 184, 36, .45); }
+
+/* 压在图片上的小标、操作条：底是深色半透明，字要用金色（原来是「纸色字」，在这里是深色，会看不见） */
+html[data-theme="gold"] .badge,
+html[data-theme="gold"] .draw-job-badge { background: rgba(0, 0, 0, .78); color: var(--ink); text-shadow: none; }
+html[data-theme="gold"] .qa button { color: var(--ink); border-color: rgba(var(--ink-rgb), .6); }
+html[data-theme="gold"] .qa button:hover { color: var(--on-zhu); }
+html[data-theme="gold"] .basket-add { background: rgba(0, 0, 0, .72); color: var(--ink); }
+html[data-theme="gold"] .basket-add:hover { color: var(--ink); }
+
+/* 点按钮时的墨滴：金色光点 */
+html[data-theme="gold"] .ink-drop { background: radial-gradient(circle, rgba(255, 214, 90, .75), rgba(255, 184, 36, 0) 70%); }

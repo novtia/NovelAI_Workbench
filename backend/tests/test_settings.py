@@ -58,6 +58,19 @@ def test_bool_and_choice_type_strictness(tmp_path):
     assert out["gallery"]["pageSize"] == 0
 
 
+def test_text_and_seed_settings_are_validated(tmp_path):
+    svc, *_ = _svc(tmp_path)
+    out = svc.update(
+        {"artistTest": {"prompt": "x" * 5000, "character": 5, "seed": 99999999999, "steps": 30, "quality": "bogus"}}
+    )["settings"]["artistTest"]
+    assert len(out["prompt"]) == 2000
+    assert out["character"] == "girl, solo"  # 非字符串回到默认
+    assert out["seed"] == 4294967295
+    assert out["steps"] == 30
+    assert out["quality"] == "gallery"
+    assert svc.update({"artistTest": {"prompt": ""}})["settings"]["artistTest"]["prompt"] == ""
+
+
 def test_noop_update_writes_no_event(tmp_path):
     svc, store, *_ = _svc(tmp_path)
     svc.update({"appearance": {"theme": "dark"}})

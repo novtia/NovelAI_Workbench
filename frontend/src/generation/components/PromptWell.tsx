@@ -35,10 +35,12 @@ import {
   ensureEnd,
   getCaretOffset,
   insertPlainText,
+  needsRender,
   offsetAfterNode,
   offsetBeforeNode,
   refreshEmpty,
   revealCaret,
+  scrollParentOf,
   segmentBeforeCaret,
   serializeNode,
   serializeSelection,
@@ -81,6 +83,10 @@ export function PromptWell({
   const kbNav = useRef(false);
   const selectOnUp = useRef(false);
   const hist = useRef({ stack: [{ v: value, c: value.length }] as Snap[], idx: 0, t: 0, typing: false });
+  const liveTimer = useRef(0);
+  const liveLast = useRef<{ v: string; c: number } | null>(null);
+  const lockedRef = useRef(Boolean(locked));
+  lockedRef.current = Boolean(locked);
   const [sug, setSug] = useState<Suggest | null>(null);
   const sugRef = useRef(sug);
   sugRef.current = sug;
@@ -191,6 +197,35 @@ export function PromptWell({
     applyWeight(card, parsed);
   }
 
+  // ---- 实时渲染 ----
+  // 打字时停手片刻就按当前文字重新渲染：写完的画师 tag 变卡片、`1.5::xxx::` 的权重色实时跟上，
+  // 不必等到输入逗号或失去焦点。正在输入的那个 tag 不会被抢走（见 promptDom.buildEditor）。
+
+  function liveRender() {
+    const root = rootRef.current;
+    if (!root || composing.current || lockedRef.current || document.activeElement !== root) return;
+    const sel = window.getSelection();
+    if (!sel || !sel.isCollapsed) return;
+    const caret = getCaretOffset(root);
+    if (caret == null) return;
+    const s = serializeNode(root);
+    const done = liveLast.current;
+    if (done && done.v === s && done.c === caret) return;
+    if (!needsRender(root, s, caret)) return;
+    const box = scrollParentOf(root);
+    const top = box?.scrollTop ?? 0;
+    buildEditor(root, s, { caret });
+    setCaretOffset(root, caret);
+    if (box) box.scrollTop = top;
+    liveLast.current = { v: s, c: caret };
+  }
+
+  /** 延迟 0：等本次输入事件处理完（下一个任务）就渲染，肉眼上是同步的；连续输入时后一次顶掉前一次。 */
+  function scheduleLive(delay = 0) {
+    window.clearTimeout(liveTimer.current);
+    liveTimer.current = window.setTimeout(liveRender, delay);
+  }
+
   // ---- 联想 ----
 
   function updateSuggest() {
@@ -233,6 +268,19 @@ export function PromptWell({
 
   useEffect(() => {
     armArtistLibrary();
+  }, []);
+
+  // 光标移出正在输入的 tag（方向键、点击）后，那个 tag 也要变成卡片。
+  useEffect(() => {
+    const onSel = () => {
+      if (document.activeElement === rootRef.current) scheduleLive();
+    };
+    document.addEventListener("selectionchange", onSel);
+    return () => {
+      document.removeEventListener("selectionchange", onSel);
+      window.clearTimeout(liveTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useLayoutEffect(() => {
@@ -308,9 +356,11 @@ export function PromptWell({
     if ((e.target as HTMLElement).closest(".artist-card")) return;
     const ne = e.nativeEvent as InputEvent;
     const type = ne.inputType || "";
+    liveLast.current = null;
     emit(type === "insertText" || type.startsWith("delete"));
     if (composing.current || ne.isComposing) return;
     if (type === "insertText" && ne.data === ",") commitCards();
+    else scheduleLive();
     updateSuggest();
   }
 
@@ -492,6 +542,7 @@ export function PromptWell({
         onCompositionEnd={() => {
           composing.current = false;
           emit(true);
+          scheduleLive();
           updateSuggest();
         }}
       />

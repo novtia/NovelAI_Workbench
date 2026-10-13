@@ -7,7 +7,11 @@ export type Control =
   | { kind: "switch" }
   | { kind: "segmented"; options: Option[] }
   | { kind: "select"; options: Option[] }
-  | { kind: "slider"; min: number; max: number; step: number; unit?: string; digits?: number };
+  | { kind: "slider"; min: number; max: number; step: number; unit?: string; digits?: number }
+  | { kind: "text"; placeholder?: string; rows?: number }
+  | { kind: "number"; min: number; max: number }
+  /** 选一个生图室里保存的预设（param-sets）；空串 = 不用预设 */
+  | { kind: "preset"; emptyLabel: string };
 
 export type SettingItem = {
   section: SectionId;
@@ -33,6 +37,14 @@ export type SectionMeta = {
   /** 该分区末尾附加的自定义面板 */
   extra?: "system";
 };
+
+/** 画师测试选了生图预设时，自定义参数不生效，置灰。 */
+const usesPreset = (s: Settings) => s.artistTest.presetId !== "";
+const lockWithPreset = (items: SettingItem[]): SettingItem[] =>
+  items.map((item) => {
+    const own = item.disabledWhen;
+    return { ...item, disabledWhen: (s: Settings) => usesPreset(s) || Boolean(own?.(s)) };
+  });
 
 const opts = (map: Record<string, string>): Option[] => Object.entries(map).map(([value, label]) => ({ value, label }));
 
@@ -430,6 +442,116 @@ export const SECTIONS: SectionMeta[] = [
             control: { kind: "switch" },
           },
         ],
+      },
+    ],
+  },
+  {
+    id: "artistTest",
+    title: "画师测试",
+    desc: "给「单画师」图库里的画师生成测试图用的默认参数：悬停在没有图的画师上点「生成」，以及测试集没有可用预设时，都用这里的参数。",
+    groups: [
+      {
+        title: "套用生图预设",
+        items: [
+          {
+            section: "artistTest",
+            key: "presetId",
+            label: "生图预设",
+            hint: "直接套用生图室里保存的预设（提示词、角色、尺寸、采样等全部照预设，每位画师 1 张）；选「自定义」则用下面的参数。预设之后在生图室里改了，这里自动跟着变。",
+            keywords: "preset 预设 套用 param",
+            control: { kind: "preset", emptyLabel: "自定义（用下面的参数）" },
+          },
+        ],
+      },
+      {
+        title: "自定义参数",
+        items: [
+          {
+            section: "artistTest",
+            key: "prompt",
+            label: "主体提示词",
+            hint: "接在画师串后面的主体 Prompt。可以留空，只靠下面的质量词和角色出图。",
+            keywords: "prompt 画师 测试集",
+            disabledWhen: usesPreset,
+            control: { kind: "text", placeholder: "例如：upper body, looking at viewer", rows: 3 },
+          },
+          {
+            section: "artistTest",
+            key: "character",
+            label: "角色提示词",
+            hint: "V5 需要至少一个角色，这里是测试图里的那个角色；留空则不加角色。套用预设时，只在预设本身没有角色时才用它补上。",
+            keywords: "character 角色",
+            control: { kind: "text", placeholder: "girl, solo", rows: 2 },
+          },
+          {
+            section: "artistTest",
+            key: "ucPreset",
+            label: "负向提示",
+            disabledWhen: usesPreset,
+            control: {
+              kind: "segmented",
+              options: [
+                { value: "heavy", label: "重度" },
+                { value: "comic", label: "漫画" },
+                { value: "none", label: "留空" },
+              ],
+            },
+          },
+        ],
+      },
+      {
+        title: "生图参数",
+        items: lockWithPreset([
+          { section: "artistTest", key: "model", label: "模型", control: { kind: "segmented", options: opts(MODEL_LABEL) } },
+          {
+            section: "artistTest",
+            key: "effort",
+            label: "V5 完整力度",
+            hint: "节约使用蒸馏模型：固定 14 步、Euler Ancestral。只在模型为 V5 完整时生效。",
+            disabledWhen: (s) => s.artistTest.model !== "nai-diffusion-5-full",
+            control: { kind: "segmented", options: opts(EFFORT_LABEL) },
+          },
+          { section: "artistTest", key: "v5Mode", label: "V5 模式", control: { kind: "segmented", options: opts(MODE_LABEL) } },
+          { section: "artistTest", key: "quality", label: "质量词", control: { kind: "segmented", options: opts(QUALITY_LABEL) } },
+          { section: "artistTest", key: "preset", label: "分辨率档位", control: { kind: "segmented", options: opts(PRESET_LABEL) } },
+          {
+            section: "artistTest",
+            key: "aspect",
+            label: "画幅",
+            control: {
+              kind: "segmented",
+              options: [
+                { value: "port", label: "竖" },
+                { value: "land", label: "横" },
+                { value: "square", label: "方" },
+              ],
+            },
+          },
+          { section: "artistTest", key: "sampler", label: "采样器", control: { kind: "select", options: opts(SAMPLER_LABEL) } },
+          {
+            section: "artistTest",
+            key: "noiseSchedule",
+            label: "噪声计划",
+            control: { kind: "select", options: ["karras", "native", "exponential", "polyexponential"].map((v) => ({ value: v, label: v })) },
+          },
+          { section: "artistTest", key: "steps", label: "步数", control: { kind: "slider", min: 1, max: 50, step: 1 } },
+          {
+            section: "artistTest",
+            key: "scale",
+            label: "提示词相关性（CFG）",
+            keywords: "scale guidance",
+            control: { kind: "slider", min: 0, max: 30, step: 0.5, digits: 1 },
+          },
+          { section: "artistTest", key: "cfgRescale", label: "CFG Rescale", control: { kind: "slider", min: 0, max: 1, step: 0.05, digits: 2 } },
+          {
+            section: "artistTest",
+            key: "seed",
+            label: "种子",
+            hint: "-1 为每张随机；固定一个数，不同画师的测试图就能在同一个种子下对比。",
+            keywords: "seed 随机",
+            control: { kind: "number", min: -1, max: 4294967295 },
+          },
+        ]),
       },
     ],
   },

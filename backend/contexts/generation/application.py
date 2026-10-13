@@ -345,6 +345,68 @@ class GenerationService:
             ).fetchall()
         return [self._job_row(r) for r in rows]
 
+    def list_history(self, before: int | None, before_id: str, limit: int) -> dict[str, Any]:
+        """生图室已完成的全部任务，按创建时间倒序分页。不受 jobsKeep 截断。"""
+        try:
+            size = int(limit)
+        except (TypeError, ValueError):
+            size = 60
+        size = max(1, min(200, size))
+        clauses = ["source='studio'", "status='done'", "json_array_length(items_json) > 0"]
+        params: list[Any] = []
+        if before is not None:
+            cursor = int(before)
+            bid = str(before_id or "")
+            if bid:
+                clauses.append("(created_at < ? OR (created_at = ? AND id < ?))")
+                params.extend([cursor, cursor, bid])
+            else:
+                clauses.append("created_at < ?")
+                params.append(cursor)
+        params.append(size + 1)
+        with self.store.connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT * FROM projections_jobs
+                WHERE {' AND '.join(clauses)}
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+                """,
+                params,
+            ).fetchall()
+        more = len(rows) > size
+        jobs = [self._job_row(r) for r in rows[:size]]
+        tail = jobs[-1] if more and jobs else None
+        return {
+            "jobs": jobs,
+            "nextBefore": tail["createdAt"] if tail else None,
+            "nextBeforeId": tail["id"] if tail else None,
+        }
+
+    def delete_history(self, refs: list[dict[str, Any]]) -> int:
+        """把若干张图从历史里移除。只改任务记录：blob 文件一律保留，收藏夹里的图不受影响。
+
+        refs 里每项是 {"jobId", "itemId"}；按图片 id 定位，不受前面删除造成的下标错位影响。
+        只处理生图室（studio）的已完成任务，其它来源和不存在的任务会被忽略。
+        """
+        by_job: dict[str, list[str]] = {}
+        for ref in refs if isinstance(refs, list) else []:
+            if not isinstance(ref, dict):
+                continue
+            job_id = str(ref.get("jobId") or "").strip()
+            item_id = str(ref.get("itemId") or "").strip()
+            if job_id and item_id:
+                by_job.setdefault(job_id, []).append(item_id)
+        removed = 0
+        for job_id, item_ids in by_job.items():
+            job = self.uow.load(GenerationJob, job_id)
+            if job.version == 0 or job.source != "studio" or job.status != "done":
+                continue
+            removed += len(job.remove_items(item_ids, now_ms()))
+            if job.pending:
+                self.uow.commit(job)
+        return removed
+
     def get_job(self, job_id: str) -> dict[str, Any] | None:
         with self.store.connect() as conn:
             row = conn.execute("SELECT * FROM projections_jobs WHERE id=?", (job_id,)).fetchone()
@@ -443,7 +505,8 @@ class GenerationService:
         写进图片元数据后，图片详情里才有角色信息。
         """
         client = client if isinstance(client, dict) else {}
-        set_id = str(client.get("testSetId") or "").strip()
+        # testSetId：测试集里的批量生图；targetAlbumId：悬停给缺图画师补一张，直接存进「单画师」收藏夹。
+        set_id = str(client.get("testSetId") or client.get("targetAlbumId") or "").strip()
         if source != "gallery" or not set_id or not items:
             return []
         hashes = [str(it.get("blobHash") or "") for it in items if it.get("blobHash")]
@@ -463,9 +526,10 @@ class GenerationService:
             "artists": [str(a) for a in artists],
             "artistLine": artist_line,
             "source": "nai-v5",
-            "testSetId": set_id,
             "testIndex": client.get("testIndex"),
         }
+        if client.get("testSetId"):
+            meta["testSetId"] = set_id
         try:
             return self.promote(set_id, hashes, meta)
         except DomainError:

@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { galleryApi } from "@/api";
 import { artistLibraryNames, indexArtistPreviews, isSingleArtistAlbum, queryKeys, stripArtist, tagKey } from "@/data";
 import type { Artwork } from "@/data/types";
-import { getSettings, useAlbumsQuery, useSession } from "@/state";
+import { getSettings, useAlbumsQuery, useArtistQuickGen, useSession } from "@/state";
 import { BasketAddButton } from "./BasketAddButton";
 
 type HoverState = {
@@ -22,7 +22,8 @@ type ArtistHoverApi = {
 };
 
 const ArtistHoverContext = createContext<ArtistHoverApi | null>(null);
-const HIDE_MS = 160;
+/** 鼠标离开画师名后多久收起预览：要留够时间把鼠标从画师名挪到预览图上（比如点「生成」按钮）。 */
+const HIDE_MS = 450;
 
 const noop: ArtistHoverApi = {
   show() {},
@@ -53,7 +54,8 @@ function useSingleArtistItems(enabled: boolean) {
     queryFn: () => galleryApi.listItems(album!.id),
     enabled: enabled && Boolean(album?.id),
   });
-  return itemsQ.data || NO_ITEMS;
+  // ready：单画师库已经加载完，「没有这位画师」的判断才可信。
+  return { items: itemsQ.data || NO_ITEMS, ready: Boolean(album?.id) && itemsQ.isSuccess };
 }
 
 /** 图库里选中的测试集图片：悬停预览要显示测试集画面。 */
@@ -93,7 +95,8 @@ export function ArtistHoverProvider({ children }: { children: ReactNode }) {
   }, []);
   const testSetId = useSession((s) => s.testSetId);
   // 选了测试集时也要有默认图，用来给没有皮肤的画师兜底。
-  const items = useSingleArtistItems(armed || Boolean(testSetId));
+  const { items, ready } = useSingleArtistItems(armed || Boolean(testSetId));
+  const quick = useArtistQuickGen();
   const names = useMemo(() => artistLibraryNames(items), [items]);
   const testItems = useTestSetItems();
   // 测试集是皮肤：有皮肤的画师先显示测试集里的画面，其余（以及皮肤之后）是「单画师」库里的默认图。
@@ -108,8 +111,10 @@ export function ArtistHoverProvider({ children }: { children: ReactNode }) {
   const hideTimer = useRef(0);
   const stateRef = useRef(state);
   const previewsRef = useRef(previews);
+  const readyRef = useRef(ready);
   stateRef.current = state;
   previewsRef.current = previews;
+  readyRef.current = ready;
 
   const cancelHide = useCallback(() => {
     window.clearTimeout(hideTimer.current);
@@ -125,7 +130,13 @@ export function ArtistHoverProvider({ children }: { children: ReactNode }) {
       const key = tagKey(name);
       const items = previewsRef.current.get(key) || [];
       cancelHide();
-      if (!key || !items.length || !getSettings().gallery.hoverPreview) {
+      if (!key || !getSettings().gallery.hoverPreview) {
+        setState(null);
+        return;
+      }
+      if (!items.length && !readyRef.current) {
+        // 单画师库还没加载：先去拉，加载完下一次鼠标移动就能判断有没有图。
+        armArtistLibrary();
         setState(null);
         return;
       }
@@ -149,8 +160,8 @@ export function ArtistHoverProvider({ children }: { children: ReactNode }) {
     setState((prev) => {
       if (!prev) return prev;
       const items = previews.get(prev.key) || [];
-      if (!items.length) return null;
-      return { ...prev, items, index: Math.min(prev.index, items.length - 1) };
+      if (!items.length && !readyRef.current) return null;
+      return { ...prev, items, index: Math.max(0, Math.min(prev.index, items.length - 1)) };
     });
   }, [previews]);
 
@@ -179,7 +190,13 @@ export function ArtistHoverProvider({ children }: { children: ReactNode }) {
       <PreviewsContext.Provider value={previews}>
         <ArtistHoverContext.Provider value={api}>
           {children}
-          <ArtistHoverPop state={state} onEnter={cancelHide} onLeave={delayHide} />
+          <ArtistHoverPop
+            state={state}
+            onEnter={cancelHide}
+            onLeave={delayHide}
+            pending={Boolean(state && quick.pending.has(state.key))}
+            onGenerate={(name) => void quick.generate(name)}
+          />
         </ArtistHoverContext.Provider>
       </PreviewsContext.Provider>
     </NamesContext.Provider>
@@ -223,10 +240,14 @@ function ArtistHoverPop({
   state,
   onEnter,
   onLeave,
+  pending,
+  onGenerate,
 }: {
   state: HoverState | null;
   onEnter: () => void;
   onLeave: () => void;
+  pending: boolean;
+  onGenerate: (name: string) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
@@ -242,7 +263,8 @@ function ArtistHoverPop({
 
   if (!state) return null;
   const item = state.items[state.index];
-  if (!item) return null;
+  const missing = state.items.length === 0;
+  if (!item && !missing) return null;
   const shown = pos || placePop(state.rect, 220, 260);
   return createPortal(
     <div
@@ -260,10 +282,33 @@ function ArtistHoverPop({
           </span>
         )}
       </div>
-      <div className="pop-img">
-        <img src={item.thumbUrl} alt="" width={item.width || undefined} height={item.height || undefined} />
-        <BasketAddButton className="on-image" names={[state.name]} />
-      </div>
+      {missing || !item ? (
+        <div className="pop-img pop-empty">
+          {pending ? (
+            <>
+              <span className="load-dots" aria-label="生成中">
+                <i />
+                <i />
+                <i />
+              </span>
+              <span className="pe-text pe-busy">正在生成，完成后自动存进单画师</span>
+            </>
+          ) : (
+            <>
+              <span className="pe-text">单画师图库里还没有这位画师的图</span>
+              <button type="button" className="btn btn-primary pe-btn" onClick={() => onGenerate(state.name)}>
+                添加到单画师并生成
+              </button>
+            </>
+          )}
+          <BasketAddButton className="on-image" names={[state.name]} />
+        </div>
+      ) : (
+        <div className="pop-img">
+          <img src={item.thumbUrl} alt="" width={item.width || undefined} height={item.height || undefined} />
+          <BasketAddButton className="on-image" names={[state.name]} />
+        </div>
+      )}
     </div>,
     document.body,
   );

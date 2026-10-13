@@ -68,6 +68,26 @@ export async function listJobs() {
   return data.jobs;
 }
 
+export type HistoryPage = { jobs: Job[]; nextBefore: number | null; nextBeforeId: string | null };
+
+/** 生图室的全部完成记录，按创建时间倒序翻页，不受「最近任务条数」截断。 */
+export async function listHistory(cursor?: { before: number; beforeId?: string | null }, limit = 60) {
+  const q = new URLSearchParams({ limit: String(limit) });
+  if (cursor && Number.isFinite(cursor.before)) q.set("before", String(cursor.before));
+  if (cursor?.beforeId) q.set("beforeId", cursor.beforeId);
+  return request<HistoryPage>(`/api/nai/history?${q}`);
+}
+
+export type HistoryRef = { jobId: string; itemId: string };
+
+/** 从历史里移除图片记录。只删记录，图片文件和收藏夹里的图都不受影响。 */
+export async function deleteHistory(items: HistoryRef[]) {
+  return request<{ removed: number }>("/api/nai/history/delete", {
+    method: "POST",
+    body: JSON.stringify({ items }),
+  });
+}
+
 export async function promoteItems(albumId: string, blobHashes: string[], meta: Record<string, unknown>) {
   const data = await request<{ items: unknown[] }>("/api/nai/generate", {
     method: "POST",

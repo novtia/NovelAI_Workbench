@@ -6,6 +6,7 @@ from PIL import Image
 from contexts.gallery.application import GalleryService
 from contexts.gallery.projectors import GalleryProjector
 from contexts.generation.application import GenerationService, SseHub
+from contexts.generation.domain import GenerationJob
 from contexts.generation.nai_client import NaiError
 from contexts.generation.projectors import GenerationProjector
 from contexts.identity.projectors import IdentityProjector
@@ -159,6 +160,122 @@ def test_generate_estimate_respects_opus_free_image(tmp_path):
     assert svc.estimate({**base, "genSamples": 1, "opus": True})["generate"] == 0
     assert svc.estimate({**base, "genSamples": 3, "opus": True})["generate"] == one * 2
     assert svc.estimate({**base, "genSamples": 1, "opus": True, "steps": 40})["generate"] > 0
+
+
+class _KeepTwo:
+    def value(self, section, key):
+        if section == "generation" and key == "jobsKeep":
+            return 2
+        raise KeyError(key)
+
+
+def _stamp(svc, job_id: str, created: int) -> None:
+    with svc.store.connect() as conn:
+        conn.execute("UPDATE projections_jobs SET created_at=? WHERE id=?", (created, job_id))
+
+
+def _finish(svc, source: str, created: int, *, items: bool = True) -> str:
+    job = svc.enqueue({"prompt": "1girl", "source": source})
+    agg = svc.uow.load(GenerationJob, job["id"])
+    if items:
+        agg.complete(
+            [{"id": "shot", "blobHash": "ab" * 32, "width": 832, "height": 1216}],
+            {"prompt": "1girl", "seed": 7, "width": 832, "height": 1216, "steps": 28, "sampler": "k_euler"},
+            None,
+            created,
+        )
+    else:
+        agg.fail("失败", created)
+    svc.uow.commit(agg)
+    _stamp(svc, job["id"], created)
+    return job["id"]
+
+
+def test_history_pages_past_jobs_keep_and_skips_other_sources(tmp_path):
+    svc, _ = _services(tmp_path)
+    svc.settings = _KeepTwo()
+    older = [_finish(svc, "studio", 1000 + i) for i in range(4)]
+    same_a = _finish(svc, "studio", 2000)
+    same_b = _finish(svc, "studio", 2000)
+    lottery = _finish(svc, "lottery", 5000)
+    failed = _finish(svc, "studio", 6000, items=False)
+    queued = svc.enqueue({"prompt": "wait", "source": "studio"})
+
+    listed = {j["id"] for j in svc.list_jobs()}
+    assert queued["id"] in listed
+    assert failed in listed
+    assert not any(i in listed for i in older)
+
+    first = svc.list_history(None, "", 2)
+    newer, older_same = sorted([same_a, same_b], reverse=True)
+    assert [j["id"] for j in first["jobs"]] == [newer, older_same]
+    assert all(j["source"] == "studio" and j["status"] == "done" and j["items"] for j in first["jobs"])
+    assert first["jobs"][0]["items"][0]["url"] == f"/api/blobs/{'ab' * 32}"
+    assert lottery not in {j["id"] for j in first["jobs"]}
+
+    second = svc.list_history(first["nextBefore"], first["nextBeforeId"], 2)
+    assert [j["id"] for j in second["jobs"]] == [older[3], older[2]]
+    third = svc.list_history(second["nextBefore"], second["nextBeforeId"], 2)
+    assert [j["id"] for j in third["jobs"]] == [older[1], older[0]]
+    assert third["nextBefore"] is None
+    assert third["nextBeforeId"] is None
+
+
+def _finish_with_images(svc, source: str, created: int, sizes: list[tuple[int, int]]):
+    job = svc.enqueue({"prompt": "1girl", "source": source})
+    items = [svc.store_image(_image(size)) for size in sizes]
+    agg = svc.uow.load(GenerationJob, job["id"])
+    agg.complete(items, {"prompt": "1girl", "seed": 7}, None, created)
+    svc.uow.commit(agg)
+    _stamp(svc, job["id"], created)
+    return job["id"], items
+
+
+def _history_ids(svc) -> dict[str, list[str]]:
+    page = svc.list_history(None, "", 100)
+    return {j["id"]: [it["id"] for it in j["items"]] for j in page["jobs"]}
+
+
+def test_delete_history_keeps_blobs_and_album_items(tmp_path):
+    from contexts.gallery.application import ensure_default_album
+    from kernel.integrity import rebuild_projections, verify_all
+
+    svc, blobs = _services(tmp_path)
+    ensure_default_album(svc.gallery)
+    job_a, items_a = _finish_with_images(svc, "studio", 1000, [(300, 400), (320, 420)])
+    job_b, items_b = _finish_with_images(svc, "studio", 2000, [(340, 440)])
+    job_lot, items_lot = _finish_with_images(svc, "lottery", 3000, [(360, 460)])
+
+    saved_hash = items_a[0]["blobHash"]
+    svc.promote("default", [saved_hash], {"prompt": "1girl", "name": "nai.png", "artists": ["x"]})
+    before = blobs.get(saved_hash)
+
+    refs = [
+        {"jobId": job_a, "itemId": items_a[0]["id"]},
+        {"jobId": job_lot, "itemId": items_lot[0]["id"]},  # 抽奖任务不属于历史，必须被忽略
+        {"jobId": "nope", "itemId": "x"},
+        {"jobId": job_a, "itemId": "not-there"},
+    ]
+    assert svc.delete_history(refs) == 1
+    assert _history_ids(svc) == {job_b: [items_b[0]["id"]], job_a: [items_a[1]["id"]]}
+    assert svc.get_job(job_lot)["items"], "抽奖任务的图不能被历史删除动到"
+
+    # 收藏夹里的图和图片文件都还在，内容没变。
+    assert blobs.exists(saved_hash) and blobs.get(saved_hash) == before
+    assert [i["hash"] for i in svc.gallery.list_items("default")] == [saved_hash]
+
+    # 全删光的任务从历史里消失；重复删除是空操作。
+    assert svc.delete_history([{"jobId": job_b, "itemId": items_b[0]["id"]}]) == 1
+    assert svc.delete_history([{"jobId": job_b, "itemId": items_b[0]["id"]}]) == 0
+    assert job_b not in _history_ids(svc)
+
+    # 重建投影后删除结果仍然生效，事件和图片校验都通过。
+    expected = _history_ids(svc)
+    rebuild_projections(svc.store, svc.uow.projectors)
+    assert _history_ids(svc) == expected
+    assert [i["hash"] for i in svc.gallery.list_items("default")] == [saved_hash]
+    report = verify_all(svc.store, blobs, svc.uow.projectors)
+    assert report["ok"], report
 
 
 def test_upscale_defaults_to_2x(tmp_path):

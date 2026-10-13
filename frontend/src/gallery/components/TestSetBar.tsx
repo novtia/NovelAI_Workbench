@@ -1,4 +1,4 @@
-import { isSingleArtistAlbum } from "@/data";
+import { ARTIST_TEST_PRESET_ID, ARTIST_TEST_PRESET_NAME, isSingleArtistAlbum } from "@/data";
 import { IconPencil, IconTrash } from "@/generation/components/icons";
 import { useCollection, useTestRun } from "@/state";
 
@@ -9,7 +9,6 @@ export function TestSetBar() {
   if (!isSingleArtistAlbum(album)) return null;
 
   const { progress, running, submitting } = t;
-  const empty = !t.sets.length;
   const canStart = !running && !submitting && Boolean(t.preset) && baseItems.length > 0;
 
   return (
@@ -42,7 +41,7 @@ export function TestSetBar() {
         <label className="tb-field tb-preset">
           <span>生图预设</span>
           <select value={t.presetId} disabled={running} onChange={(e) => t.setPresetId(e.target.value)}>
-            <option value="">{empty ? "暂无预设，请先在生图室保存" : "请选择预设"}</option>
+            <option value={ARTIST_TEST_PRESET_ID}>{ARTIST_TEST_PRESET_NAME}（设置 → 画师测试）</option>
             {t.sets.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}

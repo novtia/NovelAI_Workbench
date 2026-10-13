@@ -112,6 +112,19 @@ class GenerationProjector(Projector):
                     event.aggregate_id,
                 ),
             )
+        elif t == "JobItemsRemoved":
+            row = conn.execute(
+                "SELECT items_json FROM projections_jobs WHERE id=?", (event.aggregate_id,)
+            ).fetchone()
+            if row:
+                gone = {str(i) for i in p.get("itemIds") or []}
+                items = [
+                    it for it in json.loads(row["items_json"] or "[]") if str(it.get("id")) not in gone
+                ]
+                conn.execute(
+                    "UPDATE projections_jobs SET items_json=?, version=? WHERE id=?",
+                    (json.dumps(items, ensure_ascii=False), event.version, event.aggregate_id),
+                )
         elif t == "JobFailed":
             conn.execute(
                 "UPDATE projections_jobs SET status='error', error=?, finished_at=?, version=? WHERE id=?",

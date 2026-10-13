@@ -8,7 +8,7 @@ from typing import Any
 
 @dataclass(frozen=True, slots=True)
 class Spec:
-    kind: str  # bool | int | float | choice
+    kind: str  # bool | int | float | choice | str
     default: Any
     min: float | None = None
     max: float | None = None
@@ -16,6 +16,10 @@ class Spec:
 
     def coerce(self, value: Any) -> Any:
         """把任意输入规整成合法值；不合法时返回默认值。"""
+        if self.kind == "str":
+            if not isinstance(value, str):
+                return self.default
+            return value[: int(self.max)] if self.max is not None else value
         if self.kind == "bool":
             if isinstance(value, bool):
                 return value
@@ -58,6 +62,10 @@ def _float(default: float, lo: float, hi: float) -> Spec:
 
 def _choice(default: Any, *choices: Any) -> Spec:
     return Spec("choice", default, choices=tuple(choices))
+
+
+def _str(default: str, max_len: int) -> Spec:
+    return Spec("str", default, max=max_len)
 
 
 SCHEMA: dict[str, dict[str, Spec]] = {
@@ -112,6 +120,34 @@ SCHEMA: dict[str, dict[str, Spec]] = {
         "autoOpenJobs": _bool(False),
         "streamPreview": _bool(True),
         "tokenWarn": _bool(True),
+    },
+    # 单画师图库里「给画师生成测试图」用的参数：悬停补图、测试集里没有预设时都用它。
+    "artistTest": {
+        # 选了生图预设（param-sets）就直接套用预设，下面的自定义参数不再生效；空串 = 用下面的自定义参数。
+        "presetId": _str("", 64),
+        "prompt": _str("", 2000),
+        "character": _str("girl, solo", 500),
+        "ucPreset": _choice("heavy", "heavy", "comic", "none"),
+        "model": _choice("nai-diffusion-5-full", "nai-diffusion-5-full", "nai-diffusion-5-curated"),
+        "effort": _choice("high", "high", "medium"),
+        "v5Mode": _choice("anime", "anime", "furry"),
+        "quality": _choice("gallery", "off", "official", "gallery"),
+        "preset": _choice("Normal", "Small", "Normal", "Large"),
+        "aspect": _choice("port", "port", "land", "square"),
+        "sampler": _choice(
+            "k_euler_ancestral",
+            "k_euler_ancestral",
+            "k_euler",
+            "k_dpmpp_2s_ancestral",
+            "k_dpmpp_2m",
+            "k_dpmpp_2m_sde",
+            "k_dpmpp_sde",
+        ),
+        "noiseSchedule": _choice("karras", "karras", "native", "exponential", "polyexponential"),
+        "steps": _int(28, 1, 50),
+        "scale": _float(5, 0, 30),
+        "cfgRescale": _float(0, 0, 1),
+        "seed": _int(-1, -1, 4294967295),
     },
     "lottery": {
         "min": _int(3, 1, 50),

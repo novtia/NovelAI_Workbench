@@ -112,6 +112,23 @@ class GenerationJob(AggregateRoot):
             return
         self.record("JobCancelled", {"finishedAt": finished_at})
 
+    def remove_items(self, item_ids: list[str], removed_at: int) -> list[str]:
+        """从历史里移除已完成任务的若干张图，只改记录，不碰 blob 文件。返回实际移除的 id。"""
+        if self.version == 0:
+            raise DomainError("任务不存在", 404)
+        if self.status != "done":
+            raise DomainError("任务还没完成", 409)
+        wanted = {str(i) for i in item_ids if i}
+        hit = [str(it.get("id")) for it in self.items if str(it.get("id")) in wanted]
+        if not hit:
+            return []
+        self.record("JobItemsRemoved", {"itemIds": hit, "removedAt": removed_at})
+        return hit
+
+    def _on_JobItemsRemoved(self, payload: dict[str, Any]) -> None:
+        gone = {str(i) for i in payload.get("itemIds") or []}
+        self.items = [it for it in self.items if str(it.get("id")) not in gone]
+
     def _on_JobQueued(self, payload: dict[str, Any]) -> None:
         self.source = payload.get("source") or "studio"
         self.status = "queued"

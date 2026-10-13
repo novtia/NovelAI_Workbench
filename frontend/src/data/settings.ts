@@ -47,6 +47,26 @@ export type Settings = {
     streamPreview: boolean;
     tokenWarn: boolean;
   };
+  /** 单画师图库里「给画师生成测试图」的参数（悬停补图；测试集没有预设时也用它） */
+  artistTest: {
+    /** 空串 = 用下面的自定义参数；否则直接套用这个生图预设 */
+    presetId: string;
+    prompt: string;
+    character: string;
+    ucPreset: "heavy" | "comic" | "none";
+    model: "nai-diffusion-5-full" | "nai-diffusion-5-curated";
+    effort: "high" | "medium";
+    v5Mode: "anime" | "furry";
+    quality: "off" | "official" | "gallery";
+    preset: "Small" | "Normal" | "Large";
+    aspect: "port" | "land" | "square";
+    sampler: string;
+    noiseSchedule: string;
+    steps: number;
+    scale: number;
+    cfgRescale: number;
+    seed: number;
+  };
   lottery: {
     min: number;
     max: number;
@@ -128,6 +148,24 @@ export const DEFAULT_SETTINGS: Settings = {
     autoOpenJobs: false,
     streamPreview: true,
     tokenWarn: true,
+  },
+  artistTest: {
+    presetId: "",
+    prompt: "",
+    character: "girl, solo",
+    ucPreset: "heavy",
+    model: "nai-diffusion-5-full",
+    effort: "high",
+    v5Mode: "anime",
+    quality: "gallery",
+    preset: "Normal",
+    aspect: "port",
+    sampler: "k_euler_ancestral",
+    noiseSchedule: "karras",
+    steps: 28,
+    scale: 5,
+    cfgRescale: 0,
+    seed: -1,
   },
   lottery: {
     min: 3,

@@ -5,6 +5,7 @@ export const queryKeys = {
   galleryView: ["gallery-view"] as const,
   artistBasket: ["artist-basket"] as const,
   jobs: ["jobs"] as const,
+  history: ["history"] as const,
   naiStatus: ["nai-status"] as const,
   paramSets: ["param-sets"] as const,
   lotteryBatches: ["lottery-batches"] as const,

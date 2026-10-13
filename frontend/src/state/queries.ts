@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { galleryApi, generationApi, lotteryApi } from "@/api";
 import { queryKeys } from "@/data/queryKeys";
 import { isTestSetAlbum } from "@/data/singleArtist";
@@ -30,6 +30,17 @@ export function useItemsQuery(albumId?: string) {
 
 export function useJobsQuery() {
   return useQuery({ queryKey: queryKeys.jobs, queryFn: generationApi.listJobs, staleTime: Infinity });
+}
+
+/** 历史页专用：生图室全部完成记录，滚到底再取下一页。 */
+export function useHistoryQuery() {
+  return useInfiniteQuery({
+    queryKey: queryKeys.history,
+    queryFn: ({ pageParam }) => generationApi.listHistory(pageParam),
+    initialPageParam: undefined as { before: number; beforeId?: string | null } | undefined,
+    getNextPageParam: (last) =>
+      last.nextBefore != null ? { before: last.nextBefore, beforeId: last.nextBeforeId } : undefined,
+  });
 }
 
 export function useNaiStatusQuery() {

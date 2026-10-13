@@ -23,6 +23,7 @@ import {
   triggerRect,
 } from "@/data";
 import type {
+  Artwork,
   DrawBatch,
   DrawResult,
   Job,
@@ -34,7 +35,7 @@ import type {
 } from "@/data/types";
 import { emit } from "./bus";
 import { useCollection } from "./collection";
-import { useJobsQuery, useLotteryBatchesQuery, useLotteryBoardQuery, useParamSetsQuery } from "./queries";
+import { useItemsQuery, useJobsQuery, useLotteryBatchesQuery, useLotteryBoardQuery, useParamSetsQuery } from "./queries";
 import { useLotteryStore } from "./lotteryStore";
 import { currentTabId, runInTab } from "./scoped";
 import { useSession } from "./session";
@@ -45,6 +46,7 @@ import { pushToast } from "./toast";
 /** 每个标签各自一个保存防抖，免得 A 标签的保存被 B 标签取消。 */
 const persistTimers = new Map<string, number>();
 let latestLottery: any = {};
+const NO_ITEMS: Artwork[] = [];
 
 function drawKey(batchId: string, drawId: string) {
   return `${batchId}:${drawId}`;
@@ -132,8 +134,11 @@ export async function saveLotteryPreview(qc: QueryClient, targetAlbumId: string,
 export function useLottery() {
   const qc = useQueryClient();
   const albumId = useSession((s) => s.albumId);
-  // 抽奖池永远取当前收藏夹本身，不受图库里选中的测试集影响。
-  const { albums, baseItems: items } = useCollection();
+  const { albums } = useCollection();
+  // 画师池固定取「单画师」收藏夹：不随图库当前选中的收藏夹或测试集变化。
+  const poolAlbumId = albums.find((a) => isSingleArtistAlbum(a))?.id || "";
+  const itemsQ = useItemsQuery(poolAlbumId);
+  const items = itemsQ.data || NO_ITEMS;
   const batchesQ = useLotteryBatchesQuery();
   const setsQ = useParamSetsQuery();
   const jobsQ = useJobsQuery();
@@ -180,7 +185,7 @@ export function useLottery() {
       try {
         const board = await lotteryApi.saveBoard(
           boardPayload({
-            albumId,
+            albumId: poolAlbumId || albumId,
             excluded: excludedNext,
             pinned: pinnedNext,
             weightCaps: capsNext,
@@ -353,7 +358,7 @@ export function useLottery() {
       if (item) emit("generation.applyForm", item.form);
     },
     roll: async () => {
-      if (!albumId) return pushToast("请先选择收藏夹", "warn");
+      if (!poolAlbumId) return pushToast("还没有「单画师」收藏夹，先导入单画师图", "warn");
       if (!active.length) return pushToast("画师池为空，先在左侧恢复一些画师", "warn");
       const next = clampControls(store.controls, active.length, pinnedCount);
       if (!Number.isFinite(next.target) || next.target <= 0) return pushToast("目标和必须大于 0", "warn");
@@ -361,7 +366,7 @@ export function useLottery() {
       store.setControls(next);
       try {
         await persist({ controls: next }, true);
-        const batch = await lotteryApi.rollDraws(albumId, {
+        const batch = await lotteryApi.rollDraws(poolAlbumId, {
           excluded: useLotteryStore.getState().excluded,
           pinned: useLotteryStore.getState().pinned,
           weightCaps: useLotteryStore.getState().weightCaps,

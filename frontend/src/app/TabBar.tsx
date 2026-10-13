@@ -8,6 +8,7 @@ export const VIEW_META: Record<ViewId, { label: string; Icon: LucideIcon }> = {
   gallery: { label: "图库", Icon: NAV_ICONS.gallery },
   lottery: { label: "抽奖台", Icon: NAV_ICONS.lottery },
   studio: { label: "生图室", Icon: NAV_ICONS.studio },
+  history: { label: "历史", Icon: NAV_ICONS.history },
   settings: { label: "设置", Icon: NAV_ICONS.settings },
 };
 

@@ -158,7 +158,11 @@ class BitReader {
   }
 }
 
-function alphaBitReader(imageData: ImageData) {
+export type PixelData = { data: Uint8ClampedArray; width: number; height: number };
+
+const STEALTH_MAGICS = ["stealth_pngcomp", "stealth_pnginfo", "stealth_rgbcomp", "stealth_rgbinfo"];
+
+function alphaBitReader(imageData: PixelData) {
   const { data, width, height } = imageData;
   return new BitReader((i) => {
     const x = Math.floor(i / height);
@@ -167,7 +171,7 @@ function alphaBitReader(imageData: ImageData) {
   }, width * height);
 }
 
-function rgbBitReader(imageData: ImageData) {
+function rgbBitReader(imageData: PixelData) {
   const { data, width, height } = imageData;
   return new BitReader((i) => {
     const pixel = Math.floor(i / 3);
@@ -179,11 +183,10 @@ function rgbBitReader(imageData: ImageData) {
 }
 
 async function decodeStealthPayload(reader: BitReader) {
-  const magics = ["stealth_pngcomp", "stealth_pnginfo", "stealth_rgbcomp", "stealth_rgbinfo"];
   const head = reader.readBytes(16);
   if (head.length < 16) return null;
   const magic = decodeText(head, false);
-  const matched = magics.find((m) => magic.startsWith(m));
+  const matched = STEALTH_MAGICS.find((m) => magic.startsWith(m));
   if (!matched) return null;
   const bitLen = reader.readU32();
   if (bitLen == null || bitLen === 0) return null;
@@ -356,18 +359,40 @@ export async function makeThumb(file: Blob, max = 320, quality = 0.82) {
   return { blob, width, height };
 }
 
+/**
+ * 抹掉像素里的隐写信息（原地修改）。NovelAI 把参数写在 alpha 通道的最低位里，canvas 重新编码并不会改动 alpha，
+ * 所以只丢掉 PNG 文本块是不够的：
+ *  - alpha：>= 254 的一律拉成 255（隐写只会用到 254/255）；真有半透明的像素则只清最低位；
+ *  - RGB：只有检测到 RGB 隐写头时才把最低位打乱，避免无谓地改动画面。
+ */
+export function scrubStealth(img: PixelData) {
+  const d = img.data;
+  const head = rgbBitReader(img).readBytes(16);
+  const rgbStealth = head.length === 16 && STEALTH_MAGICS.some((m) => decodeText(head, false).startsWith(m));
+  for (let i = 0; i < d.length; i += 4) {
+    if (rgbStealth) {
+      for (let c = 0; c < 3; c++) d[i + c] = (d[i + c] & 0xfe) | (Math.random() < 0.5 ? 1 : 0);
+    }
+    const a = d[i + 3];
+    d[i + 3] = a >= 254 ? 255 : a & 0xfe;
+  }
+}
+
 export async function reencodePngClean(blob: Blob) {
   const bitmap = await createImageBitmap(blob);
   const canvas = document.createElement("canvas");
   canvas.width = bitmap.width;
   canvas.height = bitmap.height;
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) {
     bitmap.close();
     throw new Error("无法导出图片");
   }
   ctx.drawImage(bitmap, 0, 0);
   bitmap.close();
+  const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  scrubStealth(pixels);
+  ctx.putImageData(pixels, 0, 0);
   const out = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
   if (!out) throw new Error("无法导出图片");
   return out;

@@ -14,6 +14,7 @@ const SECTION_ICONS: Record<SectionId, LucideIcon> = {
   appearance: NAV_ICONS.appearance,
   gallery: NAV_ICONS.gallery,
   generation: NAV_ICONS.studio,
+  artistTest: NAV_ICONS.artistTest,
   lottery: NAV_ICONS.lottery,
   basket: NAV_ICONS.basket,
   layout: NAV_ICONS.layout,

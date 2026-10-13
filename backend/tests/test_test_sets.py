@@ -111,6 +111,24 @@ def test_gallery_job_completion_binds_into_test_set(tmp_path):
     assert len(gallery.list_items(album["id"])) == 1
 
 
+def test_target_album_job_binds_straight_into_single_artist_album(tmp_path):
+    gallery, generation, blobs = _services(tmp_path)
+    ensure_single_artist_album(gallery)
+    album = gallery.find_single_artist_album()
+    digest = blobs.put(_png(11))
+    client = {
+        "targetAlbumId": album["id"],
+        "artists": ["new_artist"],
+        "artistLine": "artist:new_artist",
+        "form": {"prompt": "", "seed": -1},
+    }
+    saved = generation.bind_test_set_items("gallery", client, [{"blobHash": digest}])
+    assert len(saved) == 1
+    items = gallery.list_items(album["id"])
+    assert [i["artists"] for i in items] == [["new_artist"]]
+    assert "testSetId" not in items[0]["params"]
+
+
 def test_bound_image_keeps_generation_meta_with_characters(tmp_path):
     gallery, generation, blobs = _services(tmp_path)
     ensure_single_artist_album(gallery)

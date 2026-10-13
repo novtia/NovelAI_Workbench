@@ -1,6 +1,8 @@
 import {
   Brush,
   Database,
+  FlaskConical,
+  History,
   Images,
   LayoutDashboard,
   Moon,
@@ -21,6 +23,8 @@ export const NAV_ICONS = {
   lottery: Ticket,
   /** 生图 */
   studio: Brush,
+  /** 历史记录 */
+  history: History,
   /** 画师串 */
   basket: ShoppingBasket,
   /** 设置 */
@@ -30,6 +34,8 @@ export const NAV_ICONS = {
   themeToLight: Sun,
   /** 设置分区：外观 */
   appearance: Palette,
+  /** 设置分区：画师测试 */
+  artistTest: FlaskConical,
   /** 设置分区：布局 */
   layout: LayoutDashboard,
   /** 设置分区：账号与额度 */

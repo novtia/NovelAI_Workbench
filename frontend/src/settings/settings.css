@@ -70,6 +70,17 @@
 .s-seg button { min-width: 44px; }
 .s-seg button:disabled { opacity: .5; cursor: default; }
 .s-select { min-width: 160px; }
+.s-text {
+  width: 300px; resize: vertical; padding: 6px 8px; background: transparent; color: var(--ink);
+  border: 1px solid var(--line-2); font-family: var(--mono); font-size: 12px; line-height: 1.6; outline: none;
+}
+.s-text:focus { border-color: var(--zhu); }
+.s-text:disabled { opacity: .5; }
+.s-number {
+  width: 160px; height: 30px; padding: 0 8px; background: transparent; color: var(--ink);
+  border: 1px solid var(--line-2); font-family: var(--mono); font-size: 12px; text-align: right; outline: none;
+}
+.s-number:focus { border-color: var(--zhu); }
 .s-slider { display: flex; align-items: center; gap: 12px; }
 .s-slider input[type=range] { width: 200px; }
 .s-slider input[type=range]:disabled { opacity: .5; }

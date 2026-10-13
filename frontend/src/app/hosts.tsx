@@ -1,6 +1,7 @@
 import { BasketPopover } from "../basket/BasketPopover";
 import { useCommands, useUiStore } from "@/state";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
+import { ContextMenuHost } from "@/ui/contextMenu";
 
 export function WorkbenchHosts() {
   const overlay = useUiStore((s) => s.overlay);
@@ -35,6 +36,7 @@ export function WorkbenchHosts() {
       </div>
       <BasketPopover />
       <ConfirmDialog />
+      <ContextMenuHost />
       <div className={`progress${progress.show ? " show" : ""}`}>
         <span>
           正在解析 {progress.done} / {progress.total}

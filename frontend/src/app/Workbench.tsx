@@ -15,6 +15,7 @@ const GalleryView = lazy(() => import("../gallery").then((m) => ({ default: m.Ga
 const LotteryView = lazy(() => import("../lottery").then((m) => ({ default: m.LotteryView })));
 const StudioView = lazy(() => import("../generation/StudioView").then((m) => ({ default: m.StudioView })));
 const SettingsView = lazy(() => import("../settings/SettingsView").then((m) => ({ default: m.SettingsView })));
+const HistoryView = lazy(() => import("../history").then((m) => ({ default: m.HistoryView })));
 
 const VIEWS = [
   { id: "gallery" as const, label: "图库", title: "图库", Icon: NAV_ICONS.gallery },
@@ -107,6 +108,19 @@ export function Workbench() {
                 </button>
               );
             })}
+            <span className="act-sep" role="separator" />
+            <button
+              className={`act-btn${view === "history" ? " active" : ""}`}
+              type="button"
+              title="历史记录"
+              data-view="history"
+              onClick={() => setView("history")}
+            >
+              <span className="glyph" aria-hidden="true">
+                <NAV_ICONS.history />
+              </span>
+              <span className="lab">历史</span>
+            </button>
             <div className="act-foot">
               <button
                 className={`act-btn${basketOpen ? " active" : ""}`}
@@ -158,6 +172,7 @@ export function Workbench() {
                 {view === "gallery" ? <GalleryView /> : null}
                 {view === "lottery" ? <LotteryView /> : null}
                 {view === "studio" ? <StudioView /> : null}
+                {view === "history" ? <HistoryView /> : null}
                 {view === "settings" ? <SettingsView /> : null}
               </Suspense>
             </Fragment>

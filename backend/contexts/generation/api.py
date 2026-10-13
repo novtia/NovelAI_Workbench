@@ -108,6 +108,25 @@ def list_jobs(request: Request):
     return {"jobs": _svc(request).list_jobs()}
 
 
+@router.get("/api/nai/history")
+def list_history(request: Request, before: int | None = None, beforeId: str = "", limit: int = 60):
+    return _svc(request).list_history(before, beforeId, limit)
+
+
+@router.post("/api/nai/history/delete")
+async def delete_history(request: Request):
+    """从历史里移除图片记录；不删图片文件，收藏夹不受影响。"""
+    body = await request.json()
+    refs = body.get("items") if isinstance(body, dict) else None
+    if not isinstance(refs, list):
+        return JSONResponse({"error": "请求格式错误"}, status_code=400)
+    try:
+        removed = await asyncio.to_thread(_svc(request).delete_history, refs)
+    except DomainError as exc:
+        return _err(exc)
+    return {"removed": removed}
+
+
 @router.get("/api/nai/jobs/stream")
 async def stream_jobs(request: Request):
     svc = _svc(request)

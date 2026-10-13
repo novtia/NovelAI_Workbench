@@ -61,12 +61,15 @@ export function useJobStream() {
           }
           return [next, ...list];
         });
+        if (next.source === "studio" && next.status === "done") {
+          void qc.invalidateQueries({ queryKey: queryKeys.history });
+        }
         if (next.source === "lottery" && next.status === "done") {
           qc.setQueryData(queryKeys.lotteryBatches, (old: DrawBatch[] | undefined) => applyJobToBatches(old, next));
         }
         if (next.source === "gallery" && next.status === "done") {
-          // 后端在任务完成前已把图绑进测试集，这里只需刷新显示。
-          const setId = String(next.client?.testSetId || "");
+          // 后端在任务完成前已把图绑进测试集（或悬停补图的目标收藏夹），这里只需刷新显示。
+          const setId = String(next.client?.testSetId || next.client?.targetAlbumId || "");
           if (setId) scheduleTestSetRefresh(qc, setId);
         }
       }

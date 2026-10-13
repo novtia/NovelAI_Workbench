@@ -92,7 +92,7 @@ body.is-resizing .overlay {
   width: 0;
   height: 0;
   transform-origin: 0 0;
-  will-change: transform;
+  /* 不要加 will-change: transform：它会让浏览器把整层按初始缩放栅格化后只拉伸贴图，放大后图片就糊了。 */
 }
 .cv-world.ease {
   transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1);

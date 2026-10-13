@@ -2,6 +2,9 @@ import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ApiError, galleryApi, generationApi } from "@/api";
 import {
+  ARTIST_TEST_PRESET_ID,
+  ARTIST_TEST_PRESET_NAME,
+  resolveArtistTestForm,
   buildSkinLayout,
   buildTestTargets,
   formToPayload,
@@ -15,6 +18,7 @@ import type { TestTarget } from "@/data/testRun";
 import { useCollection } from "./collection";
 import { useJobsQuery, useParamSetsQuery } from "./queries";
 import { useSession } from "./session";
+import { useSettings } from "./settingsStore";
 import { confirmDialog } from "./confirm";
 import { pushToast } from "./toast";
 import { useTestRunStore } from "./testRunStore";
@@ -63,12 +67,19 @@ export function useTestRun() {
   const submitting = useTestRunStore((s) => s.submitting);
   const sets = setsQ.data || [];
   const jobs = jobsQ.data || [];
-  const presetId = sets.some((s) => s.id === storedPresetId) ? storedPresetId : sets[0]?.id || "";
-  const preset = sets.find((s) => s.id === presetId) || null;
+  // 设置里「画师测试」的参数，作为下拉里一个固定的「默认测试参数」预设；没有保存过任何预设时默认选它。
+  const artistTest = useSettings((s) => s.artistTest);
+  const defaultPreset = useMemo<ParamSet>(() => {
+    const { form, preset } = resolveArtistTestForm(artistTest, setsQ.data || []);
+    return { id: ARTIST_TEST_PRESET_ID, name: preset ? `${ARTIST_TEST_PRESET_NAME}（${preset.name}）` : ARTIST_TEST_PRESET_NAME, form, createdAt: 0 };
+  }, [artistTest, setsQ.data]);
+  const findPreset = (id: string) => (id === ARTIST_TEST_PRESET_ID ? defaultPreset : sets.find((s) => s.id === id) || null);
+  const presetId = findPreset(storedPresetId) ? storedPresetId : sets[0]?.id || ARTIST_TEST_PRESET_ID;
+  const preset = findPreset(presetId);
   const run = testSetId ? runs[testSetId] || null : null;
   const isSubmitting = Boolean(testSetId) && submitting === testSetId;
   // 继续生成沿用这个测试集当初用的预设；记录丢了就用当前选中的预设。
-  const runPreset = (run && sets.find((s) => s.id === run.presetId)) || preset;
+  const runPreset = (run && findPreset(run.presetId)) || preset;
 
   // 进度按整个默认集算；网格显示按搜索过滤后的默认集算。两者无搜索时是同一份。
   const fullLayout = useMemo(

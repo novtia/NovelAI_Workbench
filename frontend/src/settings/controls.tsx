@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { DEFAULT_SETTINGS, type Settings } from "@/data/settings";
+import { useParamSetsQuery } from "@/state/queries";
 import { useSettingsStore } from "@/state/settingsStore";
 import type { Control, Option, SettingItem } from "./catalog";
 
@@ -116,6 +117,113 @@ export function Slider({
   );
 }
 
+/** 文本框：输入时不立刻写设置（每个字符一次请求太碎），失焦或停手片刻后再提交。 */
+export function TextBox({
+  value,
+  onChange,
+  disabled,
+  label,
+  placeholder,
+  rows = 2,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+  label: string;
+  placeholder?: string;
+  rows?: number;
+}) {
+  const [draft, setDraft] = useState(value);
+  const timer = useRef(0);
+  useEffect(() => setDraft(value), [value]);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const commit = (v: string) => {
+    window.clearTimeout(timer.current);
+    if (v !== value) onChange(v);
+  };
+  return (
+    <textarea
+      className="s-text"
+      aria-label={label}
+      rows={rows}
+      value={draft}
+      placeholder={placeholder}
+      disabled={disabled}
+      spellCheck={false}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        window.clearTimeout(timer.current);
+        const v = e.target.value;
+        timer.current = window.setTimeout(() => commit(v), 600);
+      }}
+      onBlur={() => commit(draft)}
+    />
+  );
+}
+
+export function NumberBox({
+  value,
+  min,
+  max,
+  onChange,
+  disabled,
+  label,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  onChange: (v: number) => void;
+  disabled?: boolean;
+  label: string;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => setDraft(String(value)), [value]);
+  const commit = () => {
+    const n = Math.round(Number(draft));
+    if (draft.trim() === "" || !Number.isFinite(n)) {
+      setDraft(String(value));
+      return;
+    }
+    const next = Math.min(max, Math.max(min, n));
+    setDraft(String(next));
+    if (next !== value) onChange(next);
+  };
+  return (
+    <input
+      className="s-number"
+      type="number"
+      aria-label={label}
+      min={min}
+      max={max}
+      step={1}
+      value={draft}
+      disabled={disabled}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commit();
+      }}
+    />
+  );
+}
+
+/** 选生图室里保存的预设；预设被删掉后仍显示成「已删除」，这时实际按自定义参数生图，改选即可恢复。 */
+export function PresetSelect({ value, emptyLabel, onChange, disabled }: { value: string; emptyLabel: string; onChange: (v: string) => void; disabled?: boolean }) {
+  const sets = useParamSetsQuery().data || [];
+  const missing = value !== "" && !sets.some((s) => s.id === value);
+  return (
+    <select className="s-select" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
+      <option value="">{emptyLabel}</option>
+      {missing ? <option value={value}>（预设已被删除）</option> : null}
+      {sets.map((s) => (
+        <option key={s.id} value={s.id}>
+          {s.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function getValue(settings: Settings, item: SettingItem): unknown {
   return (settings[item.section] as Record<string, unknown>)[item.key];
 }
@@ -135,6 +243,12 @@ function ControlView({ control, value, onChange, disabled, label }: { control: C
       return <SelectBox options={control.options} value={value} onChange={emit} disabled={disabled} />;
     case "slider":
       return <Slider {...control} value={Number(value)} onChange={emit} disabled={disabled} label={label} />;
+    case "text":
+      return <TextBox value={String(value ?? "")} onChange={emit} disabled={disabled} label={label} placeholder={control.placeholder} rows={control.rows} />;
+    case "preset":
+      return <PresetSelect value={String(value ?? "")} emptyLabel={control.emptyLabel} onChange={emit} disabled={disabled} />;
+    case "number":
+      return <NumberBox value={Number(value)} min={control.min} max={control.max} onChange={emit} disabled={disabled} label={label} />;
   }
 }
 
