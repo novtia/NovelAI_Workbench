@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type DragEvent, type MouseEvent } from "re
 import { useStore } from "zustand";
 import type { LucideIcon } from "lucide-react";
 import { NAV_ICONS } from "@/ui/navIcons";
+import { WindowControls } from "./WindowControls";
 import { useAlbumsQuery, useSession, useStudioStore, useTabs, type Tab, type ViewId } from "@/state";
 
 export const VIEW_META: Record<ViewId, { label: string; Icon: LucideIcon }> = {
@@ -155,7 +156,7 @@ export function TabBar() {
   }
 
   return (
-    <div className="wb-tabbar" role="tablist" aria-label="窗口标签页">
+    <div className="wb-tabbar" role="tablist" aria-label="窗口标签页" data-tauri-drag-region>
       <div className="wb-tabs">
         {tabs.map((tab) => (
           <TabItem
@@ -170,7 +171,8 @@ export function TabBar() {
       <button type="button" className="wb-tab-add" title="新建标签页 (Alt+T)" aria-label="新建标签页" onClick={() => openTab("gallery")}>
         +
       </button>
-      <div className="wb-tab-fill" />
+      <div className="wb-tab-fill" data-tauri-drag-region />
+      <WindowControls />
     </div>
   );
 }

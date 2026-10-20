@@ -1,3 +1,4 @@
+import { blobUrl, isAssetUrl, itemImageUrl } from "@/api/assets";
 import { stripArtist, tagKey } from "./hashKey";
 import type { Artwork, DrawBatch, DrawResult, DrawRow, Job, LotteryBoard, LotteryControls, LotShot, PoolArtist } from "./types";
 
@@ -211,10 +212,10 @@ export function jobProgressText(job?: Job | null) {
 export function previewUrl(it?: { url?: string; id?: string; blobHash?: string } | null) {
   if (!it) return "";
   if (it.url && it.url !== "undefined") return it.url;
-  if (it.blobHash) return `/api/blobs/${it.blobHash}`;
+  if (it.blobHash) return blobUrl(it.blobHash);
   const id = String(it.id || "");
   if (/^[a-f0-9]{32}$/i.test(id)) return `/temp/${id}.png`;
-  if (id) return `/api/items/${encodeURIComponent(id)}/image`;
+  if (id) return itemImageUrl(id);
   return "";
 }
 
@@ -222,7 +223,7 @@ export function liveSrc(raw?: string | null) {
   if (!raw) return "";
   const s = String(raw);
   if (s.startsWith("data:") || s.startsWith("blob:")) return s;
-  if (s.startsWith("/temp/") || s.startsWith("/cache/") || s.startsWith("/api/")) return s;
+  if (s.startsWith("/temp/") || s.startsWith("/cache/") || isAssetUrl(s)) return s;
   return s;
 }
 

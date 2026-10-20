@@ -1,0 +1,1186 @@
+{
+ "pool": [
+  {
+   "tag": "shinjiro",
+   "name": "shinjiro",
+   "key": "shinjiro",
+   "weight": 0.5
+  },
+  {
+   "tag": "magister",
+   "name": "magister",
+   "key": "magister",
+   "weight": 1.2
+  },
+  {
+   "tag": "kakuchou_no_okina",
+   "name": "kakuchou_no_okina",
+   "key": "kakuchou no okina",
+   "weight": 0.5,
+   "maxWeight": 0.8
+  },
+  {
+   "tag": "mx2j",
+   "name": "mx2j",
+   "key": "mx2j",
+   "weight": 0.74
+  },
+  {
+   "tag": "quasarcake",
+   "name": "quasarcake",
+   "key": "quasarcake",
+   "weight": 1.3
+  },
+  {
+   "tag": "shiroi_yoru",
+   "name": "shiroi_yoru",
+   "key": "shiroi yoru",
+   "weight": 1.0
+  },
+  {
+   "tag": "betabeet",
+   "name": "betabeet",
+   "key": "betabeet",
+   "weight": 0.83
+  },
+  {
+   "tag": "hews",
+   "name": "hews",
+   "key": "hews",
+   "weight": 1.0,
+   "maxWeight": 0.8
+  },
+  {
+   "tag": "liduke",
+   "name": "liduke",
+   "key": "liduke",
+   "weight": 1.1
+  },
+  {
+   "tag": "hotate-chan",
+   "name": "hotate-chan",
+   "key": "hotate-chan",
+   "weight": 0.9
+  },
+  {
+   "tag": "pija_(pianiishimo)",
+   "name": "pija_(pianiishimo)",
+   "key": "pija (pianiishimo)",
+   "weight": 1.0
+  },
+  {
+   "tag": "takeda_hiromatsu",
+   "name": "takeda_hiromatsu",
+   "key": "takeda hiromatsu",
+   "weight": 0.83
+  },
+  {
+   "tag": "au_(d_elete)",
+   "name": "au_(d_elete)",
+   "key": "au (d elete)",
+   "weight": 1.0,
+   "maxWeight": 0.8
+  },
+  {
+   "tag": "maabo_harusame",
+   "name": "maabo_harusame",
+   "key": "maabo harusame",
+   "weight": 0.6
+  },
+  {
+   "tag": "96yottea",
+   "name": "96yottea",
+   "key": "96yottea",
+   "weight": 1.4
+  },
+  {
+   "tag": "hintobento",
+   "name": "hintobento",
+   "key": "hintobento",
+   "weight": 1.0
+  },
+  {
+   "tag": "ushikani_kassen",
+   "name": "ushikani_kassen",
+   "key": "ushikani kassen",
+   "weight": 1.0
+  },
+  {
+   "tag": "wlop",
+   "name": "wlop",
+   "key": "wlop",
+   "weight": 0.7,
+   "maxWeight": 0.8
+  },
+  {
+   "tag": "ciloranko",
+   "name": "ciloranko",
+   "key": "ciloranko",
+   "weight": 1.25
+  },
+  {
+   "tag": "sakimichan",
+   "name": "sakimichan",
+   "key": "sakimichan",
+   "weight": 0.95
+  }
+ ],
+ "poolHash": "5f3a176b2923f6e0111b947851a2d3c65ec58578a7db57f43ca3d1f2e85e5886",
+ "cases": [
+  {
+   "seed": 42,
+   "n": 5,
+   "count": 3,
+   "target": 1,
+   "boost": 0.4,
+   "jitter": 0.6,
+   "minWeight": 0.05,
+   "maxWeight": 1,
+   "draws": [
+    {
+     "rows": [
+      {
+       "tags": [
+        "artist:sakimichan"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.95,
+       "cents": 14
+      },
+      {
+       "tags": [
+        "artist:shiroi_yoru"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.0,
+       "cents": 17
+      },
+      {
+       "tags": [
+        "artist:96yottea"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.4,
+       "cents": 34
+      },
+      {
+       "tags": [
+        "artist:quasarcake"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.3,
+       "cents": 23
+      },
+      {
+       "tags": [
+        "artist:hotate-chan"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.9,
+       "cents": 12
+      }
+     ],
+     "outputText": "0.14::artist:sakimichan::, 0.17::artist:shiroi_yoru::, 0.34::artist:96yottea::, 0.23::artist:quasarcake::, 0.12::artist:hotate-chan::",
+     "newCents": 100,
+     "targetCents": 100,
+     "diffCents": 0,
+     "artistCount": 5,
+     "artists": [
+      "sakimichan",
+      "shiroi_yoru",
+      "96yottea",
+      "quasarcake",
+      "hotate-chan"
+     ]
+    },
+    {
+     "rows": [
+      {
+       "tags": [
+        "artist:au_(d_elete)"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.0,
+       "cents": 14
+      },
+      {
+       "tags": [
+        "artist:hews"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.0,
+       "cents": 20
+      },
+      {
+       "tags": [
+        "artist:ciloranko"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.25,
+       "cents": 19
+      },
+      {
+       "tags": [
+        "artist:takeda_hiromatsu"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.83,
+       "cents": 12
+      },
+      {
+       "tags": [
+        "artist:96yottea"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.4,
+       "cents": 35
+      }
+     ],
+     "outputText": "0.14::artist:au_(d_elete)::, 0.20::artist:hews::, 0.19::artist:ciloranko::, 0.12::artist:takeda_hiromatsu::, 0.35::artist:96yottea::",
+     "newCents": 100,
+     "targetCents": 100,
+     "diffCents": 0,
+     "artistCount": 5,
+     "artists": [
+      "au_(d_elete)",
+      "hews",
+      "ciloranko",
+      "takeda_hiromatsu",
+      "96yottea"
+     ]
+    },
+    {
+     "rows": [
+      {
+       "tags": [
+        "artist:shinjiro"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.5,
+       "cents": 5
+      },
+      {
+       "tags": [
+        "artist:ciloranko"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.25,
+       "cents": 21
+      },
+      {
+       "tags": [
+        "artist:shiroi_yoru"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.0,
+       "cents": 25
+      },
+      {
+       "tags": [
+        "artist:liduke"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.1,
+       "cents": 30
+      },
+      {
+       "tags": [
+        "artist:hews"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.0,
+       "cents": 19
+      }
+     ],
+     "outputText": "0.05::artist:shinjiro::, 0.21::artist:ciloranko::, 0.25::artist:shiroi_yoru::, 0.30::artist:liduke::, 0.19::artist:hews::",
+     "newCents": 100,
+     "targetCents": 100,
+     "diffCents": 0,
+     "artistCount": 5,
+     "artists": [
+      "shinjiro",
+      "ciloranko",
+      "shiroi_yoru",
+      "liduke",
+      "hews"
+     ]
+    }
+   ],
+   "next": 0.171138648198097
+  },
+  {
+   "seed": 7,
+   "n": 7,
+   "count": 2,
+   "target": 1.5,
+   "boost": 0.0,
+   "jitter": 0,
+   "minWeight": 0.01,
+   "maxWeight": 1.5,
+   "draws": [
+    {
+     "rows": [
+      {
+       "tags": [
+        "artist:wlop"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.7,
+       "cents": 16
+      },
+      {
+       "tags": [
+        "artist:hintobento"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.0,
+       "cents": 23
+      },
+      {
+       "tags": [
+        "artist:takeda_hiromatsu"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.83,
+       "cents": 19
+      },
+      {
+       "tags": [
+        "artist:ciloranko"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.25,
+       "cents": 28
+      },
+      {
+       "tags": [
+        "artist:hews"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.0,
+       "cents": 23
+      },
+      {
+       "tags": [
+        "artist:betabeet"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.83,
+       "cents": 19
+      },
+      {
+       "tags": [
+        "artist:sakimichan"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.95,
+       "cents": 22
+      }
+     ],
+     "outputText": "0.16::artist:wlop::, 0.23::artist:hintobento::, 0.19::artist:takeda_hiromatsu::, 0.28::artist:ciloranko::, 0.23::artist:hews::, 0.19::artist:betabeet::, 0.22::artist:sakimichan::",
+     "newCents": 150,
+     "targetCents": 150,
+     "diffCents": 0,
+     "artistCount": 7,
+     "artists": [
+      "wlop",
+      "hintobento",
+      "takeda_hiromatsu",
+      "ciloranko",
+      "hews",
+      "betabeet",
+      "sakimichan"
+     ]
+    },
+    {
+     "rows": [
+      {
+       "tags": [
+        "artist:mx2j"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.74,
+       "cents": 16
+      },
+      {
+       "tags": [
+        "artist:shiroi_yoru"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.0,
+       "cents": 22
+      },
+      {
+       "tags": [
+        "artist:96yottea"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.4,
+       "cents": 30
+      },
+      {
+       "tags": [
+        "artist:hintobento"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.0,
+       "cents": 22
+      },
+      {
+       "tags": [
+        "artist:pija_(pianiishimo)"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.0,
+       "cents": 22
+      },
+      {
+       "tags": [
+        "artist:hotate-chan"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.9,
+       "cents": 20
+      },
+      {
+       "tags": [
+        "artist:takeda_hiromatsu"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.83,
+       "cents": 18
+      }
+     ],
+     "outputText": "0.16::artist:mx2j::, 0.22::artist:shiroi_yoru::, 0.30::artist:96yottea::, 0.22::artist:hintobento::, 0.22::artist:pija_(pianiishimo)::, 0.20::artist:hotate-chan::, 0.18::artist:takeda_hiromatsu::",
+     "newCents": 150,
+     "targetCents": 150,
+     "diffCents": 0,
+     "artistCount": 7,
+     "artists": [
+      "mx2j",
+      "shiroi_yoru",
+      "96yottea",
+      "hintobento",
+      "pija_(pianiishimo)",
+      "hotate-chan",
+      "takeda_hiromatsu"
+     ]
+    }
+   ],
+   "next": 0.3141471703767915
+  },
+  {
+   "seed": 20260101,
+   "n": 3,
+   "count": 4,
+   "target": 0.8,
+   "boost": 0.4,
+   "jitter": 1,
+   "minWeight": 0.05,
+   "maxWeight": 1,
+   "draws": [
+    {
+     "rows": [
+      {
+       "tags": [
+        "artist:au_(d_elete)"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.0,
+       "cents": 26
+      },
+      {
+       "tags": [
+        "artist:quasarcake"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.3,
+       "cents": 47
+      },
+      {
+       "tags": [
+        "artist:hintobento"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.0,
+       "cents": 7
+      }
+     ],
+     "outputText": "0.26::artist:au_(d_elete)::, 0.47::artist:quasarcake::, 0.07::artist:hintobento::",
+     "newCents": 80,
+     "targetCents": 80,
+     "diffCents": 0,
+     "artistCount": 3,
+     "artists": [
+      "au_(d_elete)",
+      "quasarcake",
+      "hintobento"
+     ]
+    },
+    {
+     "rows": [
+      {
+       "tags": [
+        "artist:betabeet"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.83,
+       "cents": 14
+      },
+      {
+       "tags": [
+        "artist:hintobento"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.0,
+       "cents": 29
+      },
+      {
+       "tags": [
+        "artist:magister"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.2,
+       "cents": 37
+      }
+     ],
+     "outputText": "0.14::artist:betabeet::, 0.29::artist:hintobento::, 0.37::artist:magister::",
+     "newCents": 80,
+     "targetCents": 80,
+     "diffCents": 0,
+     "artistCount": 3,
+     "artists": [
+      "betabeet",
+      "hintobento",
+      "magister"
+     ]
+    },
+    {
+     "rows": [
+      {
+       "tags": [
+        "artist:quasarcake"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.3,
+       "cents": 47
+      },
+      {
+       "tags": [
+        "artist:mx2j"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.74,
+       "cents": 10
+      },
+      {
+       "tags": [
+        "artist:betabeet"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.83,
+       "cents": 23
+      }
+     ],
+     "outputText": "0.47::artist:quasarcake::, 0.10::artist:mx2j::, 0.23::artist:betabeet::",
+     "newCents": 80,
+     "targetCents": 80,
+     "diffCents": 0,
+     "artistCount": 3,
+     "artists": [
+      "quasarcake",
+      "mx2j",
+      "betabeet"
+     ]
+    },
+    {
+     "rows": [
+      {
+       "tags": [
+        "artist:takeda_hiromatsu"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.83,
+       "cents": 55
+      },
+      {
+       "tags": [
+        "artist:hotate-chan"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.9,
+       "cents": 16
+      },
+      {
+       "tags": [
+        "artist:pija_(pianiishimo)"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.0,
+       "cents": 9
+      }
+     ],
+     "outputText": "0.55::artist:takeda_hiromatsu::, 0.16::artist:hotate-chan::, 0.09::artist:pija_(pianiishimo)::",
+     "newCents": 80,
+     "targetCents": 80,
+     "diffCents": 0,
+     "artistCount": 3,
+     "artists": [
+      "takeda_hiromatsu",
+      "hotate-chan",
+      "pija_(pianiishimo)"
+     ]
+    }
+   ],
+   "next": 0.4878651313644927
+  },
+  {
+   "seed": 123456789,
+   "n": 10,
+   "count": 2,
+   "target": 2,
+   "boost": 0.7,
+   "jitter": 0.3,
+   "minWeight": 0.1,
+   "maxWeight": 2,
+   "draws": [
+    {
+     "rows": [
+      {
+       "tags": [
+        "artist:ciloranko"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.25,
+       "cents": 43
+      },
+      {
+       "tags": [
+        "artist:ushikani_kassen"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.0,
+       "cents": 15
+      },
+      {
+       "tags": [
+        "artist:takeda_hiromatsu"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.83,
+       "cents": 16
+      },
+      {
+       "tags": [
+        "artist:pija_(pianiishimo)"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.0,
+       "cents": 18
+      },
+      {
+       "tags": [
+        "artist:magister"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.2,
+       "cents": 39
+      },
+      {
+       "tags": [
+        "artist:quasarcake"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.3,
+       "cents": 29
+      },
+      {
+       "tags": [
+        "artist:kakuchou_no_okina"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.5,
+       "cents": 10
+      },
+      {
+       "tags": [
+        "artist:shinjiro"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.5,
+       "cents": 10
+      },
+      {
+       "tags": [
+        "artist:mx2j"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.74,
+       "cents": 10
+      },
+      {
+       "tags": [
+        "artist:maabo_harusame"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.6,
+       "cents": 10
+      }
+     ],
+     "outputText": "0.43::artist:ciloranko::, 0.15::artist:ushikani_kassen::, 0.16::artist:takeda_hiromatsu::, 0.18::artist:pija_(pianiishimo)::, 0.39::artist:magister::, 0.29::artist:quasarcake::, 0.10::artist:kakuchou_no_okina::, 0.10::artist:shinjiro::, 0.10::artist:mx2j::, 0.10::artist:maabo_harusame::",
+     "newCents": 200,
+     "targetCents": 200,
+     "diffCents": 0,
+     "artistCount": 10,
+     "artists": [
+      "ciloranko",
+      "ushikani_kassen",
+      "takeda_hiromatsu",
+      "pija_(pianiishimo)",
+      "magister",
+      "quasarcake",
+      "kakuchou_no_okina",
+      "shinjiro",
+      "mx2j",
+      "maabo_harusame"
+     ]
+    },
+    {
+     "rows": [
+      {
+       "tags": [
+        "artist:ciloranko"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.25,
+       "cents": 29
+      },
+      {
+       "tags": [
+        "artist:mx2j"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.74,
+       "cents": 12
+      },
+      {
+       "tags": [
+        "artist:pija_(pianiishimo)"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.0,
+       "cents": 17
+      },
+      {
+       "tags": [
+        "artist:hintobento"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.0,
+       "cents": 12
+      },
+      {
+       "tags": [
+        "artist:sakimichan"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.95,
+       "cents": 14
+      },
+      {
+       "tags": [
+        "artist:shiroi_yoru"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.0,
+       "cents": 12
+      },
+      {
+       "tags": [
+        "artist:au_(d_elete)"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.0,
+       "cents": 17
+      },
+      {
+       "tags": [
+        "artist:liduke"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.1,
+       "cents": 35
+      },
+      {
+       "tags": [
+        "artist:quasarcake"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.3,
+       "cents": 34
+      },
+      {
+       "tags": [
+        "artist:ushikani_kassen"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.0,
+       "cents": 18
+      }
+     ],
+     "outputText": "0.29::artist:ciloranko::, 0.12::artist:mx2j::, 0.17::artist:pija_(pianiishimo)::, 0.12::artist:hintobento::, 0.14::artist:sakimichan::, 0.12::artist:shiroi_yoru::, 0.17::artist:au_(d_elete)::, 0.35::artist:liduke::, 0.34::artist:quasarcake::, 0.18::artist:ushikani_kassen::",
+     "newCents": 200,
+     "targetCents": 200,
+     "diffCents": 0,
+     "artistCount": 10,
+     "artists": [
+      "ciloranko",
+      "mx2j",
+      "pija_(pianiishimo)",
+      "hintobento",
+      "sakimichan",
+      "shiroi_yoru",
+      "au_(d_elete)",
+      "liduke",
+      "quasarcake",
+      "ushikani_kassen"
+     ]
+    }
+   ],
+   "next": 0.4365506589887156
+  },
+  {
+   "seed": 1,
+   "n": 4,
+   "count": 5,
+   "target": 1,
+   "boost": 0.4,
+   "jitter": 0.6,
+   "minWeight": 0.05,
+   "maxWeight": 1,
+   "fixed": [
+    0,
+    3
+   ],
+   "draws": [
+    {
+     "rows": [
+      {
+       "tags": [
+        "artist:shinjiro"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.5,
+       "cents": 17
+      },
+      {
+       "tags": [
+        "artist:mx2j"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.74,
+       "cents": 15
+      },
+      {
+       "tags": [
+        "artist:au_(d_elete)"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.0,
+       "cents": 37
+      },
+      {
+       "tags": [
+        "artist:hews"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.0,
+       "cents": 31
+      }
+     ],
+     "outputText": "0.17::artist:shinjiro::, 0.15::artist:mx2j::, 0.37::artist:au_(d_elete)::, 0.31::artist:hews::",
+     "newCents": 100,
+     "targetCents": 100,
+     "diffCents": 0,
+     "artistCount": 4,
+     "artists": [
+      "shinjiro",
+      "mx2j",
+      "au_(d_elete)",
+      "hews"
+     ]
+    },
+    {
+     "rows": [
+      {
+       "tags": [
+        "artist:shinjiro"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.5,
+       "cents": 11
+      },
+      {
+       "tags": [
+        "artist:mx2j"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.74,
+       "cents": 13
+      },
+      {
+       "tags": [
+        "artist:hotate-chan"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.9,
+       "cents": 24
+      },
+      {
+       "tags": [
+        "artist:quasarcake"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.3,
+       "cents": 52
+      }
+     ],
+     "outputText": "0.11::artist:shinjiro::, 0.13::artist:mx2j::, 0.24::artist:hotate-chan::, 0.52::artist:quasarcake::",
+     "newCents": 100,
+     "targetCents": 100,
+     "diffCents": 0,
+     "artistCount": 4,
+     "artists": [
+      "shinjiro",
+      "mx2j",
+      "hotate-chan",
+      "quasarcake"
+     ]
+    },
+    {
+     "rows": [
+      {
+       "tags": [
+        "artist:shinjiro"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.5,
+       "cents": 8
+      },
+      {
+       "tags": [
+        "artist:mx2j"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.74,
+       "cents": 16
+      },
+      {
+       "tags": [
+        "artist:ushikani_kassen"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.0,
+       "cents": 28
+      },
+      {
+       "tags": [
+        "artist:ciloranko"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 1.25,
+       "cents": 48
+      }
+     ],
+     "outputText": "0.08::artist:shinjiro::, 0.16::artist:mx2j::, 0.28::artist:ushikani_kassen::, 0.48::artist:ciloranko::",
+     "newCents": 100,
+     "targetCents": 100,
+     "diffCents": 0,
+     "artistCount": 4,
+     "artists": [
+      "shinjiro",
+      "mx2j",
+      "ushikani_kassen",
+      "ciloranko"
+     ]
+    },
+    {
+     "rows": [
+      {
+       "tags": [
+        "artist:shinjiro"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.5,
+       "cents": 16
+      },
+      {
+       "tags": [
+        "artist:mx2j"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.74,
+       "cents": 35
+      },
+      {
+       "tags": [
+        "artist:takeda_hiromatsu"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.83,
+       "cents": 29
+      },
+      {
+       "tags": [
+        "artist:wlop"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.7,
+       "cents": 20
+      }
+     ],
+     "outputText": "0.16::artist:shinjiro::, 0.35::artist:mx2j::, 0.29::artist:takeda_hiromatsu::, 0.20::artist:wlop::",
+     "newCents": 100,
+     "targetCents": 100,
+     "diffCents": 0,
+     "artistCount": 4,
+     "artists": [
+      "shinjiro",
+      "mx2j",
+      "takeda_hiromatsu",
+      "wlop"
+     ]
+    },
+    {
+     "rows": [
+      {
+       "tags": [
+        "artist:shinjiro"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.5,
+       "cents": 18
+      },
+      {
+       "tags": [
+        "artist:mx2j"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.74,
+       "cents": 25
+      },
+      {
+       "tags": [
+        "artist:sakimichan"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.95,
+       "cents": 36
+      },
+      {
+       "tags": [
+        "artist:takeda_hiromatsu"
+       ],
+       "count": 1,
+       "unit": 1,
+       "weight": 0.83,
+       "cents": 21
+      }
+     ],
+     "outputText": "0.18::artist:shinjiro::, 0.25::artist:mx2j::, 0.36::artist:sakimichan::, 0.21::artist:takeda_hiromatsu::",
+     "newCents": 100,
+     "targetCents": 100,
+     "diffCents": 0,
+     "artistCount": 4,
+     "artists": [
+      "shinjiro",
+      "mx2j",
+      "sakimichan",
+      "takeda_hiromatsu"
+     ]
+    }
+   ],
+   "next": 0.8569491268730604
+  }
+ ]
+}

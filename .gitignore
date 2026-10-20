@@ -16,3 +16,8 @@ dist/
 backend/data/
 frontend/dist/
 frontend/tmp-shots/
+
+src-tauri/target/
+src-tauri/gen/
+app-icon.png
+*.tsbuildinfo

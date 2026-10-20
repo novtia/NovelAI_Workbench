@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { lotteryApi, settingsApi } from "@/api";
 import { boardPayload } from "@/data/lottery";
 import { queryKeys } from "@/data/queryKeys";
@@ -119,10 +119,28 @@ export function SystemPanel() {
   const infoQ = useQuery({ queryKey: ["system-info"], queryFn: settingsApi.getSystemInfo, staleTime: 0 });
   const [busy, setBusy] = useState("");
   const [report, setReport] = useState<string[] | null>(null);
+  const [progress, setProgress] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // 导出/导入完整包时，后端按图片数量推进度。
+  useEffect(() => {
+    let off: (() => void) | undefined;
+    let dead = false;
+    void settingsApi.onTransferProgress((p) => {
+      setProgress(p.phase === "blobs" ? `图片 ${p.done} / ${p.total}` : p.done >= p.total ? "数据库已就绪" : "处理数据库…");
+    }).then((fn) => {
+      if (dead) fn();
+      else off = fn;
+    });
+    return () => {
+      dead = true;
+      off?.();
+    };
+  }, []);
 
   async function run<T>(name: string, fn: () => Promise<T>) {
     setBusy(name);
+    setProgress("");
     try {
       return await fn();
     } catch (err) {
@@ -130,6 +148,7 @@ export function SystemPanel() {
       return undefined;
     } finally {
       setBusy("");
+      setProgress("");
     }
   }
 
@@ -162,6 +181,60 @@ export function SystemPanel() {
       const r = await settingsApi.backupHint();
       setReport([r.note, ...r.copy]);
     });
+
+  const exportDb = () =>
+    run("exportDb", async () => {
+      const d = new Date();
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+      const r = await settingsApi.exportDatabase(`workbench-${stamp}.sqlite`);
+      if (r.cancelled) return;
+      setReport([`数据库已导出：${r.path ?? ""}`, `事件 ${r.events ?? 0} 条，文件 ${formatBytes(r.size ?? 0)}`, "图片文件不在数据库里，换电脑时请同时复制 blobs/ 目录。"]);
+      pushToast("数据库已导出");
+    });
+
+  const exportPack = () =>
+    run("exportPack", async () => {
+      const d = new Date();
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+      const r = await settingsApi.exportPack(`workbench-pack-${stamp}.zip`);
+      if (r.cancelled) return;
+      const missing = r.missingBlobs ?? 0;
+      setReport([
+        `完整包已导出：${r.path ?? ""}`,
+        `事件 ${r.events ?? 0} 条，图片 ${r.blobs ?? 0} 张，文件 ${formatBytes(r.size ?? 0)}`,
+        missing > 0 ? `有 ${missing} 个被引用的图片文件在本机缺失，没能打进包里` : "所有被引用的图片都已打包",
+      ]);
+      pushToast(missing > 0 ? "完整包已导出，但有图片缺失" : "完整包已导出", missing > 0 ? "warn" : "ok");
+    });
+
+  const importDb = async () => {
+    const ok = await confirmDialog(
+      "可以选 .sqlite 数据库文件，或「导出数据库+图片」生成的 .zip 完整包。\n\n导入会用所选内容整体替换当前的全部数据（图库、抽奖、生图历史、设置），不是合并；完整包里的图片只会新增，不会覆盖本机已有的。导入前会自动把当前数据库备份到数据目录的 backups/ 里。\n\n请先确认没有正在进行的生图任务。继续并选择文件？",
+      { title: "导入数据库", confirmText: "选择文件", cancelText: "取消" },
+    );
+    if (!ok) return;
+    void run("importDb", async () => {
+      const r = await settingsApi.importDatabase();
+      if (r.cancelled) return;
+      void qc.invalidateQueries();
+      const missing = r.missingBlobs ?? 0;
+      const corrupt = r.blobsCorrupt ?? 0;
+      setReport([
+        `已导入 ${r.events ?? 0} 条事件，并重建投影`,
+        ...(r.pack ? [`图片：新增 ${r.blobsAdded ?? 0} 张，本机已有 ${r.blobsSkipped ?? 0} 张${corrupt > 0 ? `，${corrupt} 张校验失败已丢弃` : ""}`] : []),
+        missing > 0
+          ? `有 ${missing} 个被引用的图片文件在本机缺失${r.pack ? "" : "，请把原数据目录的 blobs/ 复制进来，或改用完整包导入"}`
+          : "所有被引用的图片文件都在本机",
+        `原数据库已备份：${r.backup ?? ""}`,
+      ]);
+      pushToast(missing > 0 ? "数据库已导入，但有图片文件缺失" : "数据库已导入", missing > 0 ? "warn" : "ok");
+      if (await confirmDialog("数据库已导入。刷新页面后所有界面才会显示新数据。", { title: "导入完成", confirmText: "刷新页面", cancelText: "稍后" })) {
+        window.location.reload();
+      }
+    });
+  };
 
   const exportSettings = () => {
     const blob = new Blob([JSON.stringify({ app: "minimax-workbench", settings }, null, 2)], { type: "application/json" });
@@ -221,7 +294,21 @@ export function SystemPanel() {
             备份说明
           </button>
         </div>
-        <div className="s-row-hint">校验会检查事件哈希链、图片文件是否缺失/损坏，并对比重放后的投影。备份只需复制 events.sqlite 与 blobs/。</div>
+        <div className="s-actions">
+          <button type="button" className="btn" disabled={Boolean(busy)} onClick={() => void exportDb()}>
+            {busy === "exportDb" ? "导出中…" : "导出数据库"}
+          </button>
+          <button type="button" className="btn" disabled={Boolean(busy)} onClick={() => void exportPack()}>
+            {busy === "exportPack" ? "打包中…" : "导出数据库+图片"}
+          </button>
+          <button type="button" className="btn btn-danger" disabled={Boolean(busy)} onClick={() => void importDb()}>
+            {busy === "importDb" ? "导入中…" : "导入数据库"}
+          </button>
+        </div>
+        {busy === "exportPack" || busy === "importDb" ? <div className="s-row-hint">{progress || "准备中…"}（图片多时需要几分钟，请不要关闭窗口）</div> : null}
+        <div className="s-row-hint">
+          校验会检查事件哈希链、图片文件是否缺失/损坏，并对比重放后的投影。「导出数据库」只导出 events.sqlite，不含图片；「导出数据库+图片」打成一个 zip，换电脑时用它最省事。「导入数据库」自动识别这两种文件，导入前会自动备份当前库。
+        </div>
         {report ? (
           <pre className="s-report">{report.join("\n")}</pre>
         ) : null}

@@ -1,4 +1,4 @@
-/** 全局设置的类型与默认值。必须与 backend/contexts/settings/schema.py 保持一致（服务端会再校验一遍）。 */
+/** 全局设置的类型与默认值。必须与 src-tauri/src/contexts/settings/schema.rs 保持一致（服务端会再校验一遍）。 */
 
 export type ThemeMode = "light" | "dark" | "auto";
 

@@ -84,15 +84,13 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border: 0; bord
 /* ---------- 顶部标签栏（浏览器式窗口标签） ---------- */
 .wb-tabbar {
   --tabbar-h: 32px;
-  /* 接入 Electron 无边框窗口时，给系统窗口控制按钮留位置 */
-  --titlebar-inset-left: 0px;
-  --titlebar-inset-right: 0px;
+  /* 无边框窗口：整条标签栏兼作标题栏（空白处带 data-tauri-drag-region 可拖动），右侧为窗口控制按钮 */
   flex: none; display: flex; align-items: flex-end; gap: 2px; height: var(--tabbar-h);
-  padding: 4px calc(8px + var(--titlebar-inset-right)) 0 calc(8px + var(--titlebar-inset-left));
+  padding: 4px 0 0 8px;
   background: var(--paper-2); border-bottom: 1px solid var(--line);
-  position: relative; z-index: 4; user-select: none; -webkit-app-region: drag;
+  position: relative; z-index: 4; user-select: none;
 }
-.wb-tabs { display: flex; align-items: flex-end; gap: 2px; min-width: 0; flex: 0 1 auto; -webkit-app-region: no-drag; }
+.wb-tabs { display: flex; align-items: flex-end; gap: 2px; min-width: 0; flex: 0 1 auto; }
 .wb-tab {
   position: relative; display: flex; align-items: center; gap: 7px; height: 28px; min-width: 0;
   flex: 0 1 200px; width: 200px; padding: 0 8px 0 11px; border-radius: 9px 9px 0 0;
@@ -123,11 +121,20 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border: 0; bord
 .wb-tab-close:hover { background: rgba(21, 20, 15, .12); color: var(--ink); }
 .wb-tab-add {
   flex: none; align-self: center; display: grid; place-items: center; width: 24px; height: 24px; margin: 0 0 2px 4px;
-  border-radius: 7px; color: var(--ink-3); font-size: 17px; line-height: 1; -webkit-app-region: no-drag;
+  border-radius: 7px; color: var(--ink-3); font-size: 17px; line-height: 1;
   transition: background .15s, color .15s;
 }
 .wb-tab-add:hover { background: rgba(21, 20, 15, .1); color: var(--ink); }
 .wb-tab-fill { flex: 1; min-width: 40px; height: 100%; }
+.wb-winctl { flex: none; display: flex; align-self: flex-start; margin: -4px 0 0 4px; height: calc(var(--tabbar-h) - 1px); }
+.wb-winctl button {
+  display: grid; place-items: center; width: 46px; height: 100%; color: var(--ink-3);
+  transition: background .15s, color .15s;
+}
+.wb-winctl button svg { width: 14px; height: 14px; }
+.wb-winctl button svg.restore { width: 12px; height: 12px; }
+.wb-winctl button:hover { background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink); }
+.wb-winctl button.close:hover { background: var(--zhu); color: #fff; }
 .views { flex: 1; position: relative; min-width: 0; overflow: clip; }
 .view { position: absolute; inset: 0; display: none; isolation: isolate; overflow: clip; }
 .view.active { display: flex; animation: viewIn .6s var(--ease); }

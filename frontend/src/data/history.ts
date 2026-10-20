@@ -1,3 +1,4 @@
+import { blobUrl } from "@/api/assets";
 import type { Job } from "./types";
 
 /** 历史页里的一张图。一个任务出多张时，每张各占一条。 */
@@ -38,7 +39,7 @@ export function historyShots(jobs: Job[]): HistoryShot[] {
     const items = job.items || [];
     items.forEach((item, index) => {
       const blobHash = String(item.blobHash || "");
-      const url = item.url || (blobHash ? `/api/blobs/${blobHash}` : "");
+      const url = item.url || (blobHash ? blobUrl(blobHash) : "");
       const thumbUrl = item.thumbUrl || url;
       if (!url && !thumbUrl) return;
       const key = `${job.id}:${index}`;

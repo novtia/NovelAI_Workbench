@@ -9,7 +9,7 @@ export function InspectorPanel() {
   return (
     <ImageDetail
       id="inspector"
-      item={item}
+      item={item ?? null}
       onClose={closeInspector}
       onGenerate={() => item && generateFrom(item)}
       onDelete={() => void deleteOpenItem()}

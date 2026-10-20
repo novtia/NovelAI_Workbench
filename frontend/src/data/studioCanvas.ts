@@ -1,3 +1,4 @@
+import { blobUrl } from "@/api/assets";
 import type { StudioShot } from "./types";
 
 /** 画布上的一格：一张会话图，或变体组左上角的原图。坐标是画布世界坐标。 */
@@ -47,7 +48,7 @@ export function canvasLayout(session: StudioShot[], fallback: [number, number] =
     const first = shots[0];
     const source = first.meta?.requestType === "variation" ? String(first.meta?.sourceHash || "") : "";
     const entries: Array<{ shot: StudioShot | null; src: string; badge?: string; key: string }> = [];
-    if (source) entries.push({ shot: null, src: `/api/blobs/${source}`, badge: "ORIGINAL", key: `${key}:original` });
+    if (source) entries.push({ shot: null, src: blobUrl(source), badge: "ORIGINAL", key: `${key}:original` });
     for (const shot of shots) entries.push({ shot, src: "", key: shot.id });
     const x0 = -CANVAS_BLOCK_W / 2;
     const cells: CanvasCell[] = [];

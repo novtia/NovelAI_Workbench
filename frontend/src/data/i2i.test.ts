@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { blobUrl } from "@/api/assets";
 import {
   clampMagnitude,
   defaultEnhanceOpts,
@@ -15,7 +16,7 @@ import {
 } from "./studio";
 import type { StudioShot } from "./types";
 
-const base = defaultI2iBase({ hash: "h".repeat(64), url: "/api/blobs/x", width: 832, height: 1216 });
+const base = defaultI2iBase({ hash: "h".repeat(64), url: blobUrl("x"), width: 832, height: 1216 });
 
 describe("i2i payloads", () => {
   it("img2img 没有蒙版时只带强度和噪声", () => {
@@ -108,7 +109,7 @@ describe("variations", () => {
     expect(cards.map((c) => c.key)).toEqual(["j1", "d"]);
     expect(cards[0].badge).toBe("x4");
     expect(cards[0].item.id).toBe("a");
-    expect(cards[0].src).toBe("/api/blobs/src");
+    expect(cards[0].src).toBe(blobUrl("src"));
     expect(cards[1].badge).toBe("");
   });
 });

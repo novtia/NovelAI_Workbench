@@ -1,3 +1,4 @@
+import { blobUrl } from "@/api/assets";
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
 import type {
   Artwork,
@@ -228,7 +229,7 @@ export function historyCards(session: StudioShot[]): HistoryCard[] {
         key: jobId,
         item: shots[0],
         badge: total > 1 ? `x${total}` : "",
-        src: source ? `/api/blobs/${source}` : "",
+        src: source ? blobUrl(source) : "",
       });
       continue;
     }
@@ -598,8 +599,8 @@ export function shotFromJobItem(
   if (!id) return null;
   return {
     id,
-    url: item.url || (item.blobHash ? `/api/blobs/${item.blobHash}` : ""),
-    thumbUrl: item.thumbUrl || item.url || (item.blobHash ? `/api/blobs/${item.blobHash}` : ""),
+    url: item.url || (item.blobHash ? blobUrl(item.blobHash) : ""),
+    thumbUrl: item.thumbUrl || item.url || (item.blobHash ? blobUrl(item.blobHash) : ""),
     blobHash: item.blobHash,
     width: item.width,
     height: item.height,

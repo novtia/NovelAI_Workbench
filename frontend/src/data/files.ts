@@ -1,3 +1,4 @@
+import { blobUrl } from "@/api/assets";
 import { isImageFile } from "./png";
 
 function readEntry(entry: FileSystemEntry | null): Promise<File[]> {
@@ -121,7 +122,7 @@ export function hasDropPayload(e: DragEvent) {
 }
 
 export async function fileFromShotRef(shot: StudioShotDrag): Promise<File | null> {
-  const src = String(shot.url || (shot.blobHash ? `/api/blobs/${shot.blobHash}` : "")).trim();
+  const src = String(shot.url || (shot.blobHash ? blobUrl(shot.blobHash) : "")).trim();
   if (!src) return null;
   try {
     const res = await fetch(src);

@@ -56,6 +56,8 @@ function hasAlpha(data: ImageData, threshold = 0) {
 function loadImage(src: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image();
+    // 图片来自自定义协议（跨源），不加这个画布读像素会被污染而失败；协议响应带 Access-Control-Allow-Origin。
+    img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error("无法读取图片"));
     img.src = src;

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { blobUrl } from "@/api/assets";
 import { boundsOf, canvasLayout, CANVAS_BLOCK_W, cellOfShot, fitCamera, groupOfShot, scrollCamera, shotNearest, zoomAt } from "./studioCanvas";
 import type { StudioShot } from "./types";
 
@@ -19,7 +20,7 @@ describe("canvasLayout", () => {
     const [g] = canvasLayout([vs[2], vs[0], vs[1]]);
     expect(g.cells).toHaveLength(4);
     expect(g.cells[0].badge).toBe("ORIGINAL");
-    expect(g.cells[0].src).toBe("/api/blobs/src");
+    expect(g.cells[0].src).toBe(blobUrl("src"));
     expect(g.cells.slice(1).map((c) => c.shot?.id)).toEqual(["v0", "v1", "v2"]);
     expect(g.cells[1].x).toBeGreaterThan(g.cells[0].x);
     expect(g.cells[2].y).toBeGreaterThan(g.cells[0].y);

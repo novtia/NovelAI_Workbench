@@ -1,7 +1,15 @@
-﻿# 同时启动画师串工作台的后端与前端。
-# 端口不写死：优先 8766 / 5174，被占用或被系统拒绝（WinError 10013）就换下一个。
-# 选中的端口通过环境变量交给后端和 Vite，两边保持一致。
-# 在本窗口按 Ctrl+C，或关掉任一服务窗口，会把两边一起停掉。
+﻿# 启动画师串工作台（Tauri 2 桌面应用）。
+#   .\start.ps1           开发模式：热更新前端 + 编译运行 Rust 后端，数据在 backend\data
+#   .\start.ps1 -Build    打包安装程序（输出在 src-tauri\target\release\bundle）
+#   .\start.ps1 -Check    只检查环境，不启动
+#
+# 前端开发服务固定在 5174 端口（src-tauri\tauri.conf.json 的 devUrl 写死了它），被占用时会直接报错。
+# 想换数据目录：先设置环境变量 WORKBENCH_DATA_DIR，再运行本脚本。
+
+param(
+    [switch]$Build,
+    [switch]$Check
+)
 
 $ErrorActionPreference = "Stop"
 
@@ -9,22 +17,13 @@ $Root = $PSScriptRoot
 if (-not $Root) {
     $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 }
-
-$BackendDir = Join-Path $Root "backend"
 $FrontendDir = Join-Path $Root "frontend"
-# 后端优先 8766，前端优先 5174；后面是备选，再往后是一段连续扫描。
-$BackendPreferred = @(8766, 18000, 8001, 8080)
-$BackendScan = 18010..18080
-$FrontendPreferred = @(5174, 5175, 5176)
-$FrontendScan = 5177..5199
+$DevPort = 5174
 
 function Test-PortFree([int]$PortNumber) {
     $listener = $null
     try {
-        $listener = [System.Net.Sockets.TcpListener]::new(
-            [System.Net.IPAddress]::Loopback,
-            $PortNumber
-        )
+        $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $PortNumber)
         $listener.Start()
         return $true
     } catch {
@@ -36,120 +35,64 @@ function Test-PortFree([int]$PortNumber) {
     }
 }
 
-function Find-FreePort([int[]]$Preferred, [int[]]$Scan) {
-    $seen = @{}
-    foreach ($candidate in @($Preferred + $Scan)) {
-        if ($seen.ContainsKey($candidate)) { continue }
-        $seen[$candidate] = $true
-        if (Test-PortFree $candidate) { return $candidate }
+function Require-Command([string]$Name, [string]$Hint) {
+    if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
+        Write-Host "未找到 $Name。$Hint"
+        exit 1
     }
-    return 0
 }
 
-function Stop-Tree([System.Diagnostics.Process]$Process) {
-    if ($null -eq $Process) {
-        return
-    }
-    try {
-        $Process.Refresh()
-    } catch {
-        return
-    }
-    if ($Process.HasExited) {
-        return
-    }
-    & cmd.exe /c "taskkill /PID $($Process.Id) /T /F >nul 2>&1"
-}
+Require-Command "npm" "请先安装 Node.js，并确认 npm 在 PATH 里。"
+Require-Command "cargo" "请先安装 Rust（https://rustup.rs），并确认 cargo 在 PATH 里。"
 
-$python = Join-Path $BackendDir ".venv\Scripts\python.exe"
-if (-not (Test-Path -LiteralPath $python)) {
-    Write-Host "未找到后端虚拟环境：$python"
-    Write-Host "请先在 workbench/backend 执行："
-    Write-Host "  uv venv --python 3.12 .venv"
-    Write-Host "  uv pip install --python .venv\Scripts\python.exe fastapi `"uvicorn[standard]`" pydantic httpx pillow python-multipart pytest"
-    exit 1
-}
-
-if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
-    Write-Host "未找到 npm。请先安装 Node.js，并确认 npm 在 PATH 里。"
-    exit 1
-}
-
-if ($env:WORKBENCH_PORT -match '^\d+$') {
-    $requested = [int]$env:WORKBENCH_PORT
-    $BackendPreferred = @($requested) + @($BackendPreferred | Where-Object { $_ -ne $requested })
-}
-if ($env:WORKBENCH_WEB_PORT -match '^\d+$') {
-    $requestedWeb = [int]$env:WORKBENCH_WEB_PORT
-    $FrontendPreferred = @($requestedWeb) + @($FrontendPreferred | Where-Object { $_ -ne $requestedWeb })
-}
-
-$Port = Find-FreePort $BackendPreferred $BackendScan
-if ($Port -eq 0) {
-    Write-Host "没有可用的后端端口。请关掉已有后端，或设置 WORKBENCH_PORT 指定一个空闲端口。"
-    exit 1
-}
-$WebPort = Find-FreePort $FrontendPreferred $FrontendScan
-if ($WebPort -eq 0) {
-    Write-Host "没有可用的前端端口。请关掉占用 5174 附近的程序，或设置 WORKBENCH_WEB_PORT。"
-    exit 1
-}
-
-$env:WORKBENCH_PORT = "$Port"
-$env:WORKBENCH_WEB_PORT = "$WebPort"
-if ($Port -ne $BackendPreferred[0]) {
-    Write-Host "端口 $($BackendPreferred[0]) 不可用，后端改用 $Port。"
-}
-if ($WebPort -ne $FrontendPreferred[0]) {
-    Write-Host "端口 $($FrontendPreferred[0]) 不可用，前端改用 $WebPort。"
-}
-
-if (-not (Test-Path -LiteralPath (Join-Path $FrontendDir "node_modules"))) {
-    Write-Host "前端依赖未安装，正在 npm install ..."
-    Push-Location $FrontendDir
+if (-not (Test-Path -LiteralPath (Join-Path $Root "node_modules"))) {
+    Write-Host "安装 Tauri CLI 依赖 ..."
+    Push-Location $Root
     try {
         & npm install
-        if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
-        }
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     } finally {
         Pop-Location
     }
 }
 
-Write-Host "启动后端  http://127.0.0.1:$Port/"
-$backend = Start-Process -FilePath "cmd.exe" `
-    -ArgumentList "/k", "title workbench-backend && .venv\Scripts\python.exe server.py" `
-    -WorkingDirectory $BackendDir `
-    -PassThru
+if (-not (Test-Path -LiteralPath (Join-Path $FrontendDir "node_modules"))) {
+    Write-Host "安装前端依赖 ..."
+    Push-Location $FrontendDir
+    try {
+        & npm install
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    } finally {
+        Pop-Location
+    }
+}
 
-Write-Host "启动前端  http://127.0.0.1:$WebPort/"
-$frontend = Start-Process -FilePath "cmd.exe" `
-    -ArgumentList "/k", "title workbench-frontend && npm run dev" `
-    -WorkingDirectory $FrontendDir `
-    -PassThru
+if ($Check) {
+    Write-Host "环境检查通过：npm、cargo、前后端依赖都就绪。"
+    exit 0
+}
 
-Write-Host ""
-Write-Host "后端 PID $($backend.Id)    前端 PID $($frontend.Id)"
-Write-Host "浏览器打开 http://127.0.0.1:$WebPort"
-Write-Host "在本窗口按 Ctrl+C，或关掉任一服务窗口，会停止前后端。"
-
-$reason = $null
+Push-Location $Root
 try {
-    while (-not $backend.HasExited -and -not $frontend.HasExited) {
-        Start-Sleep -Milliseconds 500
+    if ($Build) {
+        Write-Host "打包中（首次编译 Rust 依赖需要几分钟）..."
+        & npm run tauri -- build
+        exit $LASTEXITCODE
     }
-    if ($backend.HasExited) {
-        $reason = "后端窗口已关闭"
-    } elseif ($frontend.HasExited) {
-        $reason = "前端窗口已关闭"
+
+    if (-not (Test-PortFree $DevPort)) {
+        Write-Host "端口 $DevPort 被占用。请先关掉占用它的程序（比如上一次没退干净的 Vite），再重新运行。"
+        exit 1
     }
-} finally {
-    Stop-Tree $backend
-    Stop-Tree $frontend
-    if ($reason) {
-        Write-Host "$reason，已停止另一边。"
+
+    if ($env:WORKBENCH_DATA_DIR) {
+        Write-Host "数据目录：$env:WORKBENCH_DATA_DIR"
     } else {
-        Write-Host "已停止前后端。"
+        Write-Host "数据目录：$(Join-Path $Root 'backend\data')（开发模式默认）"
     }
+    Write-Host "启动中（首次编译 Rust 依赖需要几分钟）..."
+    & npm run tauri -- dev
+    exit $LASTEXITCODE
+} finally {
+    Pop-Location
 }
