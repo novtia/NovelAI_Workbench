@@ -49,7 +49,10 @@ function HistoryCard({ shot, on, onPick, onContext }: CardProps) {
       style={{ "--r": r } as React.CSSProperties}
       data-shot-key={shot.key}
       aria-pressed={on}
-      onClick={(e) => onPick(shot, e)}
+      onClick={(e) => {
+        if (e.button !== 0) return;
+        onPick(shot, e);
+      }}
       onContextMenu={onContext}
       // Shift 点击会触发浏览器的文字选择，按下时就拦掉。
       onMouseDown={(e) => {
@@ -78,12 +81,15 @@ export function HistoryBoard() {
   const qc = useQueryClient();
   const albums = useAlbumsQuery().data || [];
   const [sel, setSel] = useState<Selection>(EMPTY_SELECTION);
+  // 详情只由左键单击打开。右键也会改选中，但不能把详情带出来。
+  const [detailKey, setDetailKey] = useState<string | null>(null);
   const sentinel = useRef<HTMLDivElement>(null);
   const shots = useMemo(() => historyShots(query.data?.pages.flatMap((page) => page.jobs) || []), [query.data]);
   const days = useMemo(() => groupByDay(shots), [shots]);
   const order = useMemo(() => shots.map((s) => s.key), [shots]);
   const picked = useMemo(() => pickSelected(shots, sel), [shots, sel]);
-  const detailShot = picked.length === 1 ? picked[0] : null;
+  const detailShot =
+    detailKey && sel.keys.size === 1 && sel.keys.has(detailKey) ? shots.find((shot) => shot.key === detailKey) || null : null;
 
   // 刷新、删除后去掉已经不存在的选中项。
   useEffect(() => {
@@ -102,7 +108,10 @@ export function HistoryBoard() {
     return () => io.disconnect();
   }, [query.hasNextPage, query.isFetchingNextPage, query.fetchNextPage, days.length]);
 
-  const clear = useCallback(() => setSel(EMPTY_SELECTION), []);
+  const clear = useCallback(() => {
+    setSel(EMPTY_SELECTION);
+    setDetailKey(null);
+  }, []);
 
   const removeShots = useCallback(
     async (list: HistoryShot[]) => {
@@ -122,8 +131,10 @@ export function HistoryBoard() {
         if (!cur.order.length) return;
         e.preventDefault();
         setSel(selectAll(cur.order));
+        setDetailKey(null);
       } else if (e.key === "Escape") {
         setSel((s) => (s.keys.size ? EMPTY_SELECTION : s));
+        setDetailKey(null);
       } else if (e.key === "Delete" && cur.picked.length) {
         e.preventDefault();
         void cur.removeShots(cur.picked);
@@ -134,7 +145,9 @@ export function HistoryBoard() {
   }, []);
 
   function pick(shot: HistoryShot, e: MouseEvent) {
-    setSel((cur) => applyClick(cur, order, shot.key, { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey }));
+    const mods = { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey };
+    setSel((cur) => applyClick(cur, order, shot.key, mods));
+    setDetailKey(mods.ctrl || mods.shift ? null : shot.key);
   }
 
   // ---- 右键菜单 ----
@@ -143,6 +156,9 @@ export function HistoryBoard() {
     if (!key) return false;
     const next = applyContext(sel, order, key);
     setSel(next);
+    // 详情本来就开着、而且右键没有换掉这张图时，保持不动；其它情况一律不打开。
+    const keep = detailKey != null && sel.keys.size === 1 && sel.keys.has(detailKey) && next.keys.has(detailKey);
+    setDetailKey(keep ? detailKey : null);
     return { shots: pickSelected(shots, next) };
   });
   const openBoardMenu = useContextMenu<HistoryMenuCtx>("history.board", () => (shots.length ? { shots: picked } : false));
@@ -189,7 +205,7 @@ export function HistoryBoard() {
     group: 2,
     order: 0,
     build: ({ shots: list }) => [
-      { id: "all", label: "全选", hint: "Ctrl+A", disabled: list.length === order.length, onSelect: () => setSel(selectAll(order)) },
+      { id: "all", label: "全选", hint: "Ctrl+A", disabled: list.length === order.length, onSelect: () => { setSel(selectAll(order)); setDetailKey(null); } },
       { id: "none", label: "取消选择", hint: "Esc", onSelect: clear },
     ],
   });
@@ -213,7 +229,7 @@ export function HistoryBoard() {
     id: "history.board.select",
     group: 1,
     build: () => [
-      { id: "all", label: "全选", hint: "Ctrl+A", disabled: picked.length === order.length, onSelect: () => setSel(selectAll(order)) },
+      { id: "all", label: "全选", hint: "Ctrl+A", disabled: picked.length === order.length, onSelect: () => { setSel(selectAll(order)); setDetailKey(null); } },
       { id: "none", label: "取消选择", hint: "Esc", disabled: !picked.length, onSelect: clear },
     ],
   });

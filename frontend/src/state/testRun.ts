@@ -12,8 +12,9 @@ import {
   jobIsActive,
   missingTargets,
   queryKeys,
+  remapOpenId,
 } from "@/data";
-import type { Job, ParamSet, StudioForm } from "@/data/types";
+import type { Artwork, Job, ParamSet, StudioForm } from "@/data/types";
 import type { TestTarget } from "@/data/testRun";
 import { useCollection } from "./collection";
 import { useJobsQuery, useParamSetsQuery } from "./queries";
@@ -59,7 +60,7 @@ function buildPayload(preset: ParamSet, target: TestTarget, testSetId: string) {
 
 export function useTestRun() {
   const qc = useQueryClient();
-  const { album, testSets, testSet, testSetId, baseItems, baseFiltered, skinItems, query } = useCollection();
+  const { album, testSets, testSet, testSetId, baseItems, baseFiltered, skinItems, openItem, query } = useCollection();
   const setsQ = useParamSetsQuery();
   const jobsQ = useJobsQuery();
   const runs = useTestRunStore((s) => s.runs);
@@ -215,8 +216,22 @@ export function useTestRun() {
     pushToast("已停止，可以随时点「继续」补齐剩下的画师", "ok");
   }
 
-  function selectTestSet(id: string) {
-    useSession.getState().setTestSetId(id);
+  /** 切测试集只换格子里的图：不重播入场动画、不关掉打开着的图，新测试集的图没取到前先沿用旧皮肤。 */
+  async function selectTestSet(id: string) {
+    const session = useSession.getState();
+    if (id === session.testSetId) return;
+    const open = openItem || null;
+    // 有打开的图时，先把新测试集的图取到手，才能让它原地换成对应画师的新皮肤。
+    let next = id ? qc.getQueryData<Artwork[]>(queryKeys.items(id)) : [];
+    if (open && !next) {
+      try {
+        next = await qc.fetchQuery({ queryKey: queryKeys.items(id), queryFn: () => galleryApi.listItems(id) });
+      } catch {
+        next = undefined;
+      }
+    }
+    session.setTestSetId(id);
+    if (open) session.setOpenId(next ? remapOpenId(open, baseItems, next) : null);
   }
 
   function renameTestSet() {

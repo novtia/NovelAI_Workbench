@@ -16,7 +16,7 @@ export function TestSetBar() {
       <div className="tb-group">
         <label className="tb-field tb-set">
           <span>测试集</span>
-          <select value={t.testSetId} onChange={(e) => t.selectTestSet(e.target.value)}>
+          <select value={t.testSetId} onChange={(e) => void t.selectTestSet(e.target.value)}>
             <option value="">默认（导入的原图）</option>
             {t.testSets.map((s) => (
               <option key={s.id} value={s.id}>

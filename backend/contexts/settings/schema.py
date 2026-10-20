@@ -172,6 +172,8 @@ SCHEMA: dict[str, dict[str, Spec]] = {
         "rememberWidths": _bool(True),
     },
     "account": {
+        # NovelAI 网关地址；空串 = 官方 https://image.novelai.net。
+        "gatewayUrl": _str("", 200),
         "quotaRefreshSec": _int(60, 15, 600),
         "statusTtlSec": _int(45, 10, 300),
         "showBattery": _bool(True),

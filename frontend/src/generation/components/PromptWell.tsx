@@ -27,6 +27,7 @@ import { useSettings } from "@/state/settingsStore";
 import { armArtistLibrary, useArtistHover, useArtistLibrary, useArtistPreviews } from "@/ui/ArtistHover";
 import {
   buildEditor,
+  caretAfterRender,
   caretRect,
   cardName,
   cardWeight,
@@ -128,10 +129,13 @@ export function PromptWell({
   function rebuild(s: string, caret: number | null) {
     const root = el();
     buildEditor(root, s);
+    const out = serializeNode(root);
     if (caret != null && document.activeElement === root) {
-      setCaretOffset(root, Math.min(caret, s.length));
+      setCaretOffset(root, Math.min(caretAfterRender(s, caret), out.length));
       revealCaret(root);
     }
+    // 卡片渲染时补了空格（数字紧贴闭合 `::`），把规范后的文字同步出去。
+    if (out !== s) emit(false);
   }
 
   /** 提交时机：把文字里写成画师 tag 的部分变成卡片，光标按字符偏移还原。 */
@@ -215,9 +219,12 @@ export function PromptWell({
     const box = scrollParentOf(root);
     const top = box?.scrollTop ?? 0;
     buildEditor(root, s, { caret });
-    setCaretOffset(root, caret);
+    const out = serializeNode(root);
+    const nextCaret = caretAfterRender(s, caret);
+    setCaretOffset(root, nextCaret);
     if (box) box.scrollTop = top;
-    liveLast.current = { v: s, c: caret };
+    liveLast.current = { v: out, c: nextCaret };
+    if (out !== s) emit(true);
   }
 
   /** 延迟 0：等本次输入事件处理完（下一个任务）就渲染，肉眼上是同步的；连续输入时后一次顶掉前一次。 */
@@ -285,6 +292,11 @@ export function PromptWell({
 
   useLayoutEffect(() => {
     buildEditor(el(), value);
+    const out = serializeNode(el());
+    if (out !== value) {
+      last.current = out;
+      onChangeRef.current(out);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -295,8 +307,13 @@ export function PromptWell({
     if (serializeNode(root) === value) return;
     const caret = document.activeElement === root ? getCaretOffset(root) : null;
     buildEditor(root, value);
-    if (caret != null) setCaretOffset(root, Math.min(caret, value.length));
-    hist.current = { stack: [{ v: value, c: value.length }], idx: 0, t: 0, typing: false };
+    const out = serializeNode(root);
+    if (caret != null) setCaretOffset(root, Math.min(caretAfterRender(value, caret), out.length));
+    hist.current = { stack: [{ v: out, c: out.length }], idx: 0, t: 0, typing: false };
+    if (out !== value) {
+      last.current = out;
+      onChangeRef.current(out);
+    }
     setSug(null);
   }, [value]);
 

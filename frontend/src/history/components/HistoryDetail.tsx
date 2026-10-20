@@ -1,29 +1,38 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { MODEL_LABEL, SAMPLER_LABEL } from "@/data";
+import { extractArtists } from "@/data";
+import type { Artwork } from "@/data/types";
 import type { HistoryShot } from "@/data/history";
-import { IconCopy, IconSparkles, IconX } from "@/generation/components/icons";
-import { copyShotPrompt, loadShotParams, pushToast, saveShotsToAlbum, useAlbumsQuery } from "@/state";
+import { deleteHistoryShots, loadShotParams, pushToast, saveShotsToAlbum, useAlbumsQuery } from "@/state";
+import { ImageDetail } from "@/ui/ImageDetail";
 
 function textOf(value: unknown) {
   const text = value == null ? "" : String(value);
   return text && text !== "undefined" ? text : "";
 }
 
-function modelLabel(meta: Record<string, unknown>) {
-  const raw = textOf(meta.model);
-  if (!raw) return "—";
-  if (MODEL_LABEL[raw]) return MODEL_LABEL[raw];
-  if (raw.includes("curated")) return "V5 精选";
-  if (raw.includes("medium") || meta.effort === "medium") return "V5 完整 · 节约";
-  if (raw.includes("nai-diffusion-5")) return "V5 完整";
-  return raw;
-}
-
-function when(ts: number) {
-  const d = new Date(ts);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+/** 历史图没有收藏夹条目，按生图参数拼一份和图库详情相同的视图。 */
+function asArtwork(shot: HistoryShot): Artwork {
+  const meta = shot.meta || {};
+  const parsed = extractArtists(String(meta.prompt || meta.artistLine || ""));
+  const listed = Array.isArray(meta.artists) ? meta.artists.map((n) => String(n)).filter(Boolean) : [];
+  const names = parsed.names.length ? parsed.names : listed;
+  return {
+    id: shot.itemId,
+    albumId: "",
+    addedAt: shot.createdAt,
+    name: textOf(meta.name) || "nai.png",
+    mime: "image/png",
+    size: 0,
+    hash: shot.blobHash,
+    width: shot.width,
+    height: shot.height,
+    artists: names,
+    artistLine: parsed.line || names.map((n) => `artist:${n}`).join(", "),
+    params: { ...meta, artistChain: parsed.chain || meta.artistChain },
+    imageUrl: shot.url,
+    thumbUrl: shot.thumbUrl,
+  };
 }
 
 export function HistoryDetail({ shot, onClose }: { shot: HistoryShot | null; onClose: () => void }) {
@@ -31,18 +40,7 @@ export function HistoryDetail({ shot, onClose }: { shot: HistoryShot | null; onC
   const [picked, setPicked] = useState("");
   const qc = useQueryClient();
   const target = albums.some((a) => a.id === picked) ? picked : albums[0]?.id || "";
-  const meta = shot?.meta || {};
-  const sampler = textOf(meta.sampler);
-  const width = shot?.width;
-  const height = shot?.height;
-
-  function loadParams() {
-    if (shot) loadShotParams(shot);
-  }
-
-  async function copyPrompt() {
-    if (shot) await copyShotPrompt(shot);
-  }
+  const item = shot ? asArtwork(shot) : null;
 
   async function save() {
     if (!shot?.blobHash) {
@@ -56,72 +54,36 @@ export function HistoryDetail({ shot, onClose }: { shot: HistoryShot | null; onC
     await saveShotsToAlbum(qc, [shot], target, albums.find((a) => a.id === target)?.name);
   }
 
+  async function remove() {
+    if (!shot) return;
+    if (await deleteHistoryShots(qc, [shot])) onClose();
+  }
+
   return (
-    <aside className={`inspector${shot ? " open" : ""}`} aria-hidden={!shot}>
-      <div className="insp-inner">
-        <div className="insp-head">
-          <span className="pane-title">历史详情</span>
-          <button className="icon-btn" type="button" title="关闭" aria-label="关闭" onClick={onClose}>
-            <IconX />
+    <ImageDetail
+      item={item}
+      onClose={onClose}
+      onGenerate={() => shot && loadShotParams(shot)}
+      onDelete={() => void remove()}
+      albumId="hist-album"
+      album={
+        <>
+          <select id="hist-album" value={target} onChange={(e) => setPicked(e.target.value)} disabled={!albums.length}>
+            {albums.length ? (
+              albums.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))
+            ) : (
+              <option value="">没有收藏夹</option>
+            )}
+          </select>
+          <button className="mini" type="button" onClick={() => void save()}>
+            存入
           </button>
-        </div>
-        {shot && (
-          <>
-            <div className="insp-body">
-              <div className="preview">
-                <img src={shot.url} alt="" width={width || undefined} height={height || undefined} />
-              </div>
-              <dl className="meta-grid">
-                <dt>时间</dt>
-                <dd>{when(shot.createdAt)}</dd>
-                <dt>模型</dt>
-                <dd>{modelLabel(meta)}</dd>
-                <dt>分辨率</dt>
-                <dd>{width && height ? `${width} × ${height}` : "—"}</dd>
-                <dt>步数</dt>
-                <dd>{textOf(meta.steps) || "—"}</dd>
-                <dt>Sampler</dt>
-                <dd>{SAMPLER_LABEL[sampler] || sampler || "—"}</dd>
-                <dt>CFG</dt>
-                <dd>{textOf(meta.scale) || "—"}</dd>
-                <dt>Seed</dt>
-                <dd>{textOf(meta.seed) || "—"}</dd>
-              </dl>
-              <div className="block">
-                <div className="block-head">Prompt</div>
-                <pre className="prompt">{shot.prompt || "—"}</pre>
-              </div>
-              <div className="move-row">
-                <label htmlFor="hist-album">收藏夹</label>
-                <select id="hist-album" value={target} onChange={(e) => setPicked(e.target.value)} disabled={!albums.length}>
-                  {albums.length ? (
-                    albums.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name}
-                      </option>
-                    ))
-                  ) : (
-                    <option value="">没有收藏夹</option>
-                  )}
-                </select>
-                <button className="mini" type="button" onClick={() => void save()}>
-                  存入
-                </button>
-              </div>
-            </div>
-            <div className="insp-foot">
-              <button className="btn btn-primary" type="button" onClick={loadParams}>
-                <IconSparkles />
-                载入参数
-              </button>
-              <button className="btn" type="button" onClick={() => void copyPrompt()}>
-                <IconCopy />
-                复制提示词
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </aside>
+        </>
+      }
+    />
   );
 }

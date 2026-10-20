@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { buildSkinLayout, buildTestTargets, indexSkins, missingTargets, testJobKey } from "./testRun";
+﻿import { describe, expect, it } from "vitest";
+import { buildSkinLayout, buildTestTargets, indexSkins, missingTargets, remapOpenId, testJobKey } from "./testRun";
 import type { Artwork, Job } from "./types";
 
 function art(partial: Partial<Artwork> & Pick<Artwork, "id" | "artists" | "addedAt">): Artwork {
@@ -139,5 +139,16 @@ describe("missingTargets / testJobKey", () => {
 
   it("reads the artist key from the job client", () => {
     expect(testJobKey(job("j", "Foo_Bar", "queued"))).toBe("foo bar");
+  });
+});
+
+describe("remapOpenId", () => {
+  it("打开的图跟着格子换：有皮肤换皮肤，没有回默认图", () => {
+    const next = [skin("sb2", "b")];
+    expect(remapOpenId(skin("sb", "b"), base, next)).toBe("sb2");
+    expect(remapOpenId(skin("sa", "a"), base, next)).toBe("a");
+    expect(remapOpenId(base[1], base, [])).toBe("b");
+    expect(remapOpenId(base[4], base, [skin("sd", "d")])).toBe("d2");
+    expect(remapOpenId(null, base, next)).toBeNull();
   });
 });

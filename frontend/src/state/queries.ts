@@ -18,13 +18,15 @@ export function useTestSetsQuery() {
   return useQuery({ queryKey: queryKeys.albums, queryFn: galleryApi.listAlbums, select: testSetAlbums });
 }
 
-export function useItemsQuery(albumId?: string) {
+/** keepPrevious：换了 id 后新数据到手前继续给上一份（测试集切换时网格原地换图，不闪回默认图）。 */
+export function useItemsQuery(albumId?: string, keepPrevious = false) {
   const current = useSession((s) => s.albumId);
   const id = albumId ?? current;
   return useQuery({
     queryKey: queryKeys.items(id),
     queryFn: () => galleryApi.listItems(id),
     enabled: Boolean(id),
+    placeholderData: keepPrevious ? (prev) => prev : undefined,
   });
 }
 

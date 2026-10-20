@@ -32,7 +32,7 @@ export function useCollection() {
   // items 恒为当前收藏夹（默认集）的图，决定画师的顺序、位置、数量；
   // 选了测试集时，测试集里的图放在 skinItems，只作为「皮肤」按画师覆盖，不改变布局。
   const baseQ = useItemsQuery(albumId);
-  const skinQ = useItemsQuery(testSet ? testSet.id : "");
+  const skinQ = useItemsQuery(testSet ? testSet.id : "", true);
   const items = baseQ.data || NO_ITEMS;
   const skinItems = testSet ? skinQ.data || NO_ITEMS : NO_ITEMS;
   const baseItems = items;

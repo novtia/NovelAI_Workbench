@@ -65,6 +65,19 @@ export function indexSkins(skinItems: Artwork[]) {
   return map;
 }
 
+/**
+ * 切换测试集时，让打开着的图跟着换：还停在同一个格子（同一位画师）上，
+ * 有新测试集的皮肤就换成皮肤，没有就回到默认图；找不到对应格子返回 null。
+ */
+export function remapOpenId(open: Artwork | null | undefined, baseItems: Artwork[], nextSkinItems: Artwork[]): string | null {
+  if (!open) return null;
+  const key = tagKey(firstArtist(open));
+  const layout = buildSkinLayout(baseItems, nextSkinItems, [], "x");
+  const slots = [...layout.shared, ...layout.extras.flatMap((g) => g.slots)];
+  const hit = slots.find((s) => s.base.id === open.id) || (key ? slots.find((s) => s.target?.key === key) : undefined);
+  return hit ? hit.skin?.id ?? hit.base.id : null;
+}
+
 /** 默认集里还没有皮肤的画师，按默认集顺序，供「继续」使用。 */
 export function missingTargets(baseItems: Artwork[], skinItems: Artwork[]): TestTarget[] {
   const skins = indexSkins(skinItems);

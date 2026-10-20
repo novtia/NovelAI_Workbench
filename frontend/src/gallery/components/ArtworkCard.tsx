@@ -3,6 +3,7 @@ import { asMeta } from "@/data";
 import type { Artwork } from "@/data/types";
 import { useBasketActions, useBasketHas, useCommands, useSession } from "@/state";
 import { IconCopy, IconSparkles } from "@/generation/components/icons";
+import { SwapImage } from "./SwapImage";
 
 export const ArtworkCard = memo(function ArtworkCard({ item, index, enter = true }: { item: Artwork; index: number; enter?: boolean }) {
   const selected = useSession((s) => s.openId === item.id);
@@ -30,11 +31,9 @@ export const ArtworkCard = memo(function ArtworkCard({ item, index, enter = true
       }}
     >
       <div className="thumb-wrap" style={item.width && item.height ? { aspectRatio: `${item.width} / ${item.height}` } : undefined}>
-        <img
+        <SwapImage
           src={item.thumbUrl}
           alt={item.artistLine || item.name}
-          loading="lazy"
-          decoding="async"
           width={item.width || undefined}
           height={item.height || undefined}
         />

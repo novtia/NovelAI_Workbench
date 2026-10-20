@@ -90,6 +90,8 @@ export type Settings = {
     rememberWidths: boolean;
   };
   account: {
+    /** NovelAI 网关地址；空串 = 官方地址 */
+    gatewayUrl: string;
     quotaRefreshSec: number;
     statusTtlSec: number;
     showBattery: boolean;
@@ -190,6 +192,7 @@ export const DEFAULT_SETTINGS: Settings = {
     rememberWidths: true,
   },
   account: {
+    gatewayUrl: "",
     quotaRefreshSec: 60,
     statusTtlSec: 45,
     showBattery: true,

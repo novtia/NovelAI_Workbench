@@ -57,6 +57,7 @@ def create_app() -> FastAPI:
     )
     gateway = NaiGateway(vault)
     gateway.timeout_provider = lambda: float(settings.value("generation", "timeoutSec"))
+    gateway.base_url_provider = lambda: str(settings.value("account", "gatewayUrl"))
     generation = GenerationService(
         uow,
         store,

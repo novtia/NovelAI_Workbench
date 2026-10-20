@@ -1,4 +1,4 @@
-import { formatArtistCard, formatArtistGroup, formatWeight, splitPromptSegments, type ArtistCard } from "@/data/artistCards";
+import { fixCardRaw, formatArtistCard, formatArtistGroup, formatWeight, splitPromptSegments, type ArtistCard } from "@/data/artistCards";
 import { highlight, weightStyle } from "@/data/studio";
 
 /**
@@ -64,7 +64,8 @@ export function createCardEl(card: Pick<ArtistCard, "raw" | "name" | "weight"> &
   const el = document.createElement("span");
   el.className = CARD_CLASS;
   el.contentEditable = "false";
-  el.dataset.raw = card.raw;
+  // 闭合 `::` 紧贴数字会被模型读成权重，渲染成卡片时顺手补上空格。
+  el.dataset.raw = fixCardRaw(card.raw);
   el.dataset.name = names[0];
   el.dataset.names = names.join("\n");
   // 多画师共用权重时，改权重要保留原内容，所以把 inner 记下来。
@@ -122,6 +123,16 @@ export function stillTyping(card: { start: number; end: number; weight: number |
   if (caret == null) return false;
   if (caret > card.start && caret < card.end) return true;
   return caret === card.end && card.weight == null && !card.bracket;
+}
+
+/** 渲染成卡片后，原文里补了空格会让光标之前多出几个字符；把光标偏移换算成渲染后的偏移。 */
+export function caretAfterRender(value: string, caret: number) {
+  let shift = 0;
+  for (const seg of splitPromptSegments(value)) {
+    if (seg.type !== "card" || seg.card.end > caret || stillTyping(seg.card, caret)) continue;
+    shift += fixCardRaw(seg.card.raw).length - seg.card.raw.length;
+  }
+  return caret + shift;
 }
 
 export function buildEditor(root: HTMLElement, value: string, opts?: { caret?: number | null }) {

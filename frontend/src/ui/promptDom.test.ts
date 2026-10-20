@@ -27,3 +27,22 @@ describe("stillTyping（实时渲染时哪些 tag 先不变卡片）", () => {
     expect(stillTyping(plain, plain.end + 1)).toBe(false);
   });
 });
+
+import { caretAfterRender } from "./promptDom";
+import { fixCardRaw } from "@/data/artistCards";
+
+describe("数字紧贴闭合 :: 时补空格", () => {
+  it("fixCardRaw 只在数字和闭合 :: 之间补空格", () => {
+    expect(fixCardRaw("0.8::artist:bm1991::")).toBe("0.8::artist:bm1991 ::");
+    expect(fixCardRaw("0.8::artist:foo::")).toBe("0.8::artist:foo::");
+    expect(fixCardRaw("0.8::artist:bm1991 ::")).toBe("0.8::artist:bm1991 ::");
+    expect(fixCardRaw("artist:bm1991")).toBe("artist:bm1991");
+  });
+
+  it("caretAfterRender 把光标换算到补空格之后", () => {
+    const t = "0.8::artist:bm1991::, x";
+    expect(caretAfterRender(t, 0)).toBe(0);
+    expect(caretAfterRender(t, t.indexOf(","))).toBe(t.indexOf(",") + 1);
+    expect(caretAfterRender(t, t.length)).toBe(t.length + 1);
+  });
+});

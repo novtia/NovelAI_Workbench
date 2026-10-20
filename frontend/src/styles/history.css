@@ -1,4 +1,4 @@
-﻿/* ---------- 历史记录 ---------- */
+/* ---------- 历史记录 ---------- */
 .h-main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .h-scroll { flex: 1; overflow: auto; padding: 32px 40px 80px; }
 .h-day-head { display: flex; align-items: center; gap: 14px; margin: 6px 0 22px; }

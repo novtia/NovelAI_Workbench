@@ -206,3 +206,34 @@ def test_lottery_board_uses_settings_defaults(tmp_path):
     controls = lottery.board()["controls"]
     assert controls["draws"] == 12 and controls["min"] == 2
     assert set(controls) >= set(DEFAULT_CONTROLS)
+
+
+def test_gateway_url_saved_and_used_by_nai_gateway(tmp_path):
+    from contexts.generation.nai_client import IMAGE_API, NaiGateway, TokenVault
+
+    svc, *_ = _svc(tmp_path)
+    gateway = NaiGateway(TokenVault(tmp_path / "nai.token"))
+    gateway.base_url_provider = lambda: str(svc.value("account", "gatewayUrl"))
+    assert gateway._image_api() == IMAGE_API
+    svc.update({"account": {"gatewayUrl": " https://moyan.ink/ "}})
+    assert svc.value("account", "gatewayUrl") == " https://moyan.ink/ "
+    assert gateway._image_api() == "https://moyan.ink"
+    svc.update({"account": {"gatewayUrl": "ftp://bad"}})
+    assert gateway._image_api() == IMAGE_API
+
+
+def test_fetch_subscription_non_json_gateway_is_nai_error(tmp_path):
+    import httpx
+    import pytest
+
+    from contexts.generation.nai_client import NaiError, NaiGateway, TokenVault
+
+    vault = TokenVault(tmp_path / "nai.token")
+    vault.save("sk-test")
+    gateway = NaiGateway(vault)
+    gateway._client = httpx.Client(
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, text="<html></html>"))
+    )
+    with pytest.raises(NaiError) as caught:
+        gateway.fetch_subscription()
+    assert caught.value.status == 404

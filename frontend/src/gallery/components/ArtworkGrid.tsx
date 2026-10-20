@@ -55,6 +55,8 @@ export function ArtworkGrid() {
   }
 
   const split = single && !skinned ? splitSingleArtistSections(filtered) : null;
+  // 单画师图库里默认图和皮肤图是同一批格子：入场动画一律关掉，切测试集时卡片只换图，不整页重播。
+  const enter = !single;
 
   return (
     <div className="g-scroll">
@@ -79,7 +81,7 @@ export function ArtworkGrid() {
           {split.shared.length > 0 && (
             <section className={gridClass}>
               {split.shared.map((it, i) => (
-                <ArtworkCard key={it.id} item={it} index={i} />
+                <ArtworkCard key={it.id} item={it} index={i} enter={enter} />
               ))}
             </section>
           )}
@@ -93,7 +95,7 @@ export function ArtworkGrid() {
               </div>
               <section className={gridClass}>
                 {group.items.map((it, i) => (
-                  <ArtworkCard key={it.id} item={it} index={i} />
+                  <ArtworkCard key={it.id} item={it} index={i} enter={enter} />
                 ))}
               </section>
             </section>

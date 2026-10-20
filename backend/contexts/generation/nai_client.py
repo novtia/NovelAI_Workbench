@@ -671,6 +671,12 @@ class NaiGateway:
         self._client = httpx.Client(timeout=20)
         # 生图请求超时（秒），由设置服务注入。
         self.timeout_provider: Callable[[], float] | None = None
+        # 网关地址，由设置服务注入；空串或非 http(s) 地址都回到官方地址。
+        self.base_url_provider: Callable[[], str] | None = None
+
+    def _image_api(self) -> str:
+        raw = (self.base_url_provider() if self.base_url_provider else "").strip().rstrip("/")
+        return raw if raw.lower().startswith(("http://", "https://")) else IMAGE_API
 
     def _gen_timeout(self) -> float:
         return float(self.timeout_provider()) if self.timeout_provider else 180.0
@@ -687,10 +693,19 @@ class NaiGateway:
         token = token or self.vault.load()
         if not token:
             raise NaiError(401, "还没有配置 NovelAI Persistent API Token")
-        resp = self._client.get(f"{IMAGE_API}/user/subscription", headers=self._headers(token))
+        try:
+            resp = self._client.get(f"{self._image_api()}/user/subscription", headers=self._headers(token))
+        except httpx.HTTPError as exc:
+            raise NaiError(502, f"无法连接 NovelAI：{exc}") from exc
         if resp.status_code >= 400:
             raise _parse_error(resp)
-        data = resp.json()
+        try:
+            data = resp.json()
+        except ValueError as exc:
+            # 自建网关没有 /user/subscription，会回一个网页而不是 JSON；只是看不到额度，不影响生图。
+            raise NaiError(404, "当前网关不提供订阅与额度信息") from exc
+        if not isinstance(data, dict):
+            raise NaiError(404, "当前网关不提供订阅与额度信息")
         training = data.get("trainingStepsLeft") or data.get("training_steps_left") or {}
         fixed = int(training.get("fixedTrainingStepsLeft") or training.get("fixed_training_steps_left") or 0)
         purchased = int(
@@ -729,7 +744,7 @@ class NaiGateway:
         body = {"image": base64.b64encode(png).decode("ascii"), "model": upscale_model(model)}
         try:
             with httpx.Client(timeout=self._gen_timeout()) as client:
-                resp = client.post(f"{IMAGE_API}/ai/upscale", headers=self._headers(token), json=body)
+                resp = client.post(f"{self._image_api()}/ai/upscale", headers=self._headers(token), json=body)
         except httpx.HTTPError as exc:
             raise NaiError(502, f"无法连接 NovelAI：{exc}") from exc
         if resp.status_code >= 400:
@@ -743,7 +758,7 @@ class NaiGateway:
         payload, meta = prepared if prepared is not None else build_payload(body)
         with httpx.Client(timeout=self._gen_timeout()) as client:
             resp = client.post(
-                f"{IMAGE_API}/ai/generate-image",
+                f"{self._image_api()}/ai/generate-image",
                 headers=self._headers(token),
                 json=payload,
             )
@@ -763,7 +778,7 @@ class NaiGateway:
         try:
             req = client.build_request(
                 "POST",
-                f"{IMAGE_API}/ai/generate-image-stream",
+                f"{self._image_api()}/ai/generate-image-stream",
                 headers=self._headers(token, "text/event-stream"),
                 json=payload,
             )

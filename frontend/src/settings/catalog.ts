@@ -675,7 +675,20 @@ export const SECTIONS: SectionMeta[] = [
     title: "账号与额度",
     desc: "NovelAI Token 与额度显示。",
     groups: [
-      { title: "NovelAI Token", items: [], custom: "token" },
+      {
+        title: "NovelAI Token",
+        items: [
+          {
+            section: "account",
+            key: "gatewayUrl",
+            label: "网关地址",
+            hint: "留空使用官方 https://image.novelai.net；走自己的网关就填 https://moyan.ink，Token 处填网关发的 sk- Key。保存后下一次请求生效。",
+            keywords: "gateway 网关 地址 代理 base url 公益",
+            control: { kind: "text", placeholder: "https://image.novelai.net", rows: 1 },
+          },
+        ],
+        custom: "token",
+      },
       {
         title: "额度",
         items: [

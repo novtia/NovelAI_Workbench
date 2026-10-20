@@ -64,6 +64,14 @@ export function findArtistCards(text: string): ArtistCard[] {
   return cards;
 }
 
+/**
+ * 卡片原文规范化：闭合 `::` 紧贴数字（`0.8::artist:bm1991::`）时，模型会把 `1991::` 当成权重，
+ * 所以数字和闭合 `::` 之间必须补一个空格。
+ */
+export function fixCardRaw(raw: string) {
+  return raw.replace(/(\d)::$/, "$1 ::");
+}
+
 /** 把整段文字拆成「文字 / 卡片」交替的片段。片段拼回去必须与原文完全相等。 */
 export function splitPromptSegments(text: string): PromptSegment[] {
   const src = String(text ?? "");
