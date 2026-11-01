@@ -15,12 +15,17 @@ export type ArtistCard = {
   inner: string;
   weight: number | null;
   bracket: boolean;
+  /** 卡片被屏蔽：还留在编辑器里，但发给模型之前会整段拿掉。 */
+  muted: boolean;
 };
 
 export type PromptSegment = { type: "text"; value: string } | { type: "card"; card: ArtistCard };
 
+/** 屏蔽前缀，紧贴在三种卡片原文前面。正则里的 `#!` 要和这里保持一致。 */
+export const MUTE_PREFIX = "#!";
+
 /**
- * 只认三种写法：
+ * 只认三种写法，每种都可以用 `#!` 前缀标成屏蔽：
  *   1) 0.92::artist:name ::   （带权重，必须闭合 ::；里面可以是用逗号隔开的多个画师共用权重）
  *   2) [artist:name]
  *   3) artist:name            （后面是逗号或结尾）
@@ -28,9 +33,9 @@ export type PromptSegment = { type: "text"; value: string } | { type: "card"; ca
 // 加权组的内容：不能跨越 `::`，也不能吞掉下一个「数字::」权重起点。
 const GROUP_INNER = String.raw`(?:(?!::)(?!(?<![A-Za-z0-9_.])-?\d+(?:\.\d+)?::)[^\]\n])+?`;
 const CARD_SOURCE =
-  String.raw`(?<![A-Za-z0-9_.])(-?\d+(?:\.\d+)?)::[ \t]*(artist:[ \t]*${GROUP_INNER})[ \t]*::` +
-  String.raw`|\[[ \t]*artist:[ \t]*([^\]\n]+?)[ \t]*\]` +
-  String.raw`|(?<![A-Za-z0-9_])artist:[ \t]*([^,\]\n:]+?)(?=[ \t]*(?:,|$))`;
+  String.raw`(?<![A-Za-z0-9_.])(?<wmute>${MUTE_PREFIX})?(?<weight>-?\d+(?:\.\d+)?)::[ \t]*(?<wbody>artist:[ \t]*${GROUP_INNER})[ \t]*::` +
+  String.raw`|(?<bmute>${MUTE_PREFIX})?\[[ \t]*artist:[ \t]*(?<bbody>[^\]\n]+?)[ \t]*\]` +
+  String.raw`|(?<![A-Za-z0-9_])(?<pmute>${MUTE_PREFIX})?artist:[ \t]*(?<pbody>[^,\]\n:]+?)(?=[ \t]*(?:,|$))`;
 
 const CARD_RE = new RegExp(CARD_SOURCE, "gim");
 
@@ -45,9 +50,10 @@ export function findArtistCards(text: string): ArtistCard[] {
       re.lastIndex += 1;
       continue;
     }
-    const weighted = m[1] != null;
-    const bracket = m[3] != null;
-    const body = (m[2] ?? m[3] ?? m[4] ?? "").trim();
+    const g = m.groups ?? {};
+    const weighted = g.weight != null;
+    const bracket = g.bbody != null;
+    const body = (g.wbody ?? g.bbody ?? g.pbody ?? "").trim();
     const names = (weighted ? body.split(/[,，]/) : [body]).map(stripArtist).filter(Boolean);
     if (!names.length) continue;
     cards.push({
@@ -57,8 +63,9 @@ export function findArtistCards(text: string): ArtistCard[] {
       name: names[0],
       names,
       inner: weighted ? body : `artist:${names[0]}`,
-      weight: weighted ? Number(m[1]) : null,
+      weight: weighted ? Number(g.weight) : null,
       bracket,
+      muted: Boolean(g.wmute || g.bmute || g.pmute),
     });
   }
   return cards;
@@ -103,6 +110,40 @@ export function formatArtistCard(name: string, weight: number | null) {
   const n = stripArtist(name);
   if (weight == null || !Number.isFinite(weight)) return `artist:${n}`;
   return `${formatWeight(weight)}::artist:${n}${/\d$/.test(n) ? " " : ""}::`;
+}
+
+/** 给卡片原文加上或去掉屏蔽前缀。已经带前缀时再屏蔽一次不会叠两层。 */
+export function applyMute(raw: string, muted: boolean) {
+  const body = raw.startsWith(MUTE_PREFIX) ? raw.slice(MUTE_PREFIX.length) : raw;
+  return muted ? `${MUTE_PREFIX}${body}` : body;
+}
+
+/**
+ * 拿掉屏蔽卡片，并收掉因此多出来的逗号。
+ * 没有屏蔽卡片时原样返回，空格和逗号都不动。
+ */
+export function stripMutedArtists(text: string) {
+  const src = String(text ?? "");
+  const parts = splitPromptSegments(src);
+  if (!parts.some((p) => p.type === "card" && p.card.muted)) return src;
+
+  const out: string[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    if (part.type === "card" && part.card.muted) {
+      const next = parts[i + 1];
+      if (next?.type === "text" && /^[ \t]*[,，]/.test(next.value)) {
+        parts[i + 1] = { type: "text", value: next.value.replace(/^[ \t]*[,，][ \t]*/, "") };
+        if (out.every((s) => /^[ \t]*$/.test(s))) out.length = 0;
+        continue;
+      }
+      const prev = out[out.length - 1];
+      if (prev != null && /[ \t]*[,，][ \t]*$/.test(prev)) out[out.length - 1] = prev.replace(/[ \t]*[,，][ \t]*$/, "");
+      continue;
+    }
+    out.push(part.type === "text" ? part.value : part.card.raw);
+  }
+  return out.join("");
 }
 
 /** 多画师共用权重的卡片写回原文：保留原内容，只换权重；无权重时直接是原内容。 */

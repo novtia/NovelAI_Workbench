@@ -96,6 +96,12 @@ export type Settings = {
     statusTtlSec: number;
     showBattery: boolean;
   };
+  network: {
+    /** system = 跟随系统代理；custom = 自定义；none = 直连 */
+    proxyMode: "system" | "custom" | "none";
+    proxyUrl: string;
+    connectTimeoutSec: number;
+  };
   system: {
     ssePingSec: number;
     importConcurrency: number;
@@ -197,6 +203,11 @@ export const DEFAULT_SETTINGS: Settings = {
     statusTtlSec: 45,
     showBattery: true,
   },
+  network: {
+    proxyMode: "system",
+    proxyUrl: "",
+    connectTimeoutSec: 10,
+  },
   system: {
     ssePingSec: 15,
     importConcurrency: 2,
@@ -256,6 +267,7 @@ export type SystemInfo = {
   albums: number;
   blobCount: number;
   blobBytes: number;
+  buckets?: Record<string, { count: number; bytes: number }>;
   port: number | null;
   version: string;
 };

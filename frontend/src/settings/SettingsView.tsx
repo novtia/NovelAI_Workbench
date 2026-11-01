@@ -19,6 +19,7 @@ const SECTION_ICONS: Record<SectionId, LucideIcon> = {
   basket: NAV_ICONS.basket,
   layout: NAV_ICONS.layout,
   account: NAV_ICONS.account,
+  network: NAV_ICONS.network,
   system: NAV_ICONS.system,
 };
 

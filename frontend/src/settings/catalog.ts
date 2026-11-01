@@ -717,6 +717,49 @@ export const SECTIONS: SectionMeta[] = [
     ],
   },
   {
+    id: "network",
+    title: "网络代理",
+    desc: "连接 NovelAI 时使用的代理。国内网络直连不通时，在这里指定本机的代理软件。",
+    groups: [
+      {
+        title: "代理",
+        items: [
+          {
+            section: "network",
+            key: "proxyMode",
+            label: "代理方式",
+            hint: "跟随系统：使用 Windows「Internet 选项」里的代理和 HTTP_PROXY 等环境变量。直连：不走任何代理。自定义：使用下面的地址。保存后下一次请求生效。",
+            keywords: "proxy 代理 vpn 梯子 clash v2ray 网络",
+            control: {
+              kind: "segmented",
+              options: [
+                { value: "system", label: "跟随系统" },
+                { value: "custom", label: "自定义" },
+                { value: "none", label: "直连" },
+              ],
+            },
+          },
+          {
+            section: "network",
+            key: "proxyUrl",
+            label: "代理地址",
+            hint: "例如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080。没写协议时按 http 处理。只在「自定义」时生效。",
+            keywords: "proxy 代理 地址 socks5 http",
+            control: { kind: "text", placeholder: "http://127.0.0.1:7890", rows: 1 },
+            disabledWhen: (s) => s.network.proxyMode !== "custom",
+          },
+          {
+            section: "network",
+            key: "connectTimeoutSec",
+            label: "连接超时",
+            hint: "建立连接的最长等待时间，连不上时能更快报错。",
+            control: { kind: "slider", min: 3, max: 60, step: 1, unit: "秒" },
+          },
+        ],
+      },
+    ],
+  },
+  {
     id: "system",
     title: "数据与系统",
     desc: "存储信息、完整性、备份、导入导出设置。",

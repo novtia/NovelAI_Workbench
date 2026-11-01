@@ -227,13 +227,19 @@ export function ArtistHoverTrigger({
   );
 }
 
+/** 预览只贴在画师名左侧或右侧：哪边放得下用哪边，两边都够就用更宽的一边。不改到上下。 */
 function placePop(rect: DOMRect, w: number, h: number) {
-  let left = rect.left + rect.width / 2 - w / 2;
-  let top = rect.top - h - 10;
-  if (top < 8) top = rect.bottom + 10;
-  left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
-  top = Math.max(8, Math.min(top, window.innerHeight - h - 8));
-  return { left, top };
+  const gap = 10;
+  const edge = 8;
+  const spaceRight = window.innerWidth - rect.right - gap;
+  const spaceLeft = rect.left - gap;
+  const left = spaceRight >= w || spaceRight >= spaceLeft ? rect.right + gap : rect.left - gap - w;
+  let top = rect.top + rect.height / 2 - h / 2;
+  top = Math.max(edge, Math.min(top, window.innerHeight - h - edge));
+  return {
+    left: Math.max(edge, Math.min(left, window.innerWidth - w - edge)),
+    top,
+  };
 }
 
 function ArtistHoverPop({

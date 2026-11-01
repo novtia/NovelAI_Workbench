@@ -1,6 +1,6 @@
 use super::domain::{AppSettings, SETTINGS_ID};
 use super::schema::{defaults, has_section, normalize, section_names, spec_of};
-use crate::kernel::blobs::BlobStore;
+use crate::kernel::blobs::{BlobFile, BlobStore, Bucket};
 use crate::kernel::bus::Kernel;
 use crate::kernel::{DomainError, Res};
 use rusqlite::params;
@@ -137,12 +137,29 @@ impl SettingsService {
                 }
             }
         }
+        let mut buckets = serde_json::Map::new();
+        let mut add = |key: &str, file: &BlobFile| {
+            let entry = buckets.entry(key.to_string()).or_insert_with(|| json!({"count": 0, "bytes": 0}));
+            entry["count"] = json!(entry["count"].as_u64().unwrap_or(0) + 1);
+            entry["bytes"] = json!(entry["bytes"].as_u64().unwrap_or(0) + file.size);
+        };
         let (mut blob_count, mut blob_bytes) = (0u64, 0u64);
-        for digest in blobs.iter_hashes() {
-            if let Ok(meta) = std::fs::metadata(blobs.path_for(&digest)) {
-                blob_bytes += meta.len();
-                blob_count += 1;
-            }
+        for file in blobs.files() {
+            let key = match file.slot.as_ref().map(|s| &s.bucket) {
+                Some(Bucket::Studio) => "studio",
+                Some(Bucket::Lottery) => "lottery",
+                Some(Bucket::Inputs) => "inputs",
+                Some(Bucket::Favorites(_)) => "favorites",
+                None => "legacy",
+            };
+            add(key, &file);
+            blob_count += 1;
+            blob_bytes += file.size;
+        }
+        for file in blobs.legacy_files() {
+            add("legacy", &file);
+            blob_count += 1;
+            blob_bytes += file.size;
         }
         let conn = self.k.store.connect()?;
         let count = |sql: &str| -> Res<i64> { Ok(conn.query_row(sql, [], |r| r.get(0))?) };
@@ -154,6 +171,7 @@ impl SettingsService {
             "albums": count("SELECT COUNT(*) FROM projections_albums WHERE deleted=0")?,
             "blobCount": blob_count,
             "blobBytes": blob_bytes,
+            "buckets": buckets,
             "sections": section_names(),
         }))
     }

@@ -57,11 +57,6 @@ export async function deleteAlbum(id: string) {
   await call("gallery_delete_album", { id });
 }
 
-export async function restoreAlbum(id: string) {
-  const data = await call<{ album: Album }>("gallery_restore_album", { id });
-  return data.album;
-}
-
 export async function listItems(albumId: string) {
   const data = await call<{ items: Artwork[] }>("gallery_list_items", { albumId });
   return data.items;
@@ -110,9 +105,4 @@ export async function moveItem(id: string, albumId: string) {
 
 export async function deleteItem(id: string) {
   await call("gallery_delete_item", { id });
-}
-
-export async function restoreItem(id: string) {
-  const data = await call<{ item: Artwork }>("gallery_restore_item", { id });
-  return data.item;
 }

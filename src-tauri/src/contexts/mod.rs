@@ -3,3 +3,4 @@ pub mod generation;
 pub mod identity;
 pub mod lottery;
 pub mod settings;
+pub mod storage;

@@ -80,10 +80,9 @@ pub fn handle(svc: &Arc<Services>, req: &Request<Vec<u8>>) -> Response<Body> {
             if !is_hash(&digest) {
                 return json_error(400, "无效的哈希");
             }
-            let p = svc.kernel.blobs.path_for(&digest);
-            if !p.is_file() {
+            let Some(p) = svc.kernel.blobs.find(&digest) else {
                 return json_error(404, "文件不存在");
-            }
+            };
             file_response(req, &p, None, &digest)
         }
         ["items", id, which @ ("image" | "thumb")] => {
@@ -98,10 +97,15 @@ pub fn handle(svc: &Arc<Services>, req: &Request<Vec<u8>>) -> Response<Body> {
             } else {
                 (hash, item["mime"].as_str().map(|m| m.to_string()))
             };
-            let p = svc.kernel.blobs.path_for(&digest);
-            if !p.is_file() {
+            let album = item["albumId"].as_str().unwrap_or("");
+            let slot = if *which == "thumb" {
+                crate::kernel::blobs::Slot::thumb(crate::kernel::blobs::Bucket::Favorites(album.to_string()))
+            } else {
+                crate::kernel::blobs::Slot::image(crate::kernel::blobs::Bucket::Favorites(album.to_string()))
+            };
+            let Some(p) = svc.kernel.blobs.path_in(&slot, &digest).or_else(|| svc.kernel.blobs.find(&digest)) else {
                 return json_error(404, "文件不存在");
-            }
+            };
             file_response(req, &p, mime.as_deref(), &digest)
         }
         ["jobs", id, "preview"] => {

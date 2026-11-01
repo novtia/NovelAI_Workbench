@@ -408,3 +408,12 @@ export function triggerBlobDownload(blob: Blob, filename: string) {
   a.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
+
+/** 下载原文件，或重新编码成去掉隐写和文本元数据的 PNG。 */
+export async function downloadImageFile(src: string, filename: string, clean: boolean) {
+  if (!src) throw new Error("没有可下载的图片");
+  const res = await fetch(src);
+  if (!res.ok) throw new Error("无法读取图片");
+  const raw = await res.blob();
+  triggerBlobDownload(clean ? await reencodePngClean(raw) : raw, filename);
+}

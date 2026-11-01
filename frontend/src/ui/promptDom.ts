@@ -1,4 +1,4 @@
-import { fixCardRaw, formatArtistCard, formatArtistGroup, formatWeight, splitPromptSegments, type ArtistCard } from "@/data/artistCards";
+import { applyMute, fixCardRaw, formatArtistCard, formatArtistGroup, formatWeight, splitPromptSegments, type ArtistCard } from "@/data/artistCards";
 import { highlight, weightStyle } from "@/data/studio";
 
 /**
@@ -59,7 +59,16 @@ function button(act: "dec" | "inc", label: string, title: string) {
   return b;
 }
 
-export function createCardEl(card: Pick<ArtistCard, "raw" | "name" | "weight"> & Partial<Pick<ArtistCard, "names" | "inner">>) {
+function paintMute(el: HTMLElement, muted: boolean) {
+  el.classList.toggle("is-off", muted);
+  const tip = muted ? "点击启用" : "点击屏蔽";
+  el.querySelectorAll<HTMLElement>(".ac-name").forEach((name) => {
+    name.title = tip;
+    name.setAttribute("aria-pressed", muted ? "true" : "false");
+  });
+}
+
+export function createCardEl(card: Pick<ArtistCard, "raw" | "name" | "weight"> & Partial<Pick<ArtistCard, "names" | "inner" | "muted">>) {
   const names = card.names?.length ? card.names : [card.name];
   const el = document.createElement("span");
   el.className = CARD_CLASS;
@@ -86,6 +95,7 @@ export function createCardEl(card: Pick<ArtistCard, "raw" | "name" | "weight"> &
     const name = document.createElement("span");
     name.className = "ac-name";
     name.setAttribute("data-artist-hover", "");
+    name.setAttribute("role", "button");
     name.dataset.name = n;
     name.textContent = i ? n : `artist:${n}`;
     nameEls.push(name);
@@ -103,13 +113,21 @@ export function createCardEl(card: Pick<ArtistCard, "raw" | "name" | "weight"> &
 
   el.append(button("dec", "−", "减 0.1"), input, button("inc", "+", "加 0.1"), ...nameEls, del);
   paintCard(el, card.weight);
+  paintMute(el, Boolean(card.muted));
   return el;
+}
+
+/** 屏蔽或启用：只改这张卡片的原文和样式，权重保持不变。 */
+export function setCardMuted(el: HTMLElement, muted: boolean) {
+  el.dataset.raw = applyMute(el.dataset.raw || "", muted);
+  paintMute(el, muted);
 }
 
 /** 改权重：重写这张卡的原文（null 表示去掉权重）。 */
 export function setCardWeight(el: HTMLElement, weight: number | null) {
   const inner = el.dataset.inner;
-  el.dataset.raw = inner ? formatArtistGroup(inner, weight) : formatArtistCard(cardName(el), weight);
+  const formatted = inner ? formatArtistGroup(inner, weight) : formatArtistCard(cardName(el), weight);
+  el.dataset.raw = applyMute(formatted, el.classList.contains("is-off"));
   paintCard(el, weight);
 }
 

@@ -1,4 +1,5 @@
 import { blobUrl } from "@/api/assets";
+import { stripMutedArtists } from "./artistCards";
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
 import type {
   Artwork,
@@ -134,13 +135,13 @@ export function cloneForm(form: StudioForm): StudioForm {
 export function enabledCharacters(form: StudioForm) {
   return (form.characters || [])
     .filter((c) => c.enabled !== false)
-    .map((c) => ({ prompt: c.prompt || "", uc: c.uc || "", x: c.x, y: c.y }));
+    .map((c) => ({ prompt: stripMutedArtists(c.prompt || ""), uc: stripMutedArtists(c.uc || ""), x: c.x, y: c.y }));
 }
 
 export function formToPayload(form: StudioForm, extras: Record<string, unknown> = {}) {
   return {
-    prompt: form.prompt,
-    uc: form.uc,
+    prompt: stripMutedArtists(form.prompt),
+    uc: stripMutedArtists(form.uc),
     characters: enabledCharacters(form),
     model: form.model,
     effort: form.effort,
@@ -686,6 +687,13 @@ export function costLabel(status?: TokenStatus | null) {
 export function genLabel(nSamples: number, busy: boolean, progress: string) {
   if (busy) return progress || "生成中";
   return nSamples === 1 ? "生成 1 张" : `生成 ${nSamples} 张`;
+}
+
+/** 收藏夹下载的文件名，规则和生图一致。 */
+export function artworkDownloadName(item: Pick<Artwork, "name" | "id" | "hash" | "params">, kind: StudioDownloadKind) {
+  const seedRaw = (item.params || {}).seed as unknown;
+  const seed = typeof seedRaw === "number" ? seedRaw : seedRaw == null || seedRaw === "" ? Number.NaN : Number(seedRaw);
+  return studioDownloadName(item.name, item.id || item.hash, kind, Number.isFinite(seed) ? seed : null);
 }
 
 export function studioDownloadName(name?: string, id?: string, kind: StudioDownloadKind = "original", seed?: number | null) {

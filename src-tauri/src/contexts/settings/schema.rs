@@ -245,6 +245,14 @@ pub static SCHEMA: Lazy<Vec<(&'static str, Section)>> = Lazy::new(|| {
                 ("showBattery", bool_(true)),
             ],
         ),
+        (
+            "network",
+            vec![
+                ("proxyMode", strs("system", &["system", "custom", "none"])),
+                ("proxyUrl", str_("", 200)),
+                ("connectTimeoutSec", int(10, 3, 60)),
+            ],
+        ),
         ("system", vec![("ssePingSec", int(15, 5, 60)), ("importConcurrency", int(2, 1, 6))]),
     ]
 });

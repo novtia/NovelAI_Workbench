@@ -133,6 +133,7 @@ export function useCommands() {
   async function deleteOpenItem() {
     const { session, openItem } = read();
     if (!openItem) return;
+    if (!(await confirmDialog("删除这张图片？会同时删除本地文件，无法恢复。", { title: "删除图片", confirmText: "删除" }))) return;
     await galleryApi.deleteItem(openItem.id);
     session.setOpenId(null);
     await refresh(openItem.albumId);
@@ -143,7 +144,7 @@ export function useCommands() {
     const { session, album, albumId, items } = read();
     if (!albumId || !items.length) return;
     const name = album?.name || "当前收藏夹";
-    if (getSettings().gallery.confirmDelete && !(await confirmDialog(`清空「${name}」中的 ${items.length} 张图片？`, { title: "清空收藏夹", confirmText: "清空" }))) return;
+    if (getSettings().gallery.confirmDelete && !(await confirmDialog(`清空「${name}」中的 ${items.length} 张图片？会同时删除本地文件，无法恢复。`, { title: "清空收藏夹", confirmText: "清空" }))) return;
     await galleryApi.clearAlbum(albumId);
     session.setOpenId(null);
     await refresh();
@@ -163,7 +164,9 @@ export function useCommands() {
       return;
     }
     const n = target.count ?? 0;
-    const msg = n ? `删除「${target.name}」以及其中 ${n} 张图片？` : `删除收藏夹「${target.name}」？`;
+    const msg = n
+      ? `删除「${target.name}」以及其中 ${n} 张图片？会同时删除本地文件，无法恢复。`
+      : `删除收藏夹「${target.name}」？会同时删除本地文件，无法恢复。`;
     if (getSettings().gallery.confirmDelete && !(await confirmDialog(msg, { title: "删除收藏夹", confirmText: "删除" }))) return;
     try {
       await galleryApi.deleteAlbum(id);

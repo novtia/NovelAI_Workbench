@@ -4,12 +4,14 @@ import {
   artistLibraryNames,
   filterArtistNames,
   findArtistCards,
+  applyMute,
   formatArtistCard,
   formatArtistGroup,
   joinPromptSegments,
   parseWeightInput,
   splitPromptSegments,
   stepWeight,
+  stripMutedArtists,
   suggestQueryFromSegment,
 } from "./artistCards";
 
@@ -69,6 +71,8 @@ describe("artist cards", () => {
       "0.92::artist:a ::, 1girl, artist:b",
       "a  ,  [artist:x]  ,\n0.5::artist:y2 ::  tail",
       "artist:only",
+      "#!0.65::artist:aoi ogata::, artist:b",
+      "#![artist:foo], #!artist:bar",
     ]) {
       expect(joinPromptSegments(splitPromptSegments(text))).toBe(text);
     }
@@ -123,6 +127,50 @@ describe("artist cards", () => {
     expect(
       artistLibraryNames([{ artists: ["Foo_Bar"] }, { artists: ["artist:foo bar"] }, { artists: [] }, { artists: ["baz"] }]),
     ).toEqual(["Foo_Bar", "baz"]);
+  });
+
+  it("reads a mute prefix on all three card forms", () => {
+    const text = "#!0.65::artist:aoi ogata::, #![artist:foo], #!artist:bar, artist:baz";
+    const cards = findArtistCards(text);
+    expect(cards.map((c) => c.raw)).toEqual(["#!0.65::artist:aoi ogata::", "#![artist:foo]", "#!artist:bar", "artist:baz"]);
+    expect(cards.map((c) => c.name)).toEqual(["aoi ogata", "foo", "bar", "baz"]);
+    expect(cards.map((c) => c.weight)).toEqual([0.65, null, null, null]);
+    expect(cards.map((c) => c.bracket)).toEqual([false, true, false, false]);
+    expect(cards.map((c) => c.muted)).toEqual([true, true, true, false]);
+    expect(findArtistCards("0.92::artist:foo::")[0].muted).toBe(false);
+
+    const group = findArtistCards("#!1.1::artist:thirty 8ght, thirty8ght::")[0];
+    expect(group.muted).toBe(true);
+    expect(group.names).toEqual(["thirty 8ght", "thirty8ght"]);
+    expect(group.weight).toBe(1.1);
+    expect(findArtistCards("#!-0.50::artist:foo::")[0].weight).toBe(-0.5);
+  });
+
+  it("keeps the mute prefix when the weight is rewritten", () => {
+    expect(applyMute(formatArtistCard("aoi ogata", 0.7), true)).toBe("#!0.70::artist:aoi ogata::");
+    expect(applyMute(formatArtistCard("tarapisu153", 0.92), true)).toBe("#!0.92::artist:tarapisu153 ::");
+    expect(applyMute(formatArtistGroup("artist:a, b2", 0.9), true)).toBe("#!0.90::artist:a, b2 ::");
+    expect(applyMute("#!0.65::artist:aoi ogata::", false)).toBe("0.65::artist:aoi ogata::");
+    expect(applyMute("#!artist:foo", true)).toBe("#!artist:foo");
+  });
+
+  it("strips muted artists and the comma left behind", () => {
+    expect(stripMutedArtists("artist:a, #!artist:b, 1girl")).toBe("artist:a, 1girl");
+    expect(stripMutedArtists("#!artist:a, 1girl")).toBe("1girl");
+    expect(stripMutedArtists("  #!artist:a, 1girl")).toBe("1girl");
+    expect(stripMutedArtists("1girl, #!artist:a")).toBe("1girl");
+    expect(stripMutedArtists("#!artist:a")).toBe("");
+    expect(stripMutedArtists("#!artist:a, #!artist:b, 1girl")).toBe("1girl");
+    expect(stripMutedArtists("#!0.65::artist:aoi ogata::, 1.50::artist:nnk_(nongnong)::, 1girl")).toBe(
+      "1.50::artist:nnk_(nongnong)::, 1girl",
+    );
+    expect(stripMutedArtists("#![artist:foo], solo")).toBe("solo");
+    expect(stripMutedArtists("1girl, #!1.1::artist:a, b::, solo")).toBe("1girl, solo");
+    expect(stripMutedArtists("artist:a, #!artist:b, #!artist:c, solo")).toBe("artist:a, solo");
+    const kept = "0.92::artist:a ::, artist:b, [artist:bar], 1girl";
+    expect(stripMutedArtists(kept)).toBe(kept);
+    expect(stripMutedArtists("")).toBe("");
+    expect(stripMutedArtists("hello #! world")).toBe("hello #! world");
   });
 
   it("replaces the typed segment with a card and adds a comma on its right", () => {

@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use workbench_lib::app::Services;
 use workbench_lib::contexts::generation::domain::GenerationJob;
+use workbench_lib::kernel::blobs::Bucket;
 use workbench_lib::kernel::integrity::{rebuild_projections, verify_all};
 
 /// 入队前会检查 Token 是否已配置（对应 Python 测试里的 FakeVault）。
@@ -285,7 +286,8 @@ fn history_pages_past_jobs_keep_and_skips_other_sources() {
 fn finish_with_images(svc: &Services, source: &str, created: i64, sizes: &[(u32, u32)]) -> (String, Vec<Value>) {
     let job = svc.generation.enqueue(&json!({"prompt": "1girl", "source": source})).unwrap();
     let id = job["id"].as_str().unwrap().to_string();
-    let items: Vec<Value> = sizes.iter().map(|s| svc.generation.store_image(&png_image(*s)).unwrap()).collect();
+    let bucket = Bucket::for_job(source, &json!({}));
+    let items: Vec<Value> = sizes.iter().map(|s| svc.generation.store_image(&bucket, &png_image(*s)).unwrap()).collect();
     let mut agg: GenerationJob = svc.kernel.load(&id).unwrap();
     agg.complete(Value::Array(items.clone()), json!({"prompt": "1girl", "seed": 7}), Value::Null, created);
     svc.kernel.commit(&mut agg, None).unwrap();
@@ -360,6 +362,41 @@ fn delete_history_keeps_blobs_and_album_items() {
     let k = &svc.kernel;
     rebuild_projections(&k.store, &k.projectors).unwrap();
     assert_eq!(history_map(&svc), expected);
+    let report = verify_all(&k.store, &k.blobs, &k.projectors).unwrap();
+    assert_eq!(report["ok"], json!(true), "{report}");
+}
+
+#[test]
+fn resume_pending_parks_running_and_keeps_queue_order() {
+    let dir = tempfile::tempdir().unwrap();
+    let svc = booted(dir.path());
+    let mut ids = Vec::new();
+    for prompt in ["a", "b", "c"] {
+        let job = svc.generation.enqueue(&json!({"prompt": prompt, "source": "lottery"})).unwrap();
+        ids.push(job["id"].as_str().unwrap().to_string());
+    }
+    let mut rx = svc.generation.take_receiver().unwrap();
+    while rx.try_recv().is_ok() {}
+    svc.generation.mutate_job(&ids[1], |job| job.start(1));
+    assert_eq!(svc.generation.get_job(&ids[1]).unwrap().unwrap()["status"], "running");
+
+    assert_eq!(svc.generation.resume_pending().unwrap(), 3);
+    let mut resumed = Vec::new();
+    while let Ok(id) = rx.try_recv() {
+        resumed.push(id);
+    }
+    assert_eq!(resumed, ids);
+
+    let parked = svc.generation.get_job(&ids[1]).unwrap().unwrap();
+    assert_eq!(parked["status"], "queued");
+    assert!(parked["startedAt"].is_null());
+    assert_eq!(parked["progress"]["text"], "排队中");
+
+    let k = &svc.kernel;
+    rebuild_projections(&k.store, &k.projectors).unwrap();
+    let again = svc.generation.get_job(&ids[1]).unwrap().unwrap();
+    assert_eq!(again["status"], "queued");
+    assert_eq!(again["progress"]["text"], "排队中");
     let report = verify_all(&k.store, &k.blobs, &k.projectors).unwrap();
     assert_eq!(report["ok"], json!(true), "{report}");
 }

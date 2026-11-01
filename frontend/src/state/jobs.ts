@@ -25,6 +25,13 @@ export function useJobStream() {
         qc.setQueryData(queryKeys.jobs, payload.jobs as Job[]);
         return;
       }
+      if (payload.type === "removed" && Array.isArray(payload.ids)) {
+        const gone = new Set(payload.ids.filter((id): id is string => typeof id === "string"));
+        qc.setQueryData(queryKeys.jobs, (old: Job[] | undefined) => (old || []).filter((job) => !gone.has(job.id)));
+        void qc.invalidateQueries({ queryKey: queryKeys.history });
+        void qc.invalidateQueries({ queryKey: queryKeys.lotteryBatches });
+        return;
+      }
       if (payload.type === "preview" && typeof payload.id === "string") {
         qc.setQueryData(queryKeys.jobs, (old: Job[] | undefined) =>
           (old || []).map((job) =>

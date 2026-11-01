@@ -2,6 +2,7 @@ import {
   Brush,
   Database,
   FlaskConical,
+  Globe,
   History,
   Images,
   LayoutDashboard,
@@ -40,6 +41,8 @@ export const NAV_ICONS = {
   layout: LayoutDashboard,
   /** 设置分区：账号与额度 */
   account: WalletCards,
+  /** 设置分区：网络代理 */
+  network: Globe,
   /** 设置分区：数据与系统 */
   system: Database,
 } satisfies Record<string, LucideIcon>;

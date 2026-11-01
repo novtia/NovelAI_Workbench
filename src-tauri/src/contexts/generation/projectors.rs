@@ -88,6 +88,24 @@ impl Projector for GenerationProjector {
                     params_from_iter([sql(get(p, "startedAt")), S::Integer(event.version), S::Text(id.clone())]),
                 )?;
             }
+            "JobParked" => {
+                let row: Option<Option<String>> = conn
+                    .query_row("SELECT progress_json FROM projections_jobs WHERE id=?1", params![id], |r| r.get(0))
+                    .ok();
+                let mut progress = row
+                    .flatten()
+                    .filter(|s| !s.is_empty())
+                    .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+                    .filter(|v| v.is_object())
+                    .unwrap_or_else(|| json!({}));
+                progress["text"] = json!("排队中");
+                progress["step"] = Value::Null;
+                progress["sample"] = json!(0);
+                conn.execute(
+                    "UPDATE projections_jobs SET status='queued', started_at=NULL, progress_json=?1, version=?2 WHERE id=?3",
+                    params![dumps(&progress), event.version, id],
+                )?;
+            }
             "JobPreviewed" => {
                 let row: Option<Option<String>> = conn
                     .query_row("SELECT progress_json FROM projections_jobs WHERE id=?1", params![id], |r| r.get(0))

@@ -242,7 +242,9 @@ export function useTestRun() {
   async function deleteTestSet() {
     if (!testSet) return;
     const n = testSet.count ?? 0;
-    const msg = n ? `删除测试集「${testSet.name}」以及其中 ${n} 张图片？` : `删除测试集「${testSet.name}」？`;
+    const msg = n
+      ? `删除测试集「${testSet.name}」以及其中 ${n} 张图片？会同时删除本地文件，无法恢复。`
+      : `删除测试集「${testSet.name}」？会同时删除本地文件，无法恢复。`;
     if (!(await confirmDialog(msg, { title: "删除测试集", confirmText: "删除" }))) return;
     const id = testSet.id;
     try {

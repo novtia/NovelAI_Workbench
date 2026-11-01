@@ -6,6 +6,7 @@ use common::{bare, boot, err, ids, import, names, png};
 use serde_json::{json, Value};
 use workbench_lib::contexts::gallery::application::{ensure_default_album, ensure_single_artist_album};
 use workbench_lib::contexts::gallery::rules::{SINGLE_ARTIST_ALBUM_ID, SINGLE_ARTIST_ALBUM_NAME, TEST_SET_ID_PREFIX};
+use workbench_lib::kernel::blobs::Bucket;
 use workbench_lib::kernel::integrity::rebuild_projections;
 
 fn strs(v: &[&str]) -> Value {
@@ -211,7 +212,7 @@ fn test_sets_do_not_count_as_regular_albums() {
     assert!(err(g.delete_album("default")).contains("至少保留"));
     let id = only_test["id"].as_str().unwrap();
     g.delete_album(id).unwrap();
-    assert_eq!(g.get_album(id).unwrap().unwrap()["deleted"], json!(true));
+    assert!(g.get_album(id).unwrap().is_none());
 }
 
 #[test]
@@ -233,7 +234,7 @@ fn gallery_job_completion_binds_into_test_set() {
     ensure_single_artist_album(g).unwrap();
     let album = g.create_test_set("预设A").unwrap();
     let id = album["id"].as_str().unwrap();
-    let digest = svc.kernel.blobs.put(&png(7)).unwrap();
+    let digest = svc.kernel.blobs.put(&Bucket::Studio, &png(7)).unwrap();
     let client = json!({
         "testSetId": id,
         "testIndex": 3,
@@ -262,7 +263,7 @@ fn target_album_job_binds_straight_into_single_artist_album() {
     ensure_single_artist_album(g).unwrap();
     let album = g.find_single_artist_album(false).unwrap().unwrap();
     let id = album["id"].as_str().unwrap();
-    let digest = svc.kernel.blobs.put(&png(11)).unwrap();
+    let digest = svc.kernel.blobs.put(&Bucket::Studio, &png(11)).unwrap();
     let client = json!({
         "targetAlbumId": id,
         "artists": ["new_artist"],
@@ -285,7 +286,7 @@ fn bound_image_keeps_generation_meta_with_characters() {
     ensure_single_artist_album(g).unwrap();
     let album = g.create_test_set("预设B").unwrap();
     let id = album["id"].as_str().unwrap();
-    let digest = svc.kernel.blobs.put(&png(9)).unwrap();
+    let digest = svc.kernel.blobs.put(&Bucket::Studio, &png(9)).unwrap();
     let client = json!({
         "testSetId": id,
         "testIndex": 0,
@@ -314,7 +315,7 @@ fn other_sources_are_not_bound() {
     let svc = bare(dir.path());
     let album = svc.gallery.create_test_set("预设A").unwrap();
     let id = album["id"].as_str().unwrap();
-    let digest = svc.kernel.blobs.put(&png(8)).unwrap();
+    let digest = svc.kernel.blobs.put(&Bucket::Studio, &png(8)).unwrap();
     let items = [json!({"blobHash": digest})];
     let client = json!({"testSetId": id, "artists": ["hiro"], "artistLine": "artist:hiro"});
     assert!(svc.generation.bind_test_set_items("lottery", &client, &items, &json!({})).is_empty());
@@ -355,13 +356,13 @@ fn gallery_view_selection_is_persisted_in_database() {
 fn promote_extracts_artists_from_prompt() {
     let dir = tempfile::tempdir().unwrap();
     let svc = boot(dir.path());
-    let digest = svc.kernel.blobs.put(&png(7)).unwrap();
+    let digest = svc.kernel.blobs.put(&Bucket::Studio, &png(7)).unwrap();
     let prompt = "1.40::artist:ge_tianzun::, 0.35::artist:nnk_(nongnong)::, [artist:foo bar], 1girl";
     let items = svc.generation.promote("default", &[digest], &json!({"prompt": prompt, "name": "nai.png"})).unwrap();
     assert_eq!(items[0]["artists"], json!(["ge_tianzun", "nnk_(nongnong)", "foo bar"]));
     assert!(items[0]["artistLine"].as_str().unwrap().starts_with("1.40::artist:ge_tianzun::"));
     // 已经带画师列表的不被覆盖
-    let digest2 = svc.kernel.blobs.put(&png(8)).unwrap();
+    let digest2 = svc.kernel.blobs.put(&Bucket::Studio, &png(8)).unwrap();
     let items = svc.generation.promote("default", &[digest2], &json!({"prompt": prompt, "artists": ["solo"]})).unwrap();
     assert_eq!(items[0]["artists"], json!(["solo"]));
 }

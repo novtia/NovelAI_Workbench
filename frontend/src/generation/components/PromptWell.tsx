@@ -17,6 +17,7 @@ import {
   formatWeight,
   parseWeightInput,
   stepWeight,
+  stripMutedArtists,
   suggestQueryFromSegment,
   tagKey,
   tokenFillPercent,
@@ -46,6 +47,7 @@ import {
   serializeNode,
   serializeSelection,
   setCaretOffset,
+  setCardMuted,
   setCardWeight,
 } from "@/ui/promptDom";
 
@@ -449,6 +451,15 @@ export function PromptWell({
 
   function onClick(e: MouseEvent<HTMLDivElement>) {
     const t = e.target as HTMLElement;
+    const nameEl = t.closest<HTMLElement>(".ac-name");
+    if (nameEl) {
+      const card = nameEl.closest<HTMLElement>(".artist-card");
+      if (card) {
+        setCardMuted(card, !card.classList.contains("is-off"));
+        emit(false);
+      }
+      return;
+    }
     const delBtn = t.closest<HTMLElement>("button.ac-del");
     if (delBtn) {
       const card = delBtn.closest<HTMLElement>(".artist-card");
@@ -466,7 +477,7 @@ export function PromptWell({
 
   function onMouseDown(e: MouseEvent<HTMLDivElement>) {
     // 点加减不能抢走编辑器的焦点和光标。
-    if ((e.target as HTMLElement).closest("button.ac-btn, button.ac-del")) e.preventDefault();
+    if ((e.target as HTMLElement).closest("button.ac-btn, button.ac-del, .ac-name")) e.preventDefault();
     else setSug(null);
   }
 
@@ -602,10 +613,11 @@ export function PromptWell({
 
 /** 只统计传进来的这一个输入框；悬停显示它自己占用的 token。 */
 export const TokenBar = memo(function TokenBar({ text, label }: { text: string; label?: string }) {
-  const n = estimateTokens(text);
+  const sent = stripMutedArtists(text);
+  const n = estimateTokens(sent);
   const warn = useSettings((s) => s.generation.tokenWarn) && n > TOKEN_LIMIT;
   const tip = `${label ? `${label} ` : ""}占用约 ${n} tokens · 总上限 ${TOKEN_LIMIT}${warn ? "（已超出）" : ""}`;
-  const p = tokenFillPercent(text);
+  const p = tokenFillPercent(sent);
   return (
     <div className={`token-bar${warn ? " over" : ""}`} data-tip={tip} aria-label={tip}>
       <span className="track">

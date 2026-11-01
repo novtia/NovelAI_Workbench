@@ -1,10 +1,11 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { artistText, asMeta, charCaptions, copyText, negativeText, promptText, sourceLabel } from "@/data";
 import type { Artwork } from "@/data/types";
-import { IconCopy, IconX } from "@/generation/components/icons";
+import { IconCopy, IconDownload, IconX } from "@/generation/components/icons";
 import { pushToast } from "@/state";
 import { ArtistHoverTrigger } from "./ArtistHover";
 import { BasketAddButton } from "./BasketAddButton";
+import { DownloadMenu, downloadArtwork, useDownloadPop } from "./DownloadMenu";
 
 export function ImageDetail({
   item,
@@ -26,6 +27,10 @@ export function ImageDetail({
   id?: string;
 }) {
   const p = asMeta(item?.params);
+  const download = useDownloadPop();
+  useEffect(() => {
+    download.close();
+  }, [item?.id, download.close]);
   const size =
     p.width && p.height ? `${p.width} × ${p.height}` : item?.width && item?.height ? `${item.width} × ${item.height}` : "—";
   const chars = item ? charCaptions(item) : [];
@@ -127,6 +132,16 @@ export function ImageDetail({
           )}
         </div>
         <div className="insp-foot">
+          <button
+            className="btn insp-download"
+            type="button"
+            disabled={!item?.imageUrl}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => item && download.toggle(e.currentTarget)}
+          >
+            <IconDownload />
+            下载
+          </button>
           <button className="btn" type="button" onClick={() => void copyPrompt()}>
             复制 Prompt
           </button>
@@ -136,6 +151,13 @@ export function ImageDetail({
           <button className="btn btn-danger" type="button" onClick={onDelete}>
             删除
           </button>
+          <DownloadMenu
+            open={download.open}
+            left={download.pos.left}
+            top={download.pos.top}
+            onClose={download.close}
+            onPick={(kind) => item && void downloadArtwork(item, kind)}
+          />
         </div>
       </div>
     </aside>

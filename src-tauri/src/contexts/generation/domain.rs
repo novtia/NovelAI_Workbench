@@ -138,6 +138,14 @@ impl GenerationJob {
         self.record("JobStarted", json!({"startedAt": started_at}));
     }
 
+    /// 进程中断时把「生成中」退回队列。进度停在半路，界面不能继续显示旧的步数。
+    pub fn park(&mut self) {
+        if self.status != "running" {
+            return;
+        }
+        self.record("JobParked", json!({}));
+    }
+
     pub fn preview(&mut self, sample: i64, step: Value, blob_hash: Option<&str>, text: &str) {
         self.record(
             "JobPreviewed",
@@ -227,6 +235,13 @@ impl Aggregate for GenerationJob {
             "JobStarted" => {
                 self.status = "running".into();
                 self.started_at = to_int(get(p, "startedAt"));
+            }
+            "JobParked" => {
+                self.status = "queued".into();
+                self.started_at = None;
+                self.progress.insert("text".into(), json!("排队中"));
+                self.progress.insert("step".into(), Value::Null);
+                self.progress.insert("sample".into(), json!(0));
             }
             "JobPreviewed" => {
                 self.preview_hash = get(p, "previewHash").as_str().map(|s| s.to_string());

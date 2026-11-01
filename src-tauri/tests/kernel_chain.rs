@@ -67,10 +67,13 @@ fn verify_detects_missing_blob_and_tampered_chain() {
 
     // 删掉一个被引用的图片文件：校验必须报缺失
     let hash = item["hash"].as_str().unwrap().to_string();
-    std::fs::remove_file(k.blobs.path_for(&hash)).unwrap();
+    std::fs::remove_file(k.blobs.find(&hash).unwrap()).unwrap();
     let report = verify_all(&k.store, &k.blobs, &k.projectors).unwrap();
     assert_eq!(report["ok"], json!(false));
-    assert!(report["blobs"]["missing"].as_array().unwrap().iter().any(|h| h == &json!(hash)), "{report}");
+    assert!(
+        report["blobs"]["missing"].as_array().unwrap().iter().any(|h| h.as_str().unwrap_or("").contains(&hash)),
+        "{report}"
+    );
 
     // 篡改一条事件的内容：事件链必须断
     let conn = k.store.connect().unwrap();

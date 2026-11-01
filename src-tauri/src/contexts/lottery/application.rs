@@ -1,11 +1,14 @@
 use super::algorithm::{draw_from_pool, parse_entries, pool_hash, tag_key, DrawParams};
 use super::domain::{
-    attach_job_previews, default_controls, stamp_draw_ids, DrawBatch, LotteryBoard, BOARD_ID,
+    attach_job_previews, default_controls, lottery_client_draw_id, stamp_draw_ids, DrawBatch, LotteryBoard, BOARD_ID,
 };
+use super::projectors::LotteryProjector;
 use crate::contexts::gallery::application::GalleryService;
-use crate::kernel::bus::Kernel;
+use crate::kernel::bus::{Kernel, Projector};
 use crate::kernel::clock::{new_id, now_ms};
-use crate::kernel::{DomainError, Res};
+use crate::kernel::purge::{stream_events, Purge};
+use crate::kernel::store::row_to_event;
+use crate::kernel::{DomainError, Res, StoredEvent};
 use crate::pyjson::dumps;
 use crate::pyrandom::PyRandom;
 use crate::util::{get, has_value, num_f, py_str, to_float, to_int, truthy};
@@ -453,31 +456,61 @@ impl LotteryService {
                 parsed as usize
             }
         };
-        let mut batch: DrawBatch = self.k.load(batch_id)?;
-        if batch.draws.len() == draws.len() {
-            for (agg, proj) in batch.draws.iter_mut().zip(draws.iter()) {
-                if !truthy(get(agg, "id")) && truthy(get(proj, "id")) {
-                    agg["id"] = get(proj, "id").clone();
+        let remaining: Vec<Value> = draws
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != index)
+            .map(|(_, d)| strip_draw(d))
+            .collect();
+        let mut plan = Purge::default();
+        {
+            let conn = self.k.store.connect()?;
+            let jobs = jobs_of_batch(&conn, batch_id)?;
+            if remaining.is_empty() {
+                plan.drop_aggregate(batch_id);
+                for (id, _, _) in &jobs {
+                    plan.drop_aggregate(id);
+                }
+            } else {
+                rewrite_created(&conn, batch_id, &remaining, &mut plan)?;
+                for (id, client, _) in &jobs {
+                    if job_matches_draw(batch_id, client, &draw_id, index) {
+                        plan.drop_aggregate(id);
+                    }
                 }
             }
         }
-        batch.remove_draw(index as i64, if draw_id.is_empty() { None } else { Some(&draw_id) })?;
-        self.k.commit(&mut batch, None)?;
-        self.get_batch(batch_id, false)?.ok_or_else(|| DomainError::not_found("批次不存在"))
+        if remaining.is_empty() {
+            self.k.purge(&plan)?;
+            return Ok(Value::Null);
+        }
+        let batch_owned = batch_id.to_string();
+        self.k.purge_with(&plan, &mut |conn| {
+            let jobs = jobs_of_batch(conn, &batch_owned)?;
+            let events = completed_events(conn, &jobs.iter().map(|(id, _, _)| id.clone()).collect::<Vec<_>>())?;
+            let projector = LotteryProjector;
+            for event in &events {
+                projector.handle(event, conn)?;
+            }
+            Ok(())
+        })?;
+        Ok(self.get_batch(batch_id, false)?.unwrap_or(Value::Null))
     }
 
     pub fn delete_batch(&self, batch_id: &str) -> Res<()> {
-        let mut batch: DrawBatch = self.k.load(batch_id)?;
-        batch.delete()?;
-        self.k.commit(&mut batch, None)?;
+        if self.get_batch(batch_id, false)?.is_none() {
+            return Err(DomainError::not_found("批次不存在"));
+        }
+        let mut plan = Purge::default();
+        plan.drop_aggregate(batch_id);
+        {
+            let conn = self.k.store.connect()?;
+            for (id, _, _) in jobs_of_batch(&conn, batch_id)? {
+                plan.drop_aggregate(&id);
+            }
+        }
+        self.k.purge(&plan)?;
         Ok(())
-    }
-
-    pub fn restore_batch(&self, batch_id: &str) -> Res<Value> {
-        let mut batch: DrawBatch = self.k.load(batch_id)?;
-        batch.restore()?;
-        self.k.commit(&mut batch, None)?;
-        self.get_batch(batch_id, true)?.ok_or_else(|| DomainError::not_found("批次不存在"))
     }
 
     /// 抽奖出图任务完成时，把预览补挂到还没有预览的画师串上；失败就算了。
@@ -561,4 +594,73 @@ struct Prepared {
     fixed: Vec<Value>,
     board: Value,
     caps: Value,
+}
+
+fn strip_draw(draw: &Value) -> Value {
+    let mut copy = draw.clone();
+    if let Some(obj) = copy.as_object_mut() {
+        obj.remove("previews");
+        obj.remove("jobId");
+    }
+    copy
+}
+
+fn job_matches_draw(batch_id: &str, client: &Value, draw_id: &str, index: usize) -> bool {
+    let id = lottery_client_draw_id(batch_id, client);
+    if !draw_id.is_empty() {
+        return id == draw_id;
+    }
+    to_int(get(client, "drawIndex")) == Some(index as i64)
+}
+
+fn jobs_of_batch(conn: &rusqlite::Connection, batch_id: &str) -> Res<Vec<(String, Value, String)>> {
+    let mut stmt = conn.prepare("SELECT id, status, client_json FROM projections_jobs WHERE source='lottery'")?;
+    let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?)))?;
+    let mut out = Vec::new();
+    for row in rows {
+        let (id, status, client_json) = row?;
+        let client = client_json.and_then(|s| serde_json::from_str::<Value>(&s).ok()).unwrap_or(Value::Null);
+        let row_batch = {
+            let v = get(&client, "batchId");
+            if truthy(v) { py_str(v).trim().to_string() } else { String::new() }
+        };
+        if row_batch == batch_id {
+            out.push((id, client, status));
+        }
+    }
+    Ok(out)
+}
+
+fn rewrite_created(conn: &rusqlite::Connection, batch_id: &str, draws: &[Value], plan: &mut Purge) -> Res<()> {
+    let rows = stream_events(conn, batch_id)?;
+    let mut saw = false;
+    for row in &rows {
+        if row.event_type == "DrawRemoved" {
+            plan.events.insert(row.seq);
+        } else if row.event_type == "DrawBatchCreated" {
+            let mut payload = row.payload.clone();
+            payload["draws"] = Value::Array(draws.to_vec());
+            plan.rewrites.insert(row.seq, payload);
+            saw = true;
+        }
+    }
+    if !saw {
+        return Err(DomainError::internal("批次缺少创建事件"));
+    }
+    Ok(())
+}
+
+fn completed_events(conn: &rusqlite::Connection, ids: &[String]) -> Res<Vec<StoredEvent>> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM events WHERE aggregate_id=?1 AND event_type='JobCompleted' ORDER BY version DESC LIMIT 1",
+    )?;
+    let mut out = Vec::new();
+    for id in ids {
+        let mut rows = stmt.query(params![id])?;
+        if let Some(row) = rows.next()? {
+            out.push(row_to_event(row)?);
+        }
+    }
+    out.sort_by_key(|e| e.global_seq);
+    Ok(out)
 }

@@ -142,7 +142,7 @@ pub async fn db_import(app: tauri::AppHandle, s: S<'_>) -> R {
     use tauri_plugin_dialog::DialogExt;
     let svc = s.inner().clone();
     tauri::async_runtime::spawn_blocking(move || -> R {
-        if !svc.generation.list_jobs()?.is_empty() {
+        if svc.generation.has_active_jobs()? {
             return Err(jobs_busy_error());
         }
         let mut dialog = app
@@ -159,7 +159,7 @@ pub async fn db_import(app: tauri::AppHandle, s: S<'_>) -> R {
         };
         let path = picked_path(picked)?;
         // 再查一次：对话框开着的时候可能已经有人提交了任务。
-        if !svc.generation.list_jobs()?.is_empty() {
+        if svc.generation.has_active_jobs()? {
             return Err(jobs_busy_error());
         }
         let emit = progress_emitter(&app);
@@ -202,6 +202,28 @@ pub fn settings_system(s: S<'_>) -> R {
     info["port"] = Value::Null;
     info["version"] = json!(env!("CARGO_PKG_VERSION"));
     Ok(info)
+}
+
+#[tauri::command(async)]
+pub fn storage_status(s: S<'_>) -> R {
+    out(crate::contexts::storage::status(&s.kernel)?)
+}
+
+#[tauri::command(async)]
+pub fn storage_plan(s: S<'_>) -> R {
+    let svc = s.inner().clone();
+    out(crate::contexts::storage::plan(&svc.kernel, &svc.data_dir)?)
+}
+
+#[tauri::command(async)]
+pub fn storage_migrate(s: S<'_>) -> R {
+    let svc = s.inner().clone();
+    out(crate::contexts::storage::migrate(&svc.kernel, &svc.data_dir)?)
+}
+
+#[tauri::command(async)]
+pub fn db_vacuum(s: S<'_>) -> R {
+    out(crate::contexts::storage::vacuum(&s.kernel.store)?)
 }
 
 // ---------- 图库 ----------
@@ -265,11 +287,6 @@ pub fn gallery_rename_album(s: S<'_>, id: String, name: Option<String>) -> R {
 pub fn gallery_delete_album(s: S<'_>, id: String) -> R {
     s.gallery.delete_album(&id)?;
     Ok(Value::Null)
-}
-
-#[tauri::command(async)]
-pub fn gallery_restore_album(s: S<'_>, id: String) -> R {
-    out(json!({"album": s.gallery.restore_album(&id)?}))
 }
 
 #[tauri::command(async)]
@@ -353,11 +370,6 @@ pub fn gallery_delete_item(s: S<'_>, id: String) -> R {
 }
 
 #[tauri::command(async)]
-pub fn gallery_restore_item(s: S<'_>, id: String) -> R {
-    out(json!({"item": s.gallery.restore_item(&id)?}))
-}
-
-#[tauri::command(async)]
 pub fn gallery_artwork_at(s: S<'_>, id: String, version: i64) -> R {
     out(json!({"artwork": s.gallery.artwork_at(&id, version)?}))
 }
@@ -402,11 +414,6 @@ pub fn lottery_remove_draw(s: S<'_>, id: String, draw_ref: String) -> R {
 pub fn lottery_delete_batch(s: S<'_>, id: String) -> R {
     s.lottery.delete_batch(&id)?;
     Ok(Value::Null)
-}
-
-#[tauri::command(async)]
-pub fn lottery_restore_batch(s: S<'_>, id: String) -> R {
-    out(json!({"batch": s.lottery.restore_batch(&id)?}))
 }
 
 // ---------- NovelAI / 生图 ----------

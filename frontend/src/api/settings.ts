@@ -75,6 +75,47 @@ export function importDatabase() {
   return call<DbImportResult>("db_import");
 }
 
+export type StorageStatus = {
+  legacyFiles: number;
+  previews: number;
+  failedJobs: number;
+  deletedAlbums: number;
+  deletedArtworks: number;
+  needsOrganize: boolean;
+};
+
+export type StorageReport = {
+  aggregates: number;
+  events: number;
+  rewritten: number;
+  rehashed: number;
+  filesMoved: number;
+  filesCopied: number;
+  filesDeleted: number;
+  bytesFreed: number;
+  filesMissing: number;
+  previewsDeleted: number;
+  applied: boolean;
+  backup?: string;
+  verify?: { ok: boolean };
+};
+
+export function storageStatus() {
+  return call<StorageStatus>("storage_status");
+}
+
+export function storagePlan() {
+  return call<StorageReport>("storage_plan");
+}
+
+export function storageMigrate() {
+  return call<StorageReport>("storage_migrate");
+}
+
+export function vacuumDatabase() {
+  return call<{ before: number; after: number }>("db_vacuum");
+}
+
 export type TransferProgress = { phase: "database" | "blobs"; done: number; total: number };
 
 /** 订阅导出/导入的进度；返回取消订阅函数。 */

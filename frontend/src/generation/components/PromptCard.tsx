@@ -1,4 +1,4 @@
-import { copyText } from "@/data";
+import { copyText, stripMutedArtists } from "@/data";
 import { isMediumEffort, QUALITY_LABEL, UC } from "@/data/studio";
 import { useShallow } from "zustand/react/shallow";
 import { pushToast, useStudioActions, useStudioStore } from "@/state";
@@ -30,7 +30,8 @@ export function PromptCard() {
           type="button"
           title="复制提示词"
           onClick={async () => {
-            pushToast((await copyText(active)) ? "已复制" : "没有可复制的内容", active ? "ok" : "warn");
+            const sent = stripMutedArtists(active);
+            pushToast((await copyText(sent)) ? "已复制" : "没有可复制的内容", sent ? "ok" : "warn");
           }}
         >
           <IconCopy />

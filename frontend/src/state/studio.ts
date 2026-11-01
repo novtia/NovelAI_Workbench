@@ -24,13 +24,11 @@ import {
   persistSelectedSet,
   placePop,
   queryKeys,
-  reencodePngClean,
   shotFromJobItem,
   singleArtistImportError,
   isSingleArtistAlbum,
   isTestSetAlbum,
   studioDownloadName,
-  triggerBlobDownload,
   fileFromShotRef,
   extractArtists,
   defaultI2iBase,
@@ -55,7 +53,7 @@ import type {
   StudioShot,
 } from "@/data/types";
 import type { StudioShotDrag } from "@/data/files";
-import { isImageFile, parseImageMeta } from "@/data/png";
+import { downloadImageFile, isImageFile, parseImageMeta } from "@/data/png";
 import { on } from "./bus";
 import { useEstimateQuery, useJobsQuery, useNaiStatusQuery } from "./queries";
 import { useSession } from "./session";
@@ -525,11 +523,7 @@ export function useStudioActions() {
     const seed = typeof seedRaw === "number" ? seedRaw : Number(seedRaw);
     const filename = studioDownloadName(current?.name, current?.id || current?.blobHash, kind, Number.isFinite(seed) ? seed : null);
     try {
-      const res = await fetch(src);
-      if (!res.ok) throw new Error("无法读取图片");
-      const raw = await res.blob();
-      const blob = kind === "clean" ? await reencodePngClean(raw) : raw;
-      triggerBlobDownload(blob, filename);
+      await downloadImageFile(src, filename, kind === "clean");
     } catch (err) {
       pushToast(err instanceof Error ? err.message : "下载失败", "warn");
     }
@@ -613,20 +607,26 @@ export function useStudioActions() {
       return;
     }
     try {
-      await generationApi.saveToken(token);
+      // 后端只写本地文件就返回；额度要联网查，放到后台刷新，不卡住保存按钮。
+      const saved = await generationApi.saveToken(token);
       store.setTokenInput("");
       closeStudioMenus();
-      await qc.invalidateQueries({ queryKey: queryKeys.naiStatus });
+      qc.setQueryData(queryKeys.naiStatus, saved);
+      void qc.invalidateQueries({ queryKey: queryKeys.naiStatus });
       pushToast("Token 已保存", "ok");
     } catch (err) {
-      pushToast(err instanceof Error ? err.message : "Token 无效", "warn");
+      pushToast(err instanceof Error ? err.message : "Token 保存失败", "warn");
     }
   }
 
   async function clearToken() {
-    await generationApi.clearToken();
-    await qc.invalidateQueries({ queryKey: queryKeys.naiStatus });
-    pushToast("已清除 Token");
+    try {
+      const saved = await generationApi.clearToken();
+      qc.setQueryData(queryKeys.naiStatus, saved);
+      pushToast("已清除 Token");
+    } catch (err) {
+      pushToast(err instanceof Error ? err.message : "清除失败", "warn");
+    }
   }
 
   function resetParams() {

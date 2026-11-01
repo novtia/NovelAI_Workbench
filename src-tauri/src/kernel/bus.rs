@@ -2,23 +2,29 @@ use super::blobs::BlobStore;
 use super::errors::Res;
 use super::events::{Aggregate, StoredEvent};
 use super::hashes::{event_hash, GENESIS_HASH};
+use super::purge::PurgeHook;
 use super::store::EventStore;
 use rusqlite::Connection;
 use serde_json::{json, Value};
-use std::collections::BTreeSet;
+use std::sync::RwLock;
 
 pub trait Projector: Send + Sync {
     fn handle(&self, event: &StoredEvent, conn: &Connection) -> Res<()>;
 }
 
-/// 事件库 + blob 库 + 投影器；对应 Python 的 UnitOfWork。
+/// 事件库 + 图片文件 + 投影器；对应 Python 的 UnitOfWork。
 pub struct Kernel {
     pub store: EventStore,
     pub blobs: BlobStore,
     pub projectors: Vec<Box<dyn Projector>>,
+    pub(crate) purge_hooks: RwLock<Vec<PurgeHook>>,
 }
 
 impl Kernel {
+    pub fn new(store: EventStore, blobs: BlobStore, projectors: Vec<Box<dyn Projector>>) -> Self {
+        Kernel { store, blobs, projectors, purge_hooks: RwLock::new(Vec::new()) }
+    }
+
     pub fn load<A: Aggregate>(&self, id: &str) -> Res<A> {
         let mut agg = A::create(id);
         for ev in self.store.load_stream(id)? {
@@ -81,34 +87,4 @@ pub fn verify_chain(store: &EventStore) -> Res<Value> {
         "errors": errors,
         "truncated": truncated,
     }))
-}
-
-fn is_hash64_any_case(s: &str) -> bool {
-    s.len() == 64
-}
-
-pub fn referenced_hashes(store: &EventStore) -> Res<BTreeSet<String>> {
-    let mut hashes = BTreeSet::new();
-    for event in store.load_all()? {
-        let payload = &event.payload;
-        for key in ["blobHash", "thumbHash", "previewHash"] {
-            if let Some(v) = payload.get(key).and_then(|v| v.as_str()) {
-                if is_hash64_any_case(v) {
-                    hashes.insert(v.to_lowercase());
-                }
-            }
-        }
-        if let Some(items) = payload.get("items").and_then(|v| v.as_array()) {
-            for item in items {
-                for key in ["blobHash", "thumbHash"] {
-                    if let Some(v) = item.get(key).and_then(|v| v.as_str()) {
-                        if is_hash64_any_case(v) {
-                            hashes.insert(v.to_lowercase());
-                        }
-                    }
-                }
-            }
-        }
-    }
-    Ok(hashes)
 }

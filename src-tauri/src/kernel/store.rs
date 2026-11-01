@@ -151,9 +151,27 @@ CREATE TABLE IF NOT EXISTS projections_meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS projections_blob_refs (
+    ref TEXT PRIMARY KEY,
+    hash TEXT NOT NULL,
+    slot TEXT NOT NULL,
+    owner TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_blob_refs_hash ON projections_blob_refs(hash, slot);
+CREATE INDEX IF NOT EXISTS idx_blob_refs_owner ON projections_blob_refs(owner);
 "#;
 
-pub const PROJECTION_TABLES: [&str; 11] = [
+/// 以聚合 id 为主键的投影表：清除聚合时直接删对应的行。
+pub const AGGREGATE_TABLES: [&str; 5] = [
+    "projections_albums",
+    "projections_artworks",
+    "projections_jobs",
+    "projections_param_sets",
+    "projections_lottery_batches",
+];
+
+pub const PROJECTION_TABLES: [&str; 12] = [
     "projections_albums",
     "projections_artworks",
     "projections_jobs",
@@ -165,6 +183,7 @@ pub const PROJECTION_TABLES: [&str; 11] = [
     "projections_identity",
     "projections_settings",
     "projections_meta",
+    "projections_blob_refs",
 ];
 
 pub struct EventStore {

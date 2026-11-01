@@ -37,23 +37,78 @@ impl TokenVault {
             .to_string()
     }
 
-    pub fn save(&self, token: &str) {
+    /// 保存并回读校验；失败要报出来，不能悄悄吞掉（否则界面显示"已保存"但重启就没了）。
+    pub fn save(&self, token: &str) -> Result<(), String> {
         let token = token.trim();
         if token.is_empty() {
-            let _ = std::fs::remove_file(&self.path);
-            return;
+            return match std::fs::remove_file(&self.path) {
+                Ok(()) => Ok(()),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(e) => Err(format!("无法删除 Token 文件 {}：{e}", self.path.display())),
+            };
         }
-        let _ = std::fs::write(&self.path, token);
+        if let Some(parent) = self.path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("无法创建目录 {}：{e}", parent.display()))?;
+        }
+        let tmp = self.path.with_extension("token.tmp");
+        std::fs::write(&tmp, token).map_err(|e| format!("无法写入 Token 文件 {}：{e}", tmp.display()))?;
+        std::fs::rename(&tmp, &self.path).map_err(|e| format!("无法保存 Token 文件 {}：{e}", self.path.display()))?;
+        match std::fs::read_to_string(&self.path) {
+            Ok(back) if back.trim() == token => Ok(()),
+            _ => Err(format!("Token 写入后校验失败：{}", self.path.display())),
+        }
     }
+
+    pub fn path(&self) -> &std::path::Path {
+        &self.path
+    }
+}
+
+/// 网络代理设置。
+#[derive(Clone, Debug, PartialEq)]
+pub struct NetConfig {
+    /// system = 跟随系统/环境变量；custom = 自定义；none = 直连
+    pub mode: String,
+    pub proxy_url: String,
+    pub connect_timeout: f64,
+}
+
+impl Default for NetConfig {
+    fn default() -> Self {
+        NetConfig { mode: "system".into(), proxy_url: String::new(), connect_timeout: 10.0 }
+    }
+}
+
+/// reqwest 的错误文本只有 "error sending request"，把底层原因一起带出来才看得懂。
+pub fn describe_err(e: &reqwest::Error) -> String {
+    use std::error::Error;
+    let mut text = e.to_string();
+    let mut src = e.source();
+    while let Some(s) = src {
+        let part = s.to_string();
+        if !text.contains(&part) {
+            text.push_str("：");
+            text.push_str(&part);
+        }
+        src = s.source();
+    }
+    text
+}
+
+fn net_err(e: reqwest::Error) -> NaiError {
+    NaiError::new(502, format!("无法连接 NovelAI：{}", describe_err(&e)))
 }
 
 type FloatProvider = Arc<dyn Fn() -> f64 + Send + Sync>;
 type StringProvider = Arc<dyn Fn() -> String + Send + Sync>;
 
+type NetProvider = Arc<dyn Fn() -> NetConfig + Send + Sync>;
+
 pub struct NaiGateway {
     pub vault: Arc<TokenVault>,
     timeout_provider: RwLock<Option<FloatProvider>>,
     base_url_provider: RwLock<Option<StringProvider>>,
+    net_provider: RwLock<Option<NetProvider>>,
 }
 
 fn tier_name(tier: i64) -> String {
@@ -95,7 +150,40 @@ fn int_of(v: &Value) -> i64 {
 
 impl NaiGateway {
     pub fn new(vault: Arc<TokenVault>) -> Self {
-        NaiGateway { vault, timeout_provider: RwLock::new(None), base_url_provider: RwLock::new(None) }
+        NaiGateway {
+            vault,
+            timeout_provider: RwLock::new(None),
+            base_url_provider: RwLock::new(None),
+            net_provider: RwLock::new(None),
+        }
+    }
+
+    pub fn set_net_provider(&self, p: NetProvider) {
+        *self.net_provider.write().unwrap_or_else(|e| e.into_inner()) = Some(p);
+    }
+
+    fn net_config(&self) -> NetConfig {
+        self.net_provider.read().unwrap_or_else(|e| e.into_inner()).as_ref().map(|p| p()).unwrap_or_default()
+    }
+
+    /// 按网络设置套上代理；自定义地址不合法时直接报错，不要悄悄直连。
+    fn apply_net(&self, mut b: reqwest::ClientBuilder) -> NaiRes<reqwest::ClientBuilder> {
+        let cfg = self.net_config();
+        match cfg.mode.as_str() {
+            "none" => b = b.no_proxy(),
+            "custom" => {
+                let url = cfg.proxy_url.trim();
+                if url.is_empty() {
+                    return Err(NaiError::new(400, "网络代理选了「自定义」，但没有填代理地址"));
+                }
+                let url = if url.contains("://") { url.to_string() } else { format!("http://{url}") };
+                let proxy = reqwest::Proxy::all(&url)
+                    .map_err(|e| NaiError::new(400, format!("代理地址无效 {url}：{e}")))?;
+                b = b.proxy(proxy);
+            }
+            _ => {}
+        }
+        Ok(b.connect_timeout(Duration::from_secs_f64(cfg.connect_timeout.clamp(1.0, 120.0))))
     }
 
     pub fn set_timeout_provider(&self, p: FloatProvider) {
@@ -126,9 +214,7 @@ impl NaiGateway {
 
     fn gen_client(&self) -> NaiRes<reqwest::Client> {
         let t = Duration::from_secs_f64(self.gen_timeout().max(1.0));
-        reqwest::Client::builder()
-            .connect_timeout(t)
-            .read_timeout(t)
+        self.apply_net(reqwest::Client::builder().read_timeout(t))?
             .build()
             .map_err(|e| NaiError::new(502, format!("无法初始化网络：{e}")))
     }
@@ -160,18 +246,18 @@ impl NaiGateway {
             Some(t) if !t.is_empty() => t.to_string(),
             _ => self.token()?,
         };
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(20))
+        let client = self
+            .apply_net(reqwest::Client::builder().timeout(Duration::from_secs(20)))?
             .build()
-            .map_err(|e| NaiError::new(502, format!("无法连接 NovelAI：{e}")))?;
+            .map_err(net_err)?;
         let resp = client
             .get(format!("{}/user/subscription", self.image_api()))
             .headers(Self::headers(&token, "*/*"))
             .send()
             .await
-            .map_err(|e| NaiError::new(502, format!("无法连接 NovelAI：{e}")))?;
+            .map_err(net_err)?;
         let status = resp.status().as_u16();
-        let bytes = resp.bytes().await.map_err(|e| NaiError::new(502, format!("无法连接 NovelAI：{e}")))?;
+        let bytes = resp.bytes().await.map_err(net_err)?;
         if status >= 400 {
             return Err(parse_error(status, &bytes));
         }
@@ -236,9 +322,9 @@ impl NaiGateway {
             .body(serde_json::to_vec(&body).unwrap_or_default())
             .send()
             .await
-            .map_err(|e| NaiError::new(502, format!("无法连接 NovelAI：{e}")))?;
+            .map_err(net_err)?;
         let status = resp.status().as_u16();
-        let bytes = resp.bytes().await.map_err(|e| NaiError::new(502, format!("无法连接 NovelAI：{e}")))?;
+        let bytes = resp.bytes().await.map_err(net_err)?;
         if status >= 400 {
             return Err(parse_error(status, &bytes));
         }
@@ -254,9 +340,9 @@ impl NaiGateway {
             .body(serde_json::to_vec(payload).unwrap_or_default())
             .send()
             .await
-            .map_err(|e| NaiError::new(502, format!("无法连接 NovelAI：{e}")))?;
+            .map_err(net_err)?;
         let status = resp.status().as_u16();
-        let bytes = resp.bytes().await.map_err(|e| NaiError::new(502, format!("无法连接 NovelAI：{e}")))?;
+        let bytes = resp.bytes().await.map_err(net_err)?;
         if status >= 400 {
             return Err(parse_error(status, &bytes));
         }
@@ -275,7 +361,7 @@ impl NaiGateway {
             .body(serde_json::to_vec(&payload).unwrap_or_default())
             .send()
             .await
-            .map_err(|e| NaiError::new(502, format!("无法连接 NovelAI：{e}")))?;
+            .map_err(net_err)?;
         let status = resp.status().as_u16();
         if status >= 400 {
             let bytes = resp.bytes().await.unwrap_or_default();

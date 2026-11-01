@@ -13,6 +13,7 @@ import {
   matchSize,
   formFromMeta,
   studioDownloadName,
+  artworkDownloadName,
   tokenFillPercent,
   estimateTokens,
 } from "./studio";
@@ -87,6 +88,20 @@ describe("studio data", () => {
     expect(payload.characters[0].prompt).toBe("girl");
   });
 
+  it("drops muted artists from the prompt sent to generation", () => {
+    const form = defaultForm();
+    form.prompt = "#!0.65::artist:aoi ogata::, 1.50::artist:nnk_(nongnong)::, 1girl";
+    form.uc = "#!artist:bad, lowres";
+    form.characters = [
+      { prompt: "#!artist:skip, girl", uc: "#![artist:hands], bad hands", x: 0.5, y: 0.5, enabled: true },
+      { prompt: "#!artist:nope, skip", uc: "", x: 0.2, y: 0.2, enabled: false },
+    ];
+    const payload = formToPayload(form);
+    expect(payload.prompt).toBe("1.50::artist:nnk_(nongnong)::, 1girl");
+    expect(payload.uc).toBe("lowres");
+    expect(payload.characters).toEqual([{ prompt: "girl", uc: "bad hands", x: 0.5, y: 0.5 }]);
+  });
+
   it("cleans quality tags and detects importable meta", () => {
     expect(cleanPromptText("cat, masterpiece, best quality")).toBe("cat");
     expect(cleanPromptText("0.8::artist:foo ::, 1girl, masterpiece")).toBe("0.8::artist:foo ::, 1girl");
@@ -106,6 +121,11 @@ describe("studio data", () => {
     expect(studioDownloadName("nai.png", "abc", "clean", 42)).toBe("nai-s42-abc-nodata.png");
     expect(studioDownloadName("", "shot-1", "original")).toBe("nai-shot1.png");
     expect(studioDownloadName("scene.png", "deadbeef99", "original", -1)).toBe("scene-deadbeef.png");
+    const item = { name: "scene.png", id: "deadbeef99", hash: "abc", params: { seed: 7 } };
+    expect(artworkDownloadName(item, "original")).toBe("scene-s7-deadbeef.png");
+    expect(artworkDownloadName(item, "clean")).toBe("scene-s7-deadbeef-nodata.png");
+    expect(artworkDownloadName({ ...item, params: {} }, "original")).toBe("scene-deadbeef.png");
+    expect(artworkDownloadName({ ...item, params: { seed: null } }, "original")).toBe("scene-deadbeef.png");
   });
 
   it("builds a form from job-shaped shot meta", () => {

@@ -182,6 +182,8 @@ export type ParamSet = { id: string; name: string; form: StudioForm; createdAt: 
 export type TokenStatus = {
   configured: boolean;
   hint: string;
+  /** 本机保存 Token 的文件路径（保存/清除后返回） */
+  tokenFile?: string;
   subscription: {
     tierName?: string;
     opus?: boolean;

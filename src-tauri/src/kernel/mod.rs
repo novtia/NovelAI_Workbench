@@ -5,6 +5,8 @@ pub mod errors;
 pub mod events;
 pub mod hashes;
 pub mod integrity;
+pub mod purge;
+pub mod refs;
 pub mod store;
 pub mod transfer;
 

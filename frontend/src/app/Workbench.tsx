@@ -87,7 +87,11 @@ export function Workbench() {
         <div className="wb-body">
           <nav className="activity" aria-label="视图切换">
             <span className="act-logo" aria-hidden="true">
-              墨
+              <svg viewBox="0 0 1024 1024">
+                <rect className="brand-seal" x="64" y="64" width="896" height="896" rx="208" />
+                <path className="brand-ring" d="M765.7 419.7A270 270 0 1 1 647 278.2" />
+                <circle className="brand-dot" cx="722" cy="340" r="48" />
+              </svg>
             </span>
             {VIEWS.map((v) => {
               const source = v.id === "studio" ? "studio" : v.id === "lottery" ? "lottery" : "";

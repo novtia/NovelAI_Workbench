@@ -2,7 +2,8 @@
 //!
 //! 两种导出：
 //! - [`export_db`]：`VACUUM INTO` 生成一份一致的 SQLite 副本，只有事件和投影，不含图片。
-//! - [`export_pack`]：一个 zip 完整包：`manifest.json` + `events.sqlite` + `blobs/<前两位>/<哈希>`。
+//! - [`export_pack`]：一个 zip 完整包：`manifest.json` + `events.sqlite` + `blobs/<桶>/<哈希>`。
+//!   旧版扁平包 `blobs/<前两位>/<哈希>` 仍能导入。
 //!   图片本身已经压缩过，所以一律用「仅存储」，不再压一遍。
 //!
 //! 导入 [`import_db`] 自动识别上面两种文件：
@@ -14,8 +15,9 @@
 //!
 //! 图片解出放在替换数据库之前：它只会往 `blobs/` 里加文件，中途失败也不会破坏现有数据，重新导入即可续上。
 
-use super::blobs::BlobStore;
-use super::bus::{referenced_hashes, verify_chain, Projector};
+use super::blobs::{file_ext, BlobStore, Slot};
+use super::bus::{verify_chain, Projector};
+use super::refs;
 use super::clock::now_ms;
 use super::errors::{DomainError, Res};
 use super::hashes::{hex_lower, is_hash64, sha256_bytes};
@@ -32,7 +34,7 @@ use zip::{CompressionMethod, ZipArchive, ZipWriter};
 const SQLITE_MAGIC: &[u8; 16] = b"SQLite format 3\0";
 const ZIP_MAGIC: &[u8; 4] = b"PK\x03\x04";
 const APP_ID: &str = "minimax-workbench";
-const PACK_FORMAT: i64 = 1;
+const PACK_FORMAT: i64 = 2;
 const MANIFEST: &str = "manifest.json";
 const DB_ENTRY: &str = "events.sqlite";
 
@@ -144,16 +146,24 @@ pub fn export_pack(store: &EventStore, blobs: &BlobStore, data_dir: &Path, dest:
     vacuum_into(store, &stage)?;
     let events: i64 = open_connection(&stage)?.query_row("SELECT COUNT(*) FROM events", [], |r| r.get(0))?;
     let empty = sha256_bytes(b"");
-    let mut hashes: Vec<String> = Vec::new();
+    let mut entries: Vec<(String, PathBuf)> = Vec::new();
     let mut missing = 0usize;
-    for h in referenced_hashes(store)? {
-        if h == empty {
+    for (hash, slots) in refs::all_refs(&store.connect()?)? {
+        if hash == empty {
             continue;
         }
-        if blobs.exists(&h) {
-            hashes.push(h);
-        } else {
-            missing += 1;
+        for slot in slots {
+            let name = format!("blobs/{}/{hash}", slot.label());
+            if let Some(path) = blobs.path_in(&slot, &hash) {
+                entries.push((name, path));
+            } else {
+                let legacy = blobs.legacy_path(&hash);
+                if legacy.is_file() {
+                    entries.push((name, legacy));
+                } else {
+                    missing += 1;
+                }
+            }
         }
     }
     progress("database", 1, 1);
@@ -169,7 +179,7 @@ pub fn export_pack(store: &EventStore, blobs: &BlobStore, data_dir: &Path, dest:
         "exportedAt": now_ms(),
         "version": env!("CARGO_PKG_VERSION"),
         "events": events,
-        "blobs": hashes.len(),
+        "blobs": entries.len(),
     });
     let written = (|| -> Res<usize> {
         zip.start_file(MANIFEST, stored()).map_err(zip_err)?;
@@ -177,16 +187,16 @@ pub fn export_pack(store: &EventStore, blobs: &BlobStore, data_dir: &Path, dest:
         zip.start_file(DB_ENTRY, stored().large_file(true)).map_err(zip_err)?;
         std::io::copy(&mut BufReader::new(File::open(&stage)?), &mut zip)?;
 
-        let total = hashes.len() as u64;
+        let total = entries.len() as u64;
         let mut written = 0usize;
         let mut vanished = 0usize;
-        for (i, h) in hashes.iter().enumerate() {
+        for (i, (name, path)) in entries.iter().enumerate() {
             // 先打开再开条目：文件中途消失就跳过，不留空条目。
-            let Ok(src) = File::open(blobs.path_for(h)) else {
+            let Ok(src) = File::open(path) else {
                 vanished += 1;
                 continue;
             };
-            zip.start_file(format!("blobs/{}/{}", &h[..2], h), stored()).map_err(zip_err)?;
+            zip.start_file(name, stored()).map_err(zip_err)?;
             std::io::copy(&mut BufReader::new(src), &mut zip)?;
             written += 1;
             let done = (i + 1) as u64;
@@ -267,11 +277,27 @@ fn extract_db(pack: &mut Pack, stage: &Path) -> Res<()> {
     Ok(())
 }
 
-/// `blobs/<前两位>/<64 位哈希>`，其余条目一律忽略（路径只由哈希拼出，不会被压缩包里的名字带出目录）。
-fn blob_hash_of(name: &str) -> Option<String> {
+enum PackBlob {
+    /// 旧版扁平目录。
+    Legacy(String),
+    /// `blobs/<桶或桶/thumbs>/<哈希>`。
+    Slot(Slot, String),
+}
+
+/// 只认由哈希和已知桶名拼出来的条目，压缩包里的其它路径一律忽略。
+fn pack_blob(name: &str) -> Option<PackBlob> {
     let rest = name.strip_prefix("blobs/")?;
-    let (dir, file) = rest.split_once('/')?;
-    (is_hash64(file) && dir == &file[..2]).then(|| file.to_string())
+    if let Some((dir, file)) = rest.split_once('/') {
+        if !file.contains('/') && is_hash64(file) && dir == &file[..2] {
+            return Some(PackBlob::Legacy(file.to_string()));
+        }
+    }
+    let (label, file) = rest.rsplit_once('/')?;
+    if is_hash64(file) {
+        Slot::parse(label).map(|slot| PackBlob::Slot(slot, file.to_string()))
+    } else {
+        None
+    }
 }
 
 struct BlobStats {
@@ -281,7 +307,7 @@ struct BlobStats {
 }
 
 fn extract_blobs(pack: &mut Pack, blobs: &BlobStore, progress: Progress) -> Res<BlobStats> {
-    let total = pack.file_names().filter(|n| blob_hash_of(n).is_some()).count() as u64;
+    let total = pack.file_names().filter(|n| pack_blob(n).is_some()).count() as u64;
     let mut stats = BlobStats { added: 0, skipped: 0, corrupt: 0 };
     let mut done = 0u64;
     let mut buf = vec![0u8; 1 << 20];
@@ -290,18 +316,20 @@ fn extract_blobs(pack: &mut Pack, blobs: &BlobStore, progress: Progress) -> Res<
         if entry.is_dir() {
             continue;
         }
-        let Some(hash) = blob_hash_of(entry.name()) else {
+        let Some(kind) = pack_blob(entry.name()) else {
             continue;
         };
         done += 1;
-        if blobs.exists(&hash) {
+        let (hash, already) = match &kind {
+            PackBlob::Legacy(hash) => (hash.clone(), blobs.exists(hash)),
+            PackBlob::Slot(slot, hash) => (hash.clone(), blobs.has(slot, hash)),
+        };
+        if already {
             stats.skipped += 1;
         } else {
-            let path = blobs.path_for(&hash);
-            if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            let tmp = path.with_file_name(format!("{hash}.tmp{}", std::process::id()));
+            let tmp_dir = blobs.root.join(".incoming");
+            std::fs::create_dir_all(&tmp_dir)?;
+            let tmp = tmp_dir.join(format!("{hash}.tmp{}", std::process::id()));
             let mut hasher = Sha256::new();
             {
                 let mut out = BufWriter::new(File::create(&tmp)?);
@@ -316,9 +344,20 @@ fn extract_blobs(pack: &mut Pack, blobs: &BlobStore, progress: Progress) -> Res<
                 out.flush()?;
             }
             if hex_lower(&hasher.finalize()) == hash {
-                if std::fs::rename(&tmp, &path).is_err() {
-                    if !path.exists() {
-                        std::fs::copy(&tmp, &path)?;
+                let dest = match &kind {
+                    PackBlob::Legacy(_) => blobs.legacy_path(&hash),
+                    PackBlob::Slot(slot, _) => {
+                        let dir = blobs.slot_dir(slot);
+                        std::fs::create_dir_all(&dir)?;
+                        dir.join(format!("{hash}.{}", file_ext(&super::blobs::read_head(&tmp))))
+                    }
+                };
+                if let Some(parent) = dest.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                if std::fs::rename(&tmp, &dest).is_err() {
+                    if !dest.exists() {
+                        std::fs::copy(&tmp, &dest)?;
                     }
                     let _ = std::fs::remove_file(&tmp);
                 }
@@ -332,6 +371,7 @@ fn extract_blobs(pack: &mut Pack, blobs: &BlobStore, progress: Progress) -> Res<
             progress("blobs", done, total);
         }
     }
+    let _ = std::fs::remove_dir(blobs.root.join(".incoming"));
     Ok(stats)
 }
 
@@ -461,12 +501,9 @@ pub fn import_db(
         ))
     })?;
 
-    // 7. 统计本机仍然缺失的图片。
-    let empty = sha256_bytes(b"");
-    let missing = referenced_hashes(store)?
-        .into_iter()
-        .filter(|h| *h != empty && !blobs.exists(h))
-        .count();
+    // 7. 按引用把图片放进对应的桶，再统计仍然缺失的。
+    let files = refs::sync_files(store, blobs, true)?;
+    let missing = files.missing;
 
     Ok(json!({
         "events": incoming,

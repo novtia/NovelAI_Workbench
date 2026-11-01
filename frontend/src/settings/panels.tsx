@@ -31,7 +31,10 @@ export function TokenPanel() {
         <span>{formatTokenStatus(status)}</span>
       </div>
       {detail ? <div className="s-row-hint">{detail}</div> : null}
-      <div className="s-row-hint">在 NovelAI 账号设置里复制 Persistent API Token。明文只保存在 backend/data/secrets/nai.token，不会进入事件库和备份。</div>
+      <div className="s-row-hint">
+        在 NovelAI 账号设置里复制 Persistent API Token。明文只保存在本机文件，不会进入事件库和备份。
+        {status?.tokenFile ? <> 当前文件：{status.tokenFile}</> : null}
+      </div>
       <div className="s-token-form">
         <input
           type="password"
@@ -97,6 +100,17 @@ function InfoGrid({ info }: { info: SystemInfo }) {
     ["收藏夹 / 图片", `${info.albums} / ${info.artworks}`],
     ["图片文件", `${info.blobCount} 个 · ${formatBytes(info.blobBytes)}`],
   ];
+  const buckets: Array<[string, string]> = [
+    ["studio", "生图"],
+    ["lottery", "抽奖"],
+    ["favorites", "收藏夹"],
+    ["inputs", "底图"],
+    ["legacy", "未整理"],
+  ];
+  for (const [key, label] of buckets) {
+    const row = info.buckets?.[key];
+    if (row && row.count > 0) rows.push([label, `${row.count} 个 · ${formatBytes(row.bytes)}`]);
+  }
   return (
     <dl className="s-info">
       {rows.map(([k, v]) => (
@@ -189,7 +203,7 @@ export function SystemPanel() {
       const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
       const r = await settingsApi.exportDatabase(`workbench-${stamp}.sqlite`);
       if (r.cancelled) return;
-      setReport([`数据库已导出：${r.path ?? ""}`, `事件 ${r.events ?? 0} 条，文件 ${formatBytes(r.size ?? 0)}`, "图片文件不在数据库里，换电脑时请同时复制 blobs/ 目录。"]);
+      setReport([`数据库已导出：${r.path ?? ""}`, `事件 ${r.events ?? 0} 条，文件 ${formatBytes(r.size ?? 0)}`, "图片在 images/ 目录（还没整理的旧图在 blobs/）。换电脑时请和数据库一起复制。"]);
       pushToast("数据库已导出");
     });
 
@@ -225,7 +239,7 @@ export function SystemPanel() {
         `已导入 ${r.events ?? 0} 条事件，并重建投影`,
         ...(r.pack ? [`图片：新增 ${r.blobsAdded ?? 0} 张，本机已有 ${r.blobsSkipped ?? 0} 张${corrupt > 0 ? `，${corrupt} 张校验失败已丢弃` : ""}`] : []),
         missing > 0
-          ? `有 ${missing} 个被引用的图片文件在本机缺失${r.pack ? "" : "，请把原数据目录的 blobs/ 复制进来，或改用完整包导入"}`
+          ? `有 ${missing} 个被引用的图片文件在本机缺失${r.pack ? "" : "，请把原数据目录的 images/ 和 blobs/ 复制进来，或改用完整包导入"}`
           : "所有被引用的图片文件都在本机",
         `原数据库已备份：${r.backup ?? ""}`,
       ]);
@@ -269,6 +283,40 @@ export function SystemPanel() {
     pushToast("本地缓存已清除，刷新页面后生效");
   };
 
+  const organize = async () => {
+    const preview = await run("plan", () => settingsApi.storagePlan());
+    if (!preview) return;
+    const lines = [
+      `将清除 ${preview.aggregates} 条记录、${preview.events} 条事件`,
+      `改写 ${preview.rewritten} 条事件，重算哈希 ${preview.rehashed} 条`,
+      `图片：移动 ${preview.filesMoved}，复制 ${preview.filesCopied}，删除 ${preview.filesDeleted}（${formatBytes(preview.bytesFreed)}）`,
+      `过程预览 ${preview.previewsDeleted} 张`,
+      preview.filesMissing ? `有 ${preview.filesMissing} 个被引用的文件在本机找不到` : "被引用的文件都能找到",
+    ];
+    setReport(lines);
+    if (!(await confirmDialog(`${lines.join("\n")}\n\n整理会真的删掉这些记录和文件，无法恢复。开始前会自动备份数据库。`, { title: "整理存储", confirmText: "开始整理" }))) return;
+    const done = await run("migrate", () => settingsApi.storageMigrate());
+    if (!done) return;
+    setReport([
+      `已清除 ${done.aggregates} 条记录`,
+      `图片：移动 ${done.filesMoved}，复制 ${done.filesCopied}，删除 ${done.filesDeleted}（${formatBytes(done.bytesFreed)}）`,
+      done.verify?.ok ? "校验通过" : "校验未通过，请查看备份",
+      `备份：${done.backup ?? ""}`,
+    ]);
+    void qc.invalidateQueries();
+    void infoQ.refetch();
+    pushToast(done.verify?.ok === false ? "存储已整理，但校验未通过" : "存储已整理", done.verify?.ok === false ? "warn" : "ok");
+  };
+
+  const vacuum = async () => {
+    if (!(await confirmDialog("压缩数据库，清掉已经删掉的数据留下的空位。图片文件不会受影响。", { title: "压缩数据库", confirmText: "压缩" }))) return;
+    const result = await run("vacuum", () => settingsApi.vacuumDatabase());
+    if (!result) return;
+    setReport([`压缩前 ${formatBytes(result.before)}`, `压缩后 ${formatBytes(result.after)}`]);
+    void infoQ.refetch();
+    pushToast("数据库已压缩");
+  };
+
   return (
     <>
       <Card
@@ -280,6 +328,20 @@ export function SystemPanel() {
         }
       >
         {infoQ.data ? <InfoGrid info={infoQ.data} /> : <div className="s-row-hint">{infoQ.isError ? "无法读取存储信息" : "读取中…"}</div>}
+      </Card>
+
+      <Card title="整理存储">
+        <div className="s-actions">
+          <button type="button" className="btn" disabled={Boolean(busy)} onClick={() => void organize()}>
+            {busy === "plan" ? "统计中…" : busy === "migrate" ? "整理中…" : "整理图片和记录"}
+          </button>
+          <button type="button" className="btn" disabled={Boolean(busy)} onClick={() => void vacuum()}>
+            {busy === "vacuum" ? "压缩中…" : "压缩数据库"}
+          </button>
+        </div>
+        <div className="s-row-hint">
+          把图片按生图、抽奖、收藏夹分开存放，并清掉失败任务、已删除的收藏和没有归属的文件。会先给出清单，确认后才执行，数据库会自动备份。收藏夹里的图是单独的一份，删历史或抽奖不会动它。
+        </div>
       </Card>
 
       <Card title="数据维护">

@@ -24,7 +24,7 @@
 use serde_json::Value;
 use workbench_lib::app;
 use workbench_lib::kernel::bus::verify_chain;
-use workbench_lib::kernel::integrity::{projection_checksum, rebuild_projections};
+use workbench_lib::kernel::integrity::{projection_checksum_of, rebuild_projections};
 
 fn env_path(name: &str) -> Option<std::path::PathBuf> {
     std::env::var_os(name).map(std::path::PathBuf::from).filter(|p| p.is_file())
@@ -50,7 +50,8 @@ fn matches_python_on_real_data() {
     assert_eq!(chain["head"], base["chain"]["head"]);
 
     // 2. 现有投影（Python 写的）的 checksum：验证 Rust 的 checksum 算法和 Python 一致
-    let before = projection_checksum(store).unwrap();
+    let legacy: Vec<&str> = workbench_lib::kernel::store::PROJECTION_TABLES[..11].to_vec();
+    let before = projection_checksum_of(store, &legacy).unwrap();
     assert_eq!(before, base["before"].as_str().unwrap(), "投影 checksum（重建前）不一致");
 
     // 3. 用 Rust 投影器重建后，必须与 Python 重建后的结果逐行一致
@@ -61,7 +62,7 @@ fn matches_python_on_real_data() {
         let _ = store.connect().unwrap().execute_batch("PRAGMA wal_checkpoint(TRUNCATE)");
         std::fs::copy(dir.path().join("events.sqlite"), dump).unwrap();
     }
-    let after = projection_checksum(store).unwrap();
+    let after = projection_checksum_of(store, &legacy).unwrap();
     assert_eq!(after, base["after"].as_str().unwrap(), "投影 checksum（重建后）不一致");
 
     // 4. 抽奖批次 verify：池哈希必须和 Python 完全一致。

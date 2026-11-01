@@ -4,17 +4,20 @@ use crate::contexts::gallery::application::{ensure_default_album, ensure_single_
 use crate::contexts::gallery::migrate::migrate_legacy;
 use crate::contexts::gallery::projectors::GalleryProjector;
 use crate::contexts::generation::application::GenerationService;
-use crate::contexts::generation::nai_client::{NaiGateway, TokenVault};
+use crate::contexts::generation::nai_client::{NaiGateway, NetConfig, TokenVault};
 use crate::contexts::generation::projectors::GenerationProjector;
 use crate::contexts::identity::IdentityProjector;
 use crate::contexts::lottery::application::LotteryService;
 use crate::contexts::lottery::projectors::LotteryProjector;
 use crate::contexts::settings::application::SettingsService;
 use crate::contexts::settings::projectors::SettingsProjector;
+use crate::contexts::storage;
 use crate::kernel::blobs::BlobStore;
 use crate::kernel::bus::{Kernel, Projector};
+use crate::kernel::refs::RefsProjector;
 use crate::kernel::store::EventStore;
 use crate::kernel::Res;
+use serde_json::json;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -26,6 +29,7 @@ pub fn projectors() -> Vec<Box<dyn Projector>> {
         Box::new(GenerationProjector),
         Box::new(IdentityProjector),
         Box::new(SettingsProjector),
+        Box::new(RefsProjector),
     ]
 }
 
@@ -41,8 +45,8 @@ pub struct Services {
 pub fn build(data_dir: &Path) -> Res<Services> {
     std::fs::create_dir_all(data_dir)?;
     let store = EventStore::open(&data_dir.join("events.sqlite"))?;
-    let blobs = BlobStore::new(&data_dir.join("blobs"))?;
-    let kernel = Arc::new(Kernel { store, blobs, projectors: projectors() });
+    let blobs = BlobStore::open(data_dir)?;
+    let kernel = Arc::new(Kernel::new(store, blobs, projectors()));
     let vault = Arc::new(TokenVault::new(data_dir.join("secrets").join("nai.token")));
     let gallery = Arc::new(GalleryService::new(kernel.clone()));
     let lottery = Arc::new(LotteryService::new(kernel.clone(), gallery.clone()));
@@ -70,6 +74,14 @@ pub fn build(data_dir: &Path) -> Res<Services> {
             s.value("account", "gatewayUrl").as_str().unwrap_or("").to_string()
         }));
     }
+    {
+        let s = settings.clone();
+        gateway.set_net_provider(Arc::new(move || NetConfig {
+            mode: s.value("network", "proxyMode").as_str().unwrap_or("system").to_string(),
+            proxy_url: s.value("network", "proxyUrl").as_str().unwrap_or("").to_string(),
+            connect_timeout: s.value_f64("network", "connectTimeoutSec", 10.0),
+        }));
+    }
     let generation = Arc::new(GenerationService::new(
         kernel.clone(),
         gallery.clone(),
@@ -77,6 +89,25 @@ pub fn build(data_dir: &Path) -> Res<Services> {
         vault,
         settings.clone(),
     ));
+    {
+        let cancel = generation.cancelled_set();
+        let gen = generation.clone();
+        kernel.on_purge(Box::new(move |stats| {
+            let mut ids = Vec::new();
+            {
+                let mut guard = cancel.lock().unwrap_or_else(|e| e.into_inner());
+                for (id, kind) in &stats.aggregates {
+                    if kind == "GenerationJob" {
+                        guard.insert(id.clone());
+                        ids.push(id.clone());
+                    }
+                }
+            }
+            if !ids.is_empty() {
+                gen.emit(json!({ "type": "removed", "ids": ids }));
+            }
+        }));
+    }
     Ok(Services { data_dir: data_dir.to_path_buf(), kernel, gallery, lottery, settings, generation })
 }
 
@@ -89,7 +120,8 @@ pub fn prepare(services: &Services, legacy_dir: Option<&Path>) -> Res<()> {
             }
         }
     }
-    ensure_defaults(services)
+    ensure_defaults(services)?;
+    storage::startup(&services.kernel)
 }
 
 /// 保证默认收藏夹和单画师收藏夹存在（启动时、导入数据库后都要补一遍）。

@@ -75,7 +75,7 @@ export async function copyShotPrompt(shot: HistoryShot) {
 export async function deleteHistoryShots(qc: QueryClient, shots: HistoryShot[]): Promise<boolean> {
   if (!shots.length) return false;
   if (getSettings().gallery.confirmDelete) {
-    const ok = await confirmDialog(`从历史中删除 ${shots.length} 张图片？已保存到收藏夹的图片不受影响。`, {
+    const ok = await confirmDialog(`从历史中删除 ${shots.length} 张图片？已保存到收藏夹的图片不受影响。会同时删除本地文件，无法恢复。`, {
       title: "删除历史图片",
       confirmText: "删除",
     });

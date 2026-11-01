@@ -35,10 +35,11 @@ export {
   parseWeightInput,
   splitPromptSegments,
   stepWeight,
+  stripMutedArtists,
   suggestQueryFromSegment,
 } from "./artistCards";
 export type { ArtistCard, PromptSegment, SuggestQuery } from "./artistCards";
-export { extractArtists, isImageFile, makeThumb, parseImageMeta, reencodePngClean, sha256Hex, triggerBlobDownload } from "./png";
+export { extractArtists, isImageFile, makeThumb, parseImageMeta, reencodePngClean, sha256Hex, triggerBlobDownload, downloadImageFile } from "./png";
 export type { CharCaption, ImageMeta } from "./png";
 export {
   asMeta,
@@ -99,6 +100,7 @@ export {
   costLabel,
   genLabel,
   studioDownloadName,
+  artworkDownloadName,
   placePop,
   clampPanel,
   loadDraft,

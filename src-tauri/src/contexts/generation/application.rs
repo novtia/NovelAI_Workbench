@@ -7,15 +7,17 @@ use crate::contexts::gallery::application::{GalleryService, ImportOptions};
 use crate::contexts::gallery::rules::extract_artists;
 use crate::contexts::identity::Credential;
 use crate::contexts::settings::application::SettingsService;
-use crate::kernel::blobs::png_size;
+use crate::kernel::blobs::{png_size, Bucket, Slot};
 use crate::kernel::bus::Kernel;
 use crate::kernel::clock::{new_hex, new_id, now_ms};
+use crate::kernel::purge::{plan_job_items, Purge};
 use crate::kernel::{DomainError, Res};
+use crate::contexts::lottery::domain::lottery_client_draw_id;
 use crate::util::{get, py_str, to_int, truthy};
 use rusqlite::types::Value as S;
 use rusqlite::{params_from_iter, Row};
 use serde_json::{json, Map, Value};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
@@ -34,7 +36,9 @@ pub struct GenerationService {
     emitter: RwLock<Option<Emitter>>,
     queue_tx: UnboundedSender<String>,
     queue_rx: Mutex<Option<UnboundedReceiver<String>>>,
-    cancel: Mutex<HashSet<String>>,
+    cancel: Arc<Mutex<HashSet<String>>>,
+    /// 这次任务写过、但完成事件未必引用的文件。任务结束时删掉没人用的。
+    staged: Mutex<HashMap<String, Vec<(String, Slot)>>>,
     status_cache: Mutex<Option<(Instant, Value)>>,
 }
 
@@ -61,7 +65,8 @@ impl GenerationService {
             emitter: RwLock::new(None),
             queue_tx: tx,
             queue_rx: Mutex::new(Some(rx)),
-            cancel: Mutex::new(HashSet::new()),
+            cancel: Arc::new(Mutex::new(HashSet::new())),
+            staged: Mutex::new(HashMap::new()),
             status_cache: Mutex::new(None),
         }
     }
@@ -102,6 +107,7 @@ impl GenerationService {
             "configured": !token.is_empty(),
             "hint": if token.is_empty() { String::new() } else { token_hint(&token) },
             "subscription": Value::Null,
+            "tokenFile": self.vault.path().display().to_string(),
         });
         if !token.is_empty() {
             match self.gateway.fetch_subscription(Some(&token)).await {
@@ -160,20 +166,31 @@ impl GenerationService {
         if token.is_empty() {
             return Err(DomainError::bad("Token 不能为空"));
         }
-        self.vault.save(token);
+        self.vault.save(token).map_err(|m| DomainError::new(m, 500))?;
         let mut cred: Credential = self.k.load("nai")?;
         cred.set_hint(&token_hint(token));
         self.k.commit(&mut cred, Some(&format!("identity.set:{}", now_ms())))?;
-        Ok(self.token_status().await)
+        Ok(self.local_status())
     }
 
     pub async fn clear_token(&self) -> Res<Value> {
         self.invalidate_status();
-        self.vault.save("");
+        self.vault.save("").map_err(|m| DomainError::new(m, 500))?;
         let mut cred: Credential = self.k.load("nai")?;
         cred.clear();
         self.k.commit(&mut cred, None)?;
-        Ok(self.token_status().await)
+        Ok(self.local_status())
+    }
+
+    /// 只看本地：不访问网络，保存/清除后立刻返回；额度由前端随后后台刷新。
+    pub fn local_status(&self) -> Value {
+        let token = self.vault.load();
+        json!({
+            "configured": !token.is_empty(),
+            "hint": if token.is_empty() { String::new() } else { token_hint(&token) },
+            "subscription": Value::Null,
+            "tokenFile": self.vault.path().display().to_string(),
+        })
     }
 
     // ---------- 参数预设 ----------
@@ -206,9 +223,12 @@ impl GenerationService {
     }
 
     pub fn delete_param_set(&self, sid: &str) -> Res<()> {
-        let mut agg: ParamSet = self.k.load(sid)?;
-        agg.delete()?;
-        self.k.commit(&mut agg, None)?;
+        if self.get_param_set(sid)?.is_none() {
+            return Err(DomainError::not_found("预设不存在"));
+        }
+        let mut plan = Purge::default();
+        plan.drop_aggregate(sid);
+        self.k.purge(&plan)?;
         Ok(())
     }
 
@@ -256,6 +276,7 @@ impl GenerationService {
         if kind != "generate" {
             size = Some(self.validate_image_job(&kind, &mut data_v)?);
         }
+        self.own_inputs(&data_v)?;
         let job_id = new_hex(16);
         let created = now_ms();
         let steps = if uses_medium(&data_v) && kind != "infill" {
@@ -305,6 +326,31 @@ impl GenerationService {
         let _ = self.queue_tx.send(job_id.to_string());
     }
 
+    /// 启动时按创建顺序把没跑完的任务放回内存队列。正在跑的退回「排队中」，避免界面停在中断前的步数。
+    pub fn resume_pending(&self) -> Res<usize> {
+        let pending = {
+            let conn = self.k.store.connect()?;
+            let mut stmt = conn.prepare(
+                "SELECT id, status FROM projections_jobs
+                 WHERE status IN ('queued', 'running')
+                 ORDER BY created_at ASC, rowid ASC",
+            )?;
+            let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+            let mut out = Vec::new();
+            for row in rows {
+                out.push(row?);
+            }
+            out
+        };
+        for (id, status) in &pending {
+            if status == "running" {
+                self.mutate_job(id, |job| job.park());
+            }
+            self.requeue(id);
+        }
+        Ok(pending.len())
+    }
+
     fn blob_size(&self, digest: &str) -> Res<(i64, i64)> {
         let data = self.k.blobs.get(digest).ok_or_else(|| DomainError::new("底图不存在，请重新选择", 404))?;
         if let Some((w, h)) = png_size(&data) {
@@ -338,6 +384,105 @@ impl GenerationService {
             o.remove("maskHash");
         }
         Ok(plan_size(kind, data, width, height))
+    }
+
+    /// 图生图的底图和蒙版归这个任务所有：从别的桶复制一份到 inputs。
+    fn own_inputs(&self, data: &Value) -> Res<()> {
+        for key in ["imageHash", "maskHash"] {
+            let v = get(data, key);
+            let hash = if truthy(v) { py_str(v).trim().to_lowercase() } else { String::new() };
+            if hash.is_empty() {
+                continue;
+            }
+            if !self.k.blobs.copy_into(&Slot::image(Bucket::Inputs), &hash)? {
+                return Err(DomainError::new("底图不存在，请重新选择", 404));
+            }
+        }
+        Ok(())
+    }
+
+    fn prune_superseded(&self, job_id: &str) -> Res<()> {
+        let Some(job) = self.get_job(job_id)? else { return Ok(()) };
+        if job["source"].as_str() != Some("lottery") || job["status"].as_str() != Some("done") {
+            return Ok(());
+        }
+        let batch = {
+            let v = get(&job["client"], "batchId");
+            if truthy(v) { py_str(v).trim().to_string() } else { String::new() }
+        };
+        let draw = lottery_client_draw_id(&batch, &job["client"]);
+        if batch.is_empty() || draw.is_empty() {
+            return Ok(());
+        }
+        let conn = self.k.store.connect()?;
+        let mut stmt = conn.prepare(
+            "SELECT id, status, client_json, finished_at, created_at FROM projections_jobs WHERE source='lottery'",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, Option<String>>(2)?,
+                r.get::<_, Option<i64>>(3)?,
+                r.get::<_, i64>(4)?,
+            ))
+        })?;
+        let mut group: Vec<(String, String, i64, i64)> = Vec::new();
+        for row in rows {
+            let (id, status, client_json, finished, created) = row?;
+            let client = client_json.and_then(|s| serde_json::from_str::<Value>(&s).ok()).unwrap_or(Value::Null);
+            let row_batch = {
+                let v = get(&client, "batchId");
+                if truthy(v) { py_str(v).trim().to_string() } else { String::new() }
+            };
+            if row_batch == batch && lottery_client_draw_id(&batch, &client) == draw {
+                group.push((id, status, finished.unwrap_or(0), created));
+            }
+        }
+        let mut keep = job_id.to_string();
+        let mut best = (0i64, 0i64, String::new());
+        for (id, status, finished, created) in &group {
+            if matches!(status.as_str(), "queued" | "running") {
+                continue;
+            }
+            let rank = (*finished, *created, id.clone());
+            if rank > best {
+                best = rank;
+                keep = id.clone();
+            }
+        }
+        let mut plan = Purge::default();
+        for (id, status, _, _) in &group {
+            if id != &keep && !matches!(status.as_str(), "queued" | "running") {
+                plan.drop_aggregate(id);
+            }
+        }
+        self.k.purge(&plan)?;
+        Ok(())
+    }
+
+    fn prune_failed(&self) -> Res<usize> {
+        let keep = to_int(&self.cfg("generation", "jobsKeep", json!(80))).unwrap_or(80).max(0);
+        let conn = self.k.store.connect()?;
+        let ids: Vec<String> = conn
+            .prepare(
+                "SELECT id FROM projections_jobs
+                 WHERE status IN ('error', 'cancelled')
+                   AND id NOT IN (SELECT id FROM projections_jobs ORDER BY created_at DESC, id DESC LIMIT ?1)",
+            )?
+            .query_map([keep], |r| r.get(0))?
+            .collect::<Result<_, _>>()?;
+        if ids.is_empty() {
+            return Ok(0);
+        }
+        let mut plan = Purge::default();
+        for id in &ids {
+            plan.drop_aggregate(id);
+        }
+        let n = ids.len();
+        drop(conn);
+        self.k.purge(&plan)?;
+        Ok(n)
     }
 
     /// 按任务类型构造发给 NovelAI 的请求；图片和蒙版从 blob 读取。
@@ -385,7 +530,7 @@ impl GenerationService {
         } else {
             image_to_png(data).map_err(|e| DomainError::bad(e.message))?
         };
-        let digest = self.k.blobs.put(&png)?;
+        let digest = self.k.blobs.put(&Bucket::Inputs, &png)?;
         let size = png_size(&png);
         Ok(json!({
             "blobHash": digest,
@@ -448,7 +593,7 @@ impl GenerationService {
         }))
     }
 
-    /// 把若干张图从历史里移除。只改任务记录：blob 文件一律保留，收藏夹里的图不受影响。
+    /// 把若干张图从历史里移除。对应的生图文件一起删掉；收藏夹里的副本不受影响。
     pub fn delete_history(&self, refs: &Value) -> Res<i64> {
         let mut by_job: BTreeMap<String, Vec<String>> = BTreeMap::new();
         let mut order: Vec<String> = Vec::new();
@@ -471,16 +616,32 @@ impl GenerationService {
                 by_job.entry(job_id).or_default().push(item_id);
             }
         }
-        let mut removed = 0;
-        for job_id in order {
-            let item_ids = &by_job[&job_id];
-            let mut job: GenerationJob = self.k.load(&job_id)?;
-            if job.version() == 0 || job.source != "studio" || job.status != "done" {
-                continue;
+        let mut removed = 0i64;
+        let mut plan = Purge::default();
+        {
+            let conn = self.k.store.connect()?;
+            for job_id in order {
+                let item_ids = &by_job[&job_id];
+                let job: GenerationJob = self.k.load(&job_id)?;
+                if job.version() == 0 || job.source != "studio" || job.status != "done" {
+                    continue;
+                }
+                let wanted: HashSet<&str> = item_ids.iter().map(|s| s.as_str()).collect();
+                let keep: Vec<Value> = job
+                    .items
+                    .iter()
+                    .filter(|it| !wanted.contains(py_str(get(it, "id")).as_str()))
+                    .cloned()
+                    .collect();
+                let hit = job.items.len() as i64 - keep.len() as i64;
+                if hit <= 0 {
+                    continue;
+                }
+                removed += hit;
+                plan_job_items(&conn, &job_id, &keep, &mut plan)?;
             }
-            removed += job.remove_items(item_ids, now_ms())?.len() as i64;
-            self.k.commit(&mut job, None)?;
         }
+        self.k.purge(&plan)?;
         Ok(removed)
     }
 
@@ -511,7 +672,31 @@ impl GenerationService {
         self.cancel.lock().unwrap_or_else(|e| e.into_inner()).contains(job_id)
     }
 
+    pub fn cancelled_set(&self) -> Arc<Mutex<HashSet<String>>> {
+        self.cancel.clone()
+    }
+
+    pub fn has_active_jobs(&self) -> Res<bool> {
+        let n: i64 = self.k.store.connect()?.query_row(
+            "SELECT COUNT(*) FROM projections_jobs WHERE status IN ('queued', 'running')",
+            [],
+            |r| r.get(0),
+        )?;
+        Ok(n > 0)
+    }
+
     pub fn mutate_job(&self, job_id: &str, mutator: impl FnOnce(&mut GenerationJob)) -> Option<Value> {
+        if self.cancelled(job_id) {
+            let mut job: GenerationJob = self.k.load(job_id).ok()?;
+            if job.version() == 0 {
+                return None;
+            }
+            if !matches!(job.status.as_str(), "done" | "error" | "cancelled") {
+                job.cancel(now_ms());
+                let _ = self.k.commit(&mut job, None);
+            }
+            return self.get_job(job_id).ok().flatten();
+        }
         let mut job: GenerationJob = self.k.load(job_id).ok()?;
         if job.version() == 0 {
             return None;
@@ -527,23 +712,49 @@ impl GenerationService {
         public
     }
 
-    pub fn store_image(&self, data: &[u8]) -> Res<Value> {
-        let digest = self.k.blobs.put(data)?;
-        let thumb = self.k.blobs.thumb(data);
-        let thumb_hash = match thumb {
-            Some(t) if !t.is_empty() => self.k.blobs.put(&t)?,
-            _ => String::new(),
-        };
+    pub fn store_image(&self, bucket: &Bucket, data: &[u8]) -> Res<Value> {
+        let (digest, thumb_hash) = self.k.blobs.put_image(bucket, data, None)?;
         let size = png_size(data);
         Ok(json!({
             "id": digest.chars().take(32).collect::<String>(),
             "blobHash": digest,
             "thumbHash": thumb_hash,
+            "bucket": bucket.label(),
             "url": assets::blob_path(&digest),
             "thumbUrl": assets::blob_path(if thumb_hash.is_empty() { &digest } else { &thumb_hash }),
             "width": size.map(|s| Value::from(s.0)).unwrap_or(Value::Null),
             "height": size.map(|s| Value::from(s.1)).unwrap_or(Value::Null),
         }))
+    }
+
+    /// 记下这次任务写出的文件，结束时把没被完成事件引用的删掉。
+    pub fn stage(&self, job_id: &str, item: &Value) {
+        let bucket = get(item, "bucket").as_str().and_then(Bucket::parse).unwrap_or(Bucket::Studio);
+        let mut staged = self.staged.lock().unwrap_or_else(|e| e.into_inner());
+        let list = staged.entry(job_id.to_string()).or_default();
+        let hash = |key: &str| {
+            let v = get(item, key);
+            if truthy(v) { py_str(v).trim().to_lowercase() } else { String::new() }
+        };
+        let blob = hash("blobHash");
+        if !blob.is_empty() {
+            list.push((blob, Slot::image(bucket.clone())));
+        }
+        let thumb = hash("thumbHash");
+        if !thumb.is_empty() {
+            list.push((thumb, Slot::thumb(bucket)));
+        }
+    }
+
+    pub fn release_staged(&self, job_id: &str) {
+        let files = self.staged.lock().unwrap_or_else(|e| e.into_inner()).remove(job_id).unwrap_or_default();
+        let _ = self.k.release_files(&files);
+    }
+
+    /// 抽奖同一条串只留最新的成功任务；失败和取消的记录只保留最近若干条。
+    pub fn settle(&self, job_id: &str) {
+        let _ = self.prune_superseded(job_id);
+        let _ = self.prune_failed();
     }
 
     pub fn promote(&self, album_id: &str, blob_hashes: &[String], meta: &Value) -> Res<Vec<Value>> {

@@ -2,7 +2,8 @@ import { memo } from "react";
 import { asMeta } from "@/data";
 import type { Artwork } from "@/data/types";
 import { useBasketActions, useBasketHas, useCommands, useSession } from "@/state";
-import { IconCopy, IconSparkles } from "@/generation/components/icons";
+import { IconCopy, IconDownload, IconSparkles } from "@/generation/components/icons";
+import { DownloadMenu, downloadArtwork, useDownloadPop } from "@/ui/DownloadMenu";
 import { SwapImage } from "./SwapImage";
 
 export const ArtworkCard = memo(function ArtworkCard({ item, index, enter = true }: { item: Artwork; index: number; enter?: boolean }) {
@@ -13,6 +14,7 @@ export const ArtworkCard = memo(function ArtworkCard({ item, index, enter = true
   const { toggle: toggleBasket } = useBasketActions();
   const unknown = asMeta(item.params).source === "none";
   const shown = (item.artists || []).slice(0, 3);
+  const download = useDownloadPop();
 
   return (
     <div
@@ -75,8 +77,27 @@ export const ArtworkCard = memo(function ArtworkCard({ item, index, enter = true
               <IconSparkles />
               生图
             </button>
+            <button
+              type="button"
+              title="下载"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                download.toggle(e.currentTarget);
+              }}
+            >
+              <IconDownload />
+              下载
+            </button>
           </div>
         </div>
+        <DownloadMenu
+          open={download.open}
+          left={download.pos.left}
+          top={download.pos.top}
+          onClose={download.close}
+          onPick={(kind) => void downloadArtwork(item, kind)}
+        />
       </div>
       <div className="artists" title={item.artistLine || ""}>
         {shown.length ? (

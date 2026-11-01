@@ -4,10 +4,11 @@ use super::rules::{
     is_single_artist_album, is_test_set_album, is_test_set_id, unique_artist_keys, SINGLE_ARTIST_ALBUM_ID,
     SINGLE_ARTIST_ALBUM_NAME, SINGLE_ARTIST_IMPORT_ERROR, TEST_SET_ID_PREFIX,
 };
-use crate::kernel::blobs::{png_size, sniff_mime};
+use crate::kernel::blobs::{gallery_target, png_size, sniff_mime, Bucket, Slot};
 use crate::kernel::clock::{new_id, now_ms};
 use crate::kernel::hashes::sha256_bytes;
 use crate::kernel::bus::Kernel;
+use crate::kernel::purge::{plan_job_items, Purge};
 use crate::kernel::{Aggregate, DomainError, Res};
 use crate::util::{get, has_value, py_str, take_chars, to_int, truthy};
 use rusqlite::params;
@@ -264,14 +265,19 @@ impl GalleryService {
         if !is_test_set_album(current.as_ref()) && self.active_album_count()? <= 1 {
             return Err(DomainError::bad("至少保留一个收藏夹"));
         }
-        let mut album: Album = self.k.load(album_id)?;
-        album.delete()?;
-        self.k.commit(&mut album, None)?;
-        for item_id in self.item_ids(album_id, false)? {
-            let mut art: Artwork = self.k.load(&item_id)?;
-            art.delete()?;
-            self.k.commit(&mut art, None)?;
+        let mut plan = Purge::default();
+        plan.drop_aggregate(album_id);
+        {
+            let conn = self.k.store.connect()?;
+            for deleted in [false, true] {
+                for id in self.item_ids(album_id, deleted)? {
+                    plan.drop_aggregate(&id);
+                }
+            }
+            self.plan_jobs_for_album(&conn, album_id, &mut plan)?;
         }
+        self.k.purge(&plan)?;
+        self.k.blobs.prune_dirs();
         Ok(())
     }
 
@@ -364,18 +370,10 @@ impl GalleryService {
         if self.has_hash(album_id, &digest)? {
             return Err(DomainError::conflict("重复"));
         }
-        let blob_hash = self.k.blobs.put(data)?;
+        let bucket = Bucket::Favorites(album_id.to_string());
+        let (blob_hash, thumb_hash) = self.k.blobs.put_image(&bucket, data, opts.thumb)?;
         if blob_hash != digest {
             return Err(DomainError::internal("哈希写入失败"));
-        }
-        let mut thumb_hash = String::new();
-        match opts.thumb {
-            Some(t) if !t.is_empty() => thumb_hash = self.k.blobs.put(t)?,
-            _ => {
-                if let Some(generated) = self.k.blobs.thumb(data) {
-                    thumb_hash = self.k.blobs.put(&generated)?;
-                }
-            }
         }
         let size = png_size(data);
         let item_id = match opts.item_id {
@@ -438,27 +436,44 @@ impl GalleryService {
         if item["albumId"].as_str() != Some(album_id) && self.has_hash(album_id, item["hash"].as_str().unwrap_or(""))? {
             return Err(DomainError::conflict("目标收藏夹已有这张图"));
         }
+        let old_album = item["albumId"].as_str().unwrap_or("").to_string();
+        let hash = item["hash"].as_str().unwrap_or("").to_string();
+        let thumb = item["thumbHash"].as_str().unwrap_or("").to_string();
+        if old_album != album_id {
+            let dest = Bucket::Favorites(album_id.to_string());
+            if hash.is_empty() || !self.k.blobs.copy_into(&Slot::image(dest.clone()), &hash)? {
+                return Err(DomainError::not_found("图片文件不存在"));
+            }
+            if !thumb.is_empty() {
+                let _ = self.k.blobs.copy_into(&Slot::thumb(dest), &thumb)?;
+            }
+        }
         let mut art: Artwork = self.k.load(item_id)?;
         art.move_to(album_id)?;
         self.k.commit(&mut art, None)?;
+        if old_album != album_id {
+            self.strip_gallery_jobs(&old_album, &hash)?;
+            let mut files = vec![(hash, Slot::image(Bucket::Favorites(old_album.clone())))];
+            if !thumb.is_empty() {
+                files.push((thumb, Slot::thumb(Bucket::Favorites(old_album))));
+            }
+            self.k.release_files(&files)?;
+        }
         self.get_item(item_id, false)?.ok_or_else(|| DomainError::not_found("图片不存在"))
     }
 
     pub fn delete_item(&self, item_id: &str) -> Res<()> {
-        let mut art: Artwork = self.k.load(item_id)?;
-        art.delete()?;
-        self.k.commit(&mut art, None)?;
-        Ok(())
-    }
-
-    pub fn restore_item(&self, item_id: &str) -> Res<Value> {
-        let mut art: Artwork = self.k.load(item_id)?;
-        if !art.album_id.is_empty() && self.has_hash(&art.album_id, &art.hash)? {
-            return Err(DomainError::conflict("目标收藏夹已有这张图"));
+        let item = self.get_item(item_id, false)?.ok_or_else(|| DomainError::not_found("图片不存在"))?;
+        let album = item["albumId"].as_str().unwrap_or("").to_string();
+        let hash = item["hash"].as_str().unwrap_or("").to_string();
+        let mut plan = Purge::default();
+        plan.drop_aggregate(item_id);
+        {
+            let conn = self.k.store.connect()?;
+            self.plan_jobs_without(&conn, &album, &hash, &mut plan)?;
         }
-        art.restore()?;
-        self.k.commit(&mut art, None)?;
-        self.get_item(item_id, true)?.ok_or_else(|| DomainError::not_found("图片不存在"))
+        self.k.purge(&plan)?;
+        Ok(())
     }
 
     pub fn clear_album(&self, album_id: &str) -> Res<()> {
@@ -466,9 +481,19 @@ impl GalleryService {
             Some(a) if !a["deleted"].as_bool().unwrap_or(false) => {}
             _ => return Err(DomainError::not_found("收藏夹不存在")),
         }
-        for item_id in self.item_ids(album_id, false)? {
-            self.delete_item(&item_id)?;
+        let mut plan = Purge::default();
+        {
+            let conn = self.k.store.connect()?;
+            for id in self.item_ids(album_id, false)? {
+                plan.drop_aggregate(&id);
+            }
+            for id in self.item_ids(album_id, true)? {
+                plan.drop_aggregate(&id);
+            }
+            self.plan_jobs_for_album(&conn, album_id, &mut plan)?;
         }
+        self.k.purge(&plan)?;
+        self.k.blobs.prune_dirs();
         Ok(())
     }
 
@@ -503,6 +528,63 @@ impl GalleryService {
             }
         }
         Ok(pool)
+    }
+
+    fn gallery_jobs(conn: &rusqlite::Connection) -> Res<Vec<(String, Value, Vec<Value>)>> {
+        let mut stmt = conn.prepare(
+            "SELECT id, client_json, items_json FROM projections_jobs WHERE source='gallery' AND status='done'",
+        )?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?, r.get::<_, Option<String>>(2)?)))?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (id, client, items) = row?;
+            let client = client.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or(Value::Null);
+            let items = items
+                .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+                .and_then(|v| v.as_array().cloned())
+                .unwrap_or_default();
+            out.push((id, client, items));
+        }
+        Ok(out)
+    }
+
+    /// 目标收藏夹是 `album`、而且用到这张图的生图任务：拿掉这张，空了就整段清除。
+    fn plan_jobs_without(&self, conn: &rusqlite::Connection, album: &str, hash: &str, plan: &mut Purge) -> Res<()> {
+        let hash = hash.to_lowercase();
+        for (id, client, items) in Self::gallery_jobs(conn)? {
+            if gallery_target(&client).as_deref() != Some(album) {
+                continue;
+            }
+            let before = items.len();
+            let keep: Vec<Value> = items
+                .into_iter()
+                .filter(|it| py_str(get(it, "blobHash")).trim().to_lowercase() != hash)
+                .collect();
+            if keep.len() == before {
+                continue;
+            }
+            plan_job_items(conn, &id, &keep, plan)?;
+        }
+        Ok(())
+    }
+
+    fn plan_jobs_for_album(&self, conn: &rusqlite::Connection, album: &str, plan: &mut Purge) -> Res<()> {
+        for (id, client, _) in Self::gallery_jobs(conn)? {
+            if gallery_target(&client).as_deref() == Some(album) {
+                plan.drop_aggregate(&id);
+            }
+        }
+        Ok(())
+    }
+
+    fn strip_gallery_jobs(&self, album: &str, hash: &str) -> Res<()> {
+        let mut plan = Purge::default();
+        {
+            let conn = self.k.store.connect()?;
+            self.plan_jobs_without(&conn, album, hash, &mut plan)?;
+        }
+        self.k.purge(&plan)?;
+        Ok(())
     }
 
     fn item_ids(&self, album_id: &str, deleted: bool) -> Res<Vec<String>> {

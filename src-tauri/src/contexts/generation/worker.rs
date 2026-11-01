@@ -4,14 +4,15 @@ use super::application::GenerationService;
 use super::domain::GenerationJob;
 use super::nai_images::{composite_infill, decode_image_b64, image_to_png};
 use super::nai_payload::*;
-use crate::kernel::blobs::png_size;
+use crate::kernel::blobs::{png_size, Bucket};
 use crate::kernel::clock::now_ms;
 use crate::util::{get, py_str, to_int, truthy};
 use serde_json::{json, Value};
+use std::future::Future;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{Mutex, Notify};
+use tokio::sync::{mpsc::UnboundedReceiver, Notify};
 
 pub const MAX_WORKERS: usize = 3;
 
@@ -75,7 +76,13 @@ fn text_of(v: &Value) -> String {
 }
 
 /// 专用放大：不经过扩散模型，直接调 /ai/upscale。
-async fn run_upscale(svc: &Arc<GenerationService>, job_id: &str, job: &GenerationJob, body: &Value) -> RunRes<()> {
+async fn run_upscale(
+    svc: &Arc<GenerationService>,
+    job_id: &str,
+    job: &GenerationJob,
+    body: &Value,
+    bucket: &Bucket,
+) -> RunRes<()> {
     let src = svc
         .k
         .blobs
@@ -87,13 +94,14 @@ async fn run_upscale(svc: &Arc<GenerationService>, job_id: &str, job: &Generatio
         return Err(NaiError::new(400, "无法读取底图").into());
     }
     let factor = upscale_factor(body);
-    svc.mutate_job(job_id, |j| j.preview(0, Value::Null, None, "放大中"));
+    svc.emit(json!({"type": "preview", "id": job_id, "text": "放大中", "sample": 0}));
     let inherit = if get(body, "inherit").is_object() { get(body, "inherit").clone() } else { json!({}) };
     let out = svc.gateway.upscale_image(&png, get(&inherit, "model")).await?;
     if svc.cancelled(job_id) {
         return Err(RunErr::Interrupted);
     }
-    let rec = svc.store_image(&out)?;
+    let rec = svc.store_image(bucket, &out)?;
+    svc.stage(job_id, &rec);
     let mut meta = inherit.as_object().cloned().unwrap_or_default();
     meta.insert("requestType".into(), json!("upscale"));
     meta.insert("scale".into(), json!(factor));
@@ -114,6 +122,7 @@ async fn post_upscale(
     job_id: &str,
     items: Vec<Value>,
     meta: &mut Value,
+    bucket: &Bucket,
 ) -> RunRes<Vec<Value>> {
     let factor = {
         let v = get(meta, "postUpscale");
@@ -122,7 +131,7 @@ async fn post_upscale(
     if factor == 0 {
         return Ok(items);
     }
-    svc.mutate_job(job_id, |j| j.preview(0, Value::Null, None, "放大中"));
+    svc.emit(json!({"type": "preview", "id": job_id, "text": "放大中", "sample": 0}));
     let mut out: Vec<Value> = Vec::new();
     for rec in items {
         if svc.cancelled(job_id) {
@@ -135,7 +144,9 @@ async fn post_upscale(
             continue;
         };
         let upscaled = svc.gateway.upscale_image(&raw, get(meta, "model")).await?;
-        out.push(svc.store_image(&upscaled)?);
+        let rec = svc.store_image(bucket, &upscaled)?;
+        svc.stage(job_id, &rec);
+        out.push(rec);
     }
     if let Some(first) = out.first() {
         if truthy(get(first, "width")) {
@@ -152,8 +163,9 @@ async fn finish(
     job: &GenerationJob,
     items: Vec<Value>,
     mut meta: Value,
+    bucket: &Bucket,
 ) -> RunRes<()> {
-    let items = post_upscale(svc, job_id, items, &mut meta).await?;
+    let items = post_upscale(svc, job_id, items, &mut meta, bucket).await?;
     let sub = fetch_sub(svc).await;
     svc.bind_test_set_items(&job.source, &Value::Object(job.client.clone()), &items, &meta);
     svc.mutate_job(job_id, |j| j.complete(Value::Array(items), meta, sub, now_ms()));
@@ -167,10 +179,11 @@ async fn run_inner(
     body: &Value,
     steps: i64,
     n_samples: i64,
+    bucket: &Bucket,
 ) -> RunRes<()> {
     let kind = if truthy(get(body, "kind")) { py_str(get(body, "kind")) } else { "generate".into() };
     if kind == "upscale" {
-        return run_upscale(svc, job_id, job, body).await;
+        return run_upscale(svc, job_id, job, body, bucket).await;
     }
     let (payload, meta) = {
         let svc2 = svc.clone();
@@ -187,9 +200,11 @@ async fn run_inner(
             let mut items = Vec::new();
             for png in images {
                 let png = infill_png(svc, body, png).await?;
-                items.push(svc.store_image(&png)?);
+                let rec = svc.store_image(bucket, &png)?;
+                svc.stage(job_id, &rec);
+                items.push(rec);
             }
-            return finish(svc, job_id, job, items, meta).await;
+            return finish(svc, job_id, job, items, meta, bucket).await;
         }
     };
 
@@ -236,7 +251,8 @@ async fn run_inner(
                 svc.emit(json!({"type": "preview", "id": job_id, "url": url, "step": step, "sample": sample, "text": text}));
             } else if et == "final" && !image.is_empty() {
                 let png = infill_png(svc, body, decode_image_b64(&image)?).await?;
-                let rec = svc.store_image(&png)?;
+                let rec = svc.store_image(bucket, &png)?;
+                svc.stage(job_id, &rec);
                 svc.emit(json!({"type": "preview", "id": job_id, "url": get(&rec, "url"), "sample": sample, "final": true}));
                 items.push(rec);
             }
@@ -251,7 +267,7 @@ async fn run_inner(
     if items.is_empty() {
         return Err(NaiError::new(502, "生图没有返回图片").into());
     }
-    finish(svc, job_id, job, items, meta).await
+    finish(svc, job_id, job, items, meta, bucket).await
 }
 
 pub async fn run_job(svc: Arc<GenerationService>, job_id: String) {
@@ -275,8 +291,9 @@ pub async fn run_job(svc: Arc<GenerationService>, job_id: String) {
     };
     let steps = int_of("steps", 28);
     let n_samples = int_of("nSamples", 1);
+    let bucket = Bucket::for_job(&job.source, &Value::Object(job.client.clone()));
 
-    let result = run_inner(&svc, &job_id, &job, &body, steps, n_samples).await;
+    let result = run_inner(&svc, &job_id, &job, &body, steps, n_samples, &bucket).await;
     match result {
         Ok(()) => {}
         Err(RunErr::Interrupted) => {
@@ -298,6 +315,8 @@ pub async fn run_job(svc: Arc<GenerationService>, job_id: String) {
             }
         }
     }
+    svc.settle(&job_id);
+    svc.release_staged(&job_id);
     svc.clear_previews(&job_id);
 }
 
@@ -306,31 +325,122 @@ struct Gate {
     notify: Notify,
 }
 
-/// 起 MAX_WORKERS 个任务，实际并发数由设置 generation.concurrency 动态限制（默认 1）。
+/// 占着的并发名额。任务正常结束或 panic 都要还回去，否则后面的任务再也排不上。
+struct Permit(Arc<Gate>);
+
+impl Drop for Permit {
+    fn drop(&mut self) {
+        self.0.running.fetch_sub(1, Ordering::SeqCst);
+        self.0.notify.notify_one();
+    }
+}
+
+fn concurrency_limit(svc: &GenerationService) -> usize {
+    let n = svc.settings.value_i64("generation", "concurrency", 1).max(1) as usize;
+    n.clamp(1, MAX_WORKERS)
+}
+
+/// 先登记等待，再看名额，避免释放发生在两次检查之间时这一次唤醒丢失。
+async fn acquire_slot(gate: &Gate, limit: &impl Fn() -> usize) {
+    loop {
+        let notified = std::pin::pin!(gate.notify.notified());
+        let max = limit().clamp(1, MAX_WORKERS);
+        let cur = gate.running.load(Ordering::SeqCst);
+        if cur < max && gate.running.compare_exchange(cur, cur + 1, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
+            return;
+        }
+        let _ = tokio::time::timeout(Duration::from_secs(1), notified).await;
+    }
+}
+
+/// 只有这一个消费者按入队顺序取任务：拿到名额才开始下一条。
+/// 以前每个空闲 worker 都会先把任务抽走再抢名额，并发为 1 时后抽到的任务可能先跑，先抽到的一直停在「排队中」。
+async fn dispatch_queue<L, F, Fut>(mut rx: UnboundedReceiver<String>, limit: L, run: F)
+where
+    L: Fn() -> usize + Send,
+    F: Fn(String) -> Fut + Send,
+    Fut: Future<Output = ()> + Send + 'static,
+{
+    let gate = Arc::new(Gate { running: AtomicUsize::new(0), notify: Notify::new() });
+    while let Some(job_id) = rx.recv().await {
+        acquire_slot(&gate, &limit).await;
+        let permit = Permit(gate.clone());
+        let task = run(job_id);
+        tokio::spawn(async move {
+            let _permit = permit;
+            task.await;
+        });
+    }
+}
+
+/// 实际并发数由设置 `generation.concurrency` 动态限制（默认 1，最多 MAX_WORKERS）。
 pub fn start_workers(svc: Arc<GenerationService>) {
     let Some(rx) = svc.take_receiver() else { return };
-    let rx = Arc::new(Mutex::new(rx));
-    let gate = Arc::new(Gate { running: AtomicUsize::new(0), notify: Notify::new() });
-    for _ in 0..MAX_WORKERS {
-        let (svc, rx, gate) = (svc.clone(), rx.clone(), gate.clone());
-        tauri::async_runtime::spawn(async move {
-            loop {
-                let next = { rx.lock().await.recv().await };
-                let Some(job_id) = next else { break };
-                loop {
-                    let limit = svc.settings.value_i64("generation", "concurrency", 1).max(1) as usize;
-                    let cur = gate.running.load(Ordering::SeqCst);
-                    if cur < limit && gate.running.compare_exchange(cur, cur + 1, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
-                        break;
-                    }
-                    let _ = tokio::time::timeout(Duration::from_secs(1), gate.notify.notified()).await;
-                }
-                // 任务 panic 不能带走工作线程，单独 spawn 再等它结束。
-                let handle = tauri::async_runtime::spawn(run_job(svc.clone(), job_id));
-                let _ = handle.await;
-                gate.running.fetch_sub(1, Ordering::SeqCst);
-                gate.notify.notify_waiters();
+    if let Err(e) = svc.resume_pending() {
+        eprintln!("[generation] 恢复排队任务失败：{}", e.message);
+    }
+    let svc_limit = svc.clone();
+    let svc_run = svc.clone();
+    tauri::async_runtime::spawn(async move {
+        dispatch_queue(rx, move || concurrency_limit(&svc_limit), move |job_id| {
+            let svc_run = svc_run.clone();
+            async move { run_job(svc_run, job_id).await }
+        })
+        .await;
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex as StdMutex;
+    use tokio::sync::{mpsc, Mutex as AsyncMutex};
+
+    async fn wait_until(mut pred: impl FnMut() -> bool) {
+        for _ in 0..100 {
+            if pred() {
+                return;
             }
-        });
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        panic!("调度没有在时限内推进");
+    }
+
+    async fn recorded_order(limit: usize) -> Vec<String> {
+        let (tx, rx) = mpsc::unbounded_channel();
+        let started = Arc::new(StdMutex::new(Vec::new()));
+        let hold = Arc::new(AsyncMutex::new(()));
+        let guard = hold.lock().await;
+        let started2 = started.clone();
+        let hold2 = hold.clone();
+        let dispatch = tokio::spawn(dispatch_queue(rx, move || limit, move |id| {
+            started2.lock().unwrap().push(id);
+            let hold2 = hold2.clone();
+            async move {
+                let _guard = hold2.lock().await;
+            }
+        }));
+        for n in ["2", "3", "4", "5", "6", "7"] {
+            tx.send(n.to_string()).unwrap();
+        }
+        wait_until(|| started.lock().unwrap().len() == limit).await;
+        tokio::time::sleep(Duration::from_millis(80)).await;
+        assert_eq!(started.lock().unwrap().len(), limit, "没拿到名额的任务不应先开始");
+        drop(guard);
+        wait_until(|| started.lock().unwrap().len() == 6).await;
+        let order = started.lock().unwrap().clone();
+        drop(tx);
+        let _ = tokio::time::timeout(Duration::from_secs(2), dispatch).await;
+        order
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrency_one_starts_in_enqueue_order() {
+        assert_eq!(recorded_order(1).await, ["2", "3", "4", "5", "6", "7"]);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrency_three_does_not_start_past_the_limit() {
+        assert_eq!(recorded_order(3).await, ["2", "3", "4", "5", "6", "7"]);
     }
 }

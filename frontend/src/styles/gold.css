@@ -67,11 +67,10 @@ html[data-theme="gold"] .pane-title {
   filter: drop-shadow(0 0 7px rgba(255, 176, 36, .55));
   animation: goldFoil 5s linear infinite;
 }
-html[data-theme="gold"] .act-logo {
-  background: linear-gradient(135deg, #fff1a6 0%, #ffc42e 40%, #c98400 100%);
-  box-shadow: 0 0 22px rgba(255, 184, 36, .65), inset 0 0 0 2px rgba(255, 246, 200, .7);
-  text-shadow: none;
-}
+html[data-theme="gold"] .act-logo { filter: drop-shadow(0 0 10px rgba(255, 184, 36, .65)); }
+html[data-theme="gold"] .act-logo .brand-seal { fill: #ffbd2b; stroke: none; }
+html[data-theme="gold"] .act-logo .brand-ring { stroke: #2a1a00; }
+html[data-theme="gold"] .act-logo .brand-dot { fill: #2a1a00; }
 html[data-theme="gold"] .kicker,
 html[data-theme="gold"] .pane-no { text-shadow: 0 0 10px rgba(255, 184, 36, .7); }
 
