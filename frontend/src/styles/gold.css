@@ -108,7 +108,8 @@ html[data-theme="gold"] .toast { box-shadow: 0 0 30px -6px rgba(255, 184, 36, .6
 html[data-theme="gold"] .grid .card { box-shadow: 0 0 0 1px var(--line-2), 0 16px 28px -20px #000; }
 html[data-theme="gold"] .grid .card:hover,
 html[data-theme="gold"] .grid .card:focus-visible { box-shadow: 0 0 0 1px rgba(255, 217, 92, .85), 0 0 30px -2px rgba(255, 184, 36, .5); }
-html[data-theme="gold"] .grid .card.sel { box-shadow: 0 0 0 2px var(--zhu), 0 0 34px -2px rgba(255, 184, 36, .6); }
+html[data-theme="gold"] .grid .card.sel,
+html[data-theme="gold"] .grid .card.picked { box-shadow: 0 0 0 2px var(--zhu), 0 0 34px -2px rgba(255, 184, 36, .6); }
 html[data-theme="gold"] dialog.modal { box-shadow: 0 0 0 1px var(--line-3), 0 0 60px -10px rgba(255, 184, 36, .45); }
 
 /* 压在图片上的小标、操作条：底是深色半透明，字要用金色（原来是「纸色字」，在这里是深色，会看不见） */

@@ -5,7 +5,7 @@ import { boardPayload } from "@/data/lottery";
 import { queryKeys } from "@/data/queryKeys";
 import { useLotteryStore } from "@/state/lotteryStore";
 import { formatBytes, type SystemInfo } from "@/data/settings";
-import { formatTokenStatus, tokenDotClass } from "@/data/studio";
+import { extraUsageText, formatTokenStatus, tokenDotClass } from "@/data/studio";
 import { LS_DRAFT, LS_IMPORT_OPTS, LS_SELECTED_SET } from "@/data/studio";
 import { confirmDialog } from "@/state/confirm";
 import { pushToast } from "@/state/toast";
@@ -22,7 +22,7 @@ export function TokenPanel() {
   const status = useNaiStatusQuery().data || null;
   const sub = status?.subscription;
   const detail = sub
-    ? [`固定 ${sub.anlasFixed ?? 0}`, `购买 ${sub.anlasPurchased ?? 0}`, sub.usagePercent != null ? `Opus ${sub.usagePercent}%` : ""].filter(Boolean).join(" · ")
+    ? [`固定 ${sub.anlasFixed ?? 0}`, `购买 ${sub.anlasPurchased ?? 0}`, sub.usagePercent != null ? `Opus ${sub.usagePercent}%` : "", extraUsageText(sub)].filter(Boolean).join(" · ")
     : status?.error || "";
   return (
     <div className="s-token">

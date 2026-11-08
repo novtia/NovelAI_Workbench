@@ -1,7 +1,8 @@
 import { isMediumEffort, SAMPLER_LABEL } from "@/data/studio";
-import { accountLabel, costLabel, genLabel, formatTokenStatus } from "@/data";
+import { accountLabel, costLabel, extraUsagePercent, extraUsageText, genLabel, formatTokenStatus } from "@/data";
 import { useShallow } from "zustand/react/shallow";
 import { openStudioPop, openTokenPop, useNaiStatusQuery, useStudioActions, useStudioEstimate, useStudioStore } from "@/state";
+import { TagFormulaPanel } from "./TagFormulaPanel";
 import { IconBolt, IconCollapse, IconExpand, IconReset, IconSeed, IconX } from "./icons";
 
 export function ParamDock() {
@@ -37,11 +38,14 @@ export function ParamDock() {
   const opus = Boolean(status?.subscription?.opus);
   const pct = status?.subscription?.usagePercent;
   const showQuota = Boolean(status?.subscription);
+  const extra = extraUsageText(status?.subscription);
+  const opusW = opus && pct != null && !status?.subscription?.usageNegative ? Math.max(0, Math.min(100, Number(pct))) : 0;
+  const extraW = Math.min(extraUsagePercent(status?.subscription), Math.max(0, 100 - opusW));
   const quotaText =
     opus && pct != null
-      ? status?.subscription?.usageNegative
-        ? `Opus 额度已超额（${Math.max(0, Math.min(100, Number(pct)))}%）`
-        : `剩余 ${Math.round(Math.max(0, Math.min(100, Number(pct))))}% Opus 额度`
+      ? (status?.subscription?.usageNegative
+          ? `Opus 额度已超额（${Math.max(0, Math.min(100, Number(pct)))}%）`
+          : `剩余 ${Math.round(Math.max(0, Math.min(100, Number(pct))))}% Opus 额度`) + (extra ? `，${extra}` : "")
       : status?.subscription && !opus
         ? `Anlas ${status.subscription.anlas}（非 Opus）`
         : "";
@@ -168,6 +172,7 @@ export function ParamDock() {
                 </button>
               </label>
             </div>
+            <TagFormulaPanel />
             <details className="ai-adv">
               <summary>高级设置</summary>
               <div className="extra show">
@@ -210,7 +215,10 @@ export function ParamDock() {
             详情
           </button>
         </div>
-        <i className="bar" style={{ width: opus && pct != null ? `${Math.max(0, Math.min(100, Number(pct)))}%` : "0%" }} />
+        <span className="bar">
+          <i style={{ width: `${opusW}%` }} />
+          {extraW > 0 && <i className="boost" style={{ width: `${extraW}%` }} />}
+        </span>
       </div>
       <p className="gen-bg-hint">后台执行 · 切换页面不会中断</p>
       <button

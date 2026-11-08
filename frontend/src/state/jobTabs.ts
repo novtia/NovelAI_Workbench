@@ -44,6 +44,17 @@ export function getJobTab(jobId: string) {
   return load().get(jobId);
 }
 
+/**
+ * 这条任务该回到哪个标签。
+ * 本地表是提交返回后写的；推送往往比那一次返回更早到，所以同时认请求体里的 client.tabId。
+ */
+export function jobOwnerTab(job: { id: string; client?: { tabId?: unknown } | null }) {
+  const mapped = getJobTab(job.id);
+  if (mapped) return mapped;
+  const tabId = job.client?.tabId;
+  return typeof tabId === "string" && tabId ? tabId : undefined;
+}
+
 /** 测试用：丢掉内存缓存。 */
 export function resetJobTabsCache() {
   map = null;
@@ -52,10 +63,10 @@ export function resetJobTabsCache() {
 /**
  * 把一批任务分给各标签：有归属且归属标签还在的给它，其余（旧任务、归属标签已关闭）归 fallback。
  */
-export function assignJobsToTabs<T extends { id: string }>(jobs: T[], tabIds: string[], fallback: string) {
+export function assignJobsToTabs<T extends { id: string; client?: { tabId?: unknown } | null }>(jobs: T[], tabIds: string[], fallback: string) {
   const out = new Map<string, T[]>(tabIds.map((id) => [id, []]));
   for (const job of jobs) {
-    const owner = getJobTab(job.id);
+    const owner = jobOwnerTab(job);
     const target = owner && out.has(owner) ? owner : fallback;
     out.get(target)?.push(job);
   }

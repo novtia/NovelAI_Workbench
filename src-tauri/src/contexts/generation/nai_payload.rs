@@ -169,8 +169,9 @@ pub fn assemble_prompt(body: &Value) -> (String, String) {
     if !quality.is_empty() && prompt.to_lowercase().contains(&quality.to_lowercase()) {
         quality = "";
     }
-    let combined = join(&[prefix, quality, &artists, &prompt]);
-    let uc = str_or(body, "uc", "").trim().to_string();
+    // 兜底：不管前端有没有处理，整条 prompt / uc 里「权重::tag::」的收尾 :: 都不能紧贴数字。
+    let combined = pad_numeric_closers(&join(&[prefix, quality, &artists, &prompt]));
+    let uc = pad_numeric_closers(str_or(body, "uc", "").trim());
     (combined, uc)
 }
 
@@ -188,7 +189,7 @@ fn characters(body: &Value) -> Vec<Character> {
         if !item.is_object() {
             continue;
         }
-        let prompt = str_or(item, "prompt", "").trim().to_string();
+        let prompt = pad_numeric_closers(str_or(item, "prompt", "").trim());
         if prompt.is_empty() {
             continue;
         }
@@ -204,7 +205,7 @@ fn characters(body: &Value) -> Vec<Character> {
         };
         out.push(Character {
             prompt,
-            uc: str_or(item, "uc", "").trim().to_string(),
+            uc: pad_numeric_closers(str_or(item, "uc", "").trim()),
             x: x.clamp(0.0, 1.0),
             y: y.clamp(0.0, 1.0),
         });
@@ -584,6 +585,22 @@ mod tests {
         assert_eq!(meta["effort"], "high");
         assert!(payload["input"].as_str().unwrap().contains("artist:foo, 1girl"));
         assert!(build_payload(&json!({"prompt": "", "quality": "off"})).is_err());
+    }
+
+    #[test]
+    fn pads_numeric_closers_in_whole_prompt() {
+        let body = json!({
+            "prompt": "1.2::artist:dishwasher1910::, 1girl",
+            "uc": "-2::bad2::",
+            "characters": [{"prompt": "1.1::name9::, girl", "uc": "1.2::x1::"}],
+            "quality": "off",
+        });
+        let (prompt, uc) = assemble_prompt(&body);
+        assert_eq!(prompt, "1.2::artist:dishwasher1910 ::, 1girl");
+        assert_eq!(uc, "-2::bad2 ::");
+        let chars = characters(&body);
+        assert_eq!(chars[0].prompt, "1.1::name9 ::, girl");
+        assert_eq!(chars[0].uc, "1.2::x1 ::");
     }
 
     #[test]

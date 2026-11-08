@@ -1,7 +1,12 @@
 import { useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ApiError, generationApi } from "@/api";
+import { ApiError, galleryApi, generationApi } from "@/api";
 import {
+  artistLibraryNames,
+  expandFormulas,
+  findFormulas,
+  formulaItems,
+  stepsUntilEnd,
   applySizeToForm,
   cloneForm,
   defaultChar,
@@ -61,6 +66,7 @@ import { getSettings } from "./settingsStore";
 import { useStudioStore, type StudioState } from "./studioStore";
 import { activeTab, currentTabId, runInTab } from "./scoped";
 import { assignJobsToTabs, setJobTab } from "./jobTabs";
+import { useTagCounters } from "./tagCounters";
 import { useTabs } from "./tabs";
 import { confirmDialog } from "./confirm";
 import { pushToast } from "./toast";
@@ -207,7 +213,39 @@ function pushSessionItems(job: Job) {
   showShot(added[index] || added[0] || rest.find((shot) => !shot.pending) || null);
 }
 
+type JobEnd = "done" | "error" | "cancelled";
+const jobWaits = new Map<string, (end: JobEnd) => void>();
+
+function settleLoopJob(job: Job) {
+  const wait = jobWaits.get(job.id);
+  if (!wait) return;
+  if (job.status !== "done" && job.status !== "error" && job.status !== "cancelled") return;
+  jobWaits.delete(job.id);
+  wait(job.status);
+}
+
+type LoopRun = { tabId: string; stops: Record<string, number> };
+let loopRun: LoopRun | null = null;
+
+function stopLoop() {
+  loopRun = null;
+  useTagCounters.getState().setRunning(false);
+}
+
+function loopHasMore() {
+  if (!loopRun) return false;
+  const { loops, counters } = useTagCounters.getState();
+  const keys = Object.keys(loopRun.stops);
+  if (!keys.length) return false;
+  for (const key of keys) {
+    if (!loops[key]) return false;
+    if ((counters[key] || 0) >= loopRun.stops[key]) return false;
+  }
+  return true;
+}
+
 function applyStudioJob(job: Job) {
+  settleLoopJob(job);
   if (job.source !== "studio") return;
   const s = useStudioStore.getState();
   if (jobIsActive(job)) {
@@ -358,12 +396,29 @@ export function useStudioSync() {
     alive.add(activeTab());
     const owners = order.filter((id) => alive.has(id));
     const assigned = assignJobsToTabs(studio, owners, owners[0] ?? activeTab());
-    for (const [tabId, mine] of assigned) runInTab(tabId, () => syncTabJobs(mine));
+    for (const [tabId, mine] of assigned) runInTab(tabId, () => syncTabJobs(mine, studio));
   }, [jobsQ.data]);
 }
 
+/**
+ * 占位如果是别的标签的任务，从当前会话里拿掉。
+ * 任务列表里还没出现的（刚提交、查询还没回来）留着，避免把自己刚放上的占位清掉。
+ */
+function dropForeignPending(mine: Job[], known: Job[]) {
+  const mineIds = new Set(mine.map((job) => job.id));
+  const knownIds = new Set(known.map((job) => job.id));
+  const s = useStudioStore.getState();
+  const foreign = new Set(
+    s.session.flatMap((shot) => (shot.pending && shot.jobId && knownIds.has(shot.jobId) && !mineIds.has(shot.jobId) ? [shot.jobId] : [])),
+  );
+  for (const id of foreign) dropPending(id);
+  const cur = useStudioStore.getState();
+  if (cur.studioJobId && knownIds.has(cur.studioJobId) && !mineIds.has(cur.studioJobId)) endBusy();
+}
+
 /** 同步「当前标签」的生图任务（外面用 runInTab 指定标签）。 */
-function syncTabJobs(studio: Job[]) {
+function syncTabJobs(studio: Job[], all: Job[]) {
+  dropForeignPending(studio, all);
   const active = studio.filter((j) => jobIsActive(j));
   const s = useStudioStore.getState();
   const current = (s.studioJobId && studio.find((j) => j.id === s.studioJobId)) || active[0];
@@ -470,26 +525,119 @@ export function useStudioActions() {
     store.patchForm({ characters: next });
   }
 
-  async function generate() {
+  function waitJob(id: string): Promise<JobEnd> {
+    const jobs = qc.getQueryData(queryKeys.jobs) as Job[] | undefined;
+    const found = jobs?.find((j) => j.id === id);
+    if (found && notified.has(id) && (found.status === "done" || found.status === "error" || found.status === "cancelled")) {
+      return Promise.resolve(found.status);
+    }
+    return new Promise((resolve) => jobWaits.set(id, resolve));
+  }
+
+  async function generate(chain = false) {
+    const tabId = currentTabId();
     const form = store.form;
-    if (store.busy) return;
+    if (store.busy) {
+      if (!chain || !loopRun || loopRun.tabId !== tabId) return;
+      const off = useStudioStore.forTab(tabId).subscribe((s) => {
+        if (s.busy) return;
+        off();
+        if (!loopRun || loopRun.tabId !== tabId || !loopHasMore()) {
+          if (loopRun?.tabId === tabId) stopLoop();
+          return;
+        }
+        runInTab(tabId, () => {
+          void generate(true);
+        });
+      });
+      return;
+    }
+    if (loopRun && !chain) {
+      pushToast("循环还在进行，点公式卡片上的停止", "warn");
+      return;
+    }
     if (!form.prompt.trim() && form.quality === "off") {
+      if (chain) stopLoop();
       pushToast("先填主体 Prompt，或打开质量词", "warn");
       return;
     }
     saveDraft();
     // 有底图就走图生图；底图带蒙版就走局部重绘。
     const i2i = store.i2i;
-    await submitStudioJob(i2i ? i2iJobPayload(form, i2i) : formToPayload(form));
+    const formulas = [form.prompt, ...form.characters.map((c) => c.prompt || "")].flatMap((text) => findFormulas(text));
+    const hasFormula = formulas.length > 0;
+    let sendForm = form;
+    let advance: Record<string, number> = {};
+    if (hasFormula) {
+      const library = await libraryNamesNow();
+      const counters = useTagCounters.getState().counters;
+      if (!chain) {
+        const stops: Record<string, number> = {};
+        const seen = new Set<string>();
+        for (const f of formulas) {
+          if (f.mode !== "seq" || !useTagCounters.getState().loops[f.key] || seen.has(f.key)) continue;
+          seen.add(f.key);
+          const total = formulaItems(f, library).length;
+          if (!total || stepsUntilEnd(f, library, counters) <= 0) continue;
+          const raw = counters[f.key] || 0;
+          const index = ((raw % total) + total) % total;
+          stops[f.key] = raw - index + total;
+        }
+        if (Object.keys(stops).length) {
+          loopRun = { tabId, stops };
+          useTagCounters.getState().setRunning(true);
+        }
+      }
+      const noWrap = Boolean(loopRun);
+      const main = expandFormulas(form.prompt, library, counters, Math.random, noWrap);
+      const chars = form.characters.map((c) => ({ c, r: expandFormulas(c.prompt || "", library, counters, Math.random, noWrap) }));
+      advance = { ...main.advance };
+      for (const { r } of chars) for (const [k, n] of Object.entries(r.advance)) advance[k] = Math.max(advance[k] || 0, n);
+      const missing = [...main.missing, ...chars.flatMap(({ r }) => r.missing)];
+      if (missing.length) pushToast(`画师库为空，公式未展开：${[...new Set(missing)].join(" ")}`, "warn");
+      sendForm = { ...form, prompt: main.text, characters: chars.map(({ c, r }) => ({ ...c, prompt: r.text })) };
+    }
+    const jobId = await submitStudioJob(i2i ? i2iJobPayload(sendForm, i2i) : formToPayload(sendForm), tabId);
+    if (!jobId) {
+      if (loopRun?.tabId === tabId) stopLoop();
+      return;
+    }
+    if (Object.keys(advance).length) useTagCounters.getState().advance(advance);
+    if (!loopRun || loopRun.tabId !== tabId) return;
+    if (!loopHasMore()) {
+      stopLoop();
+      return;
+    }
+    const end = await waitJob(jobId);
+    if (!loopRun || loopRun.tabId !== tabId || end !== "done" || !loopHasMore()) {
+      if (loopRun?.tabId === tabId) stopLoop();
+      return;
+    }
+    runInTab(tabId, () => {
+      void generate(true);
+    });
+  }
+
+  /** 画师库名字：优先读缓存，没有就拉一次「单画师」库。 */
+  async function libraryNamesNow(): Promise<string[]> {
+    const album = ((qc.getQueryData(queryKeys.albums) as Album[] | undefined) || []).find(isSingleArtistAlbum);
+    if (!album) return [];
+    try {
+      const items = await qc.ensureQueryData({ queryKey: queryKeys.items(album.id), queryFn: () => galleryApi.listItems(album.id) });
+      return artistLibraryNames(items);
+    } catch {
+      return [];
+    }
   }
 
   /** 提交一个生图类任务（生图 / 图生图 / 局部重绘 / 增强 / 放大），结果落回提交它的标签。 */
-  async function submitStudioJob(body: Record<string, unknown>) {
+  async function submitStudioJob(body: Record<string, unknown>, tabId = currentTabId()): Promise<string | null> {
     // 提交是异步的，期间用户可能切到别的标签：结果要落回提交它的这个标签。
-    const tabId = currentTabId();
-    store.setBusy(true, "", "排队中");
+    runInTab(tabId, () => useStudioStore.getState().setBusy(true, "", "排队中"));
     try {
-      const job = await generationApi.submitJob({ ...body, source: "studio" });
+      const prevClient = body.client && typeof body.client === "object" ? (body.client as Record<string, unknown>) : {};
+      // tabId 跟任务一起入库。推送比这次请求返回更早，同步时就能把占位放回这个标签。
+      const job = await generationApi.submitJob({ ...body, source: "studio", client: { ...prevClient, tabId } });
       setJobTab(job.id, tabId);
       runInTab(tabId, () => {
         notified.delete(job.id);
@@ -499,11 +647,13 @@ export function useStudioActions() {
         if (slot) showShot(slot);
       });
       await qc.invalidateQueries({ queryKey: queryKeys.jobs });
+      return job.id;
     } catch (err) {
       runInTab(tabId, endBusy);
       const msg = err instanceof Error ? err.message : "生图失败";
       pushToast(msg, "warn");
       if (/Token|401|未配置/.test(msg) && tabId === activeTab()) openTokenPop();
+      return null;
     }
   }
 

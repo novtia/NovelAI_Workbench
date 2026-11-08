@@ -8,11 +8,15 @@ import {
   buildSkinLayout,
   buildTestTargets,
   formToPayload,
+  hasInsertTag,
+  placeChain,
   isSingleArtistAlbum,
   jobIsActive,
   missingTargets,
   queryKeys,
   remapOpenId,
+  skinKeyOf,
+  testJobKey,
 } from "@/data";
 import type { Artwork, Job, ParamSet, StudioForm } from "@/data/types";
 import type { TestTarget } from "@/data/testRun";
@@ -36,16 +40,22 @@ function stamp(withSeconds: boolean) {
 }
 
 /** 和抽奖 buildPayload 一致：预设表单 + 画师串放最前，每位画师 1 张。 */
-function buildPayload(preset: ParamSet, target: TestTarget, testSetId: string) {
+function buildPayload(preset: ParamSet, target: TestTarget, testSetId: string, replaceItemId = "") {
   const form: StudioForm = {
     ...preset.form,
     nSamples: 1,
+    // 重绘必须换一张：预设里固定了种子也改成随机。
+    ...(replaceItemId ? { seed: -1 } : {}),
     characters: (preset.form.characters || []).map((c) => ({ ...c })),
   };
   const hasChar = (form.characters || []).some((c) => String(c.prompt || "").trim());
   if (!hasChar) form.characters = [{ prompt: "girl, solo", uc: "", x: 0.5, y: 0.5 }];
+  // 预设里写了 <插入位置:图库,...>：画师串就地替换，不再加在最前。
+  const inPlace = hasInsertTag(form.prompt, "图库");
   return {
-    ...formToPayload(form, { artists: target.artistLine, source: "gallery" }),
+    ...(inPlace
+      ? formToPayload({ ...form, prompt: placeChain(target.artistLine, form.prompt, "图库") }, { artists: "", source: "gallery" })
+      : formToPayload(form, { artists: target.artistLine, source: "gallery" })),
     source: "gallery",
     client: {
       testSetId,
@@ -54,6 +64,8 @@ function buildPayload(preset: ParamSet, target: TestTarget, testSetId: string) {
       artists: [target.name],
       artistLine: target.artistLine,
       form,
+      // 重绘：新图落库后，后端删掉这张被替换的旧图。
+      ...(replaceItemId ? { replaceItemId } : {}),
     },
   };
 }
@@ -208,6 +220,32 @@ export function useTestRun() {
     await submitAll(runPreset, targets, id);
   }
 
+  /** 重绘测试集里这位画师的皮肤：用这个测试集当初的预设重新生成 1 张，成功后替换旧图。 */
+  async function redraw(item: Artwork) {
+    if (!testSet || item.albumId !== testSet.id) return;
+    if (!presetReady(runPreset)) return;
+    const key = skinKeyOf(item);
+    const target = buildTestTargets(baseItems).find((t) => t.key === key);
+    if (!target) {
+      pushToast("找不到这张图对应的画师", "warn");
+      return;
+    }
+    const busy = jobs.some(
+      (j) => j.source === "gallery" && String(j.client?.testSetId || "") === testSet.id && testJobKey(j) === key && jobIsActive(j),
+    );
+    if (busy) {
+      pushToast("这位画师正在生成中", "warn");
+      return;
+    }
+    try {
+      await generationApi.submitJob(buildPayload(runPreset, target, testSet.id, item.id));
+      await qc.invalidateQueries({ queryKey: queryKeys.jobs });
+      pushToast("已加入重绘队列，完成后替换旧图", "ok");
+    } catch (err) {
+      pushToast(err instanceof Error ? err.message : "排队失败", "error");
+    }
+  }
+
   async function cancel() {
     if (!testSetId) return;
     stopped.add(testSetId);
@@ -276,6 +314,7 @@ export function useTestRun() {
     submitting: isSubmitting,
     start,
     resume,
+    redraw,
     cancel,
     selectTestSet,
     renameTestSet,

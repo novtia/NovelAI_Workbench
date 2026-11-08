@@ -1,12 +1,30 @@
-import { memo } from "react";
+import { memo, type MouseEvent } from "react";
 import { asMeta } from "@/data";
 import type { Artwork } from "@/data/types";
 import { useBasketActions, useBasketHas, useCommands, useSession } from "@/state";
-import { IconCopy, IconDownload, IconSparkles } from "@/generation/components/icons";
+import { IconCopy, IconDownload, IconReset, IconSparkles } from "@/generation/components/icons";
 import { DownloadMenu, downloadArtwork, useDownloadPop } from "@/ui/DownloadMenu";
 import { SwapImage } from "./SwapImage";
 
-export const ArtworkCard = memo(function ArtworkCard({ item, index, enter = true }: { item: Artwork; index: number; enter?: boolean }) {
+export const ArtworkCard = memo(function ArtworkCard({
+  item,
+  index,
+  enter = true,
+  onRedraw,
+  picked = false,
+  onPick,
+  onContext,
+}: {
+  item: Artwork;
+  index: number;
+  enter?: boolean;
+  /** 只有测试集里的皮肤图才有：用测试集预设重新生成这位画师的图并替换。 */
+  onRedraw?: (item: Artwork) => void;
+  /** 多选里选中了这张。 */
+  picked?: boolean;
+  onPick?: (item: Artwork, e: MouseEvent<HTMLElement>) => void;
+  onContext?: (e: MouseEvent<HTMLElement>) => void;
+}) {
   const selected = useSession((s) => s.openId === item.id);
   const { openItemById, copyArtists, generateFrom } = useCommands();
   const hasArtists = (item.artists || []).length > 0;
@@ -18,12 +36,13 @@ export const ArtworkCard = memo(function ArtworkCard({ item, index, enter = true
 
   return (
     <div
-      className={`card${unknown ? " unknown" : ""}${selected ? " sel" : ""}${enter ? "" : " no-enter"}`}
+      className={`card${unknown ? " unknown" : ""}${selected ? " sel" : ""}${picked ? " picked" : ""}${enter ? "" : " no-enter"}`}
       style={enter ? { animationDelay: `${Math.min(index, 12) * 30}ms` } : undefined}
       data-id={item.id}
       role="button"
       tabIndex={0}
-      onClick={() => openItemById(item.id)}
+      onClick={(e) => (onPick ? onPick(item, e) : openItemById(item.id))}
+      onContextMenu={onContext}
       onKeyDown={(e) => {
         if (e.target !== e.currentTarget) return;
         if (e.key === "Enter" || e.key === " ") {
@@ -33,6 +52,7 @@ export const ArtworkCard = memo(function ArtworkCard({ item, index, enter = true
       }}
     >
       <div className="thumb-wrap" style={item.width && item.height ? { aspectRatio: `${item.width} / ${item.height}` } : undefined}>
+        {picked && !selected && <span className="g-check" />}
         <SwapImage
           src={item.thumbUrl}
           alt={item.artistLine || item.name}
@@ -77,6 +97,19 @@ export const ArtworkCard = memo(function ArtworkCard({ item, index, enter = true
               <IconSparkles />
               生图
             </button>
+            {onRedraw && (
+              <button
+                type="button"
+                title="用测试集的预设重新生成这位画师的图，完成后替换这张"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRedraw(item);
+                }}
+              >
+                <IconReset />
+                重绘
+              </button>
+            )}
             <button
               type="button"
               title="下载"

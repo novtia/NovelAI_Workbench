@@ -21,6 +21,25 @@ function firstArtist(item: Pick<Artwork, "artists">) {
   return String((item.artists || [])[0] || "").trim();
 }
 
+/** 图所属的画师 key（皮肤和默认图靠它对应）。 */
+export function skinKeyOf(item: Pick<Artwork, "artists">) {
+  return tagKey(firstArtist(item));
+}
+
+/** 这位画师正在进行的「重绘」任务（client.replaceItemId 标记）。 */
+function activeRedrawJob(jobs: Job[], testSetId: string, key: string): Job | null {
+  return (
+    jobs.find(
+      (j) =>
+        j.source === "gallery" &&
+        String(j.client?.testSetId || "") === testSetId &&
+        Boolean(j.client?.replaceItemId) &&
+        testJobKey(j) === key &&
+        (j.status === "queued" || j.status === "running"),
+    ) || null
+  );
+}
+
 /** 默认集当前显示顺序（先单张、后多图分组）里，按画师去重后的每位画师，从第一位开始。 */
 export function buildTestTargets(items: Artwork[]): TestTarget[] {
   const sections = splitSingleArtistSections(items);
@@ -137,6 +156,13 @@ export function buildSkinLayout(
     stats.total += 1;
     const skin = skins.get(key) || null;
     if (skin) {
+      // 正在重绘：格子先显示生成进度，新图落库、旧图删除后再换成新图。
+      const redraw = testSetId ? activeRedrawJob(jobs, testSetId, key) : null;
+      if (redraw) {
+        stats.pending += 1;
+        const state: TestCardState = redraw.status === "running" ? "running" : "queued";
+        return { key: item.id, base: item, skin, target, pending: { key: `t${target.index}-${key}`, target, item: skin, job: redraw, state } };
+      }
       stats.done += 1;
       return { key: item.id, base: item, skin, target, pending: null };
     }

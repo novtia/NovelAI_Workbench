@@ -21,7 +21,7 @@ export type { ArtistColumn, ArtistSections, ArtistSpan, ArtistToken } from "./si
 export { basketAdd, basketHasAll, basketName, basketRemove, basketText, normalizeBasketNames } from "./artistBasket";
 export type { BasketFormat } from "./artistBasket";
 export { ARTIST_TEST_PRESET_ID, ARTIST_TEST_PRESET_NAME, artistQuickPayload, artistTestForm, quickJobTarget, resolveArtistTestForm } from "./artistTest";
-export { buildSkinLayout, buildTestTargets, indexSkins, missingTargets, remapOpenId, testJobKey } from "./testRun";
+export { buildSkinLayout, buildTestTargets, indexSkins, missingTargets, remapOpenId, skinKeyOf, testJobKey } from "./testRun";
 export type { SkinGroup, SkinLayout, SkinProgress, SkinSlot, TestCard, TestCardState, TestTarget } from "./testRun";
 export {
   WEIGHT_STEP,
@@ -39,6 +39,10 @@ export {
   suggestQueryFromSegment,
 } from "./artistCards";
 export type { ArtistCard, PromptSegment, SuggestQuery } from "./artistCards";
+export { hasInsertTag, placeChain, stripInsertTags } from "./insertTag";
+export type { InsertScope } from "./insertTag";
+export { findFormulas, uniqueFormulas, expandFormulas, previewFormula, formulaItems, sortedPool, stepsUntilEnd } from "./tagFormula";
+export type { TagFormula, FormulaPreview, ExpandResult } from "./tagFormula";
 export { extractArtists, isImageFile, makeThumb, parseImageMeta, reencodePngClean, sha256Hex, triggerBlobDownload, downloadImageFile } from "./png";
 export type { CharCaption, ImageMeta } from "./png";
 export {
@@ -97,6 +101,8 @@ export {
   tokenDotClass,
   opusLevel,
   opusMeter,
+  extraUsageText,
+  extraUsagePercent,
   costLabel,
   genLabel,
   studioDownloadName,

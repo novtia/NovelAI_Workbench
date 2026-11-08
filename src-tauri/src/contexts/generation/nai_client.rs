@@ -293,6 +293,14 @@ impl NaiGateway {
             Value::Null => Value::Null,
             v => to_float(v).map(num_f).unwrap_or(Value::Null),
         };
+        // 官方「Usage Boost」电池（5.99 刀买的额外额度）剩下的比例，网页上显示为 +N% Extra Usage。
+        let purchased_percent = {
+            let v = first_truthy(get(&usage, "purchasedPercent"), get(&usage, "purchased_percent"));
+            match v {
+                Value::Null => Value::Null,
+                v => to_float(v).map(num_f).unwrap_or(Value::Null),
+            }
+        };
         let active = match data.get("active") {
             None => true,
             Some(v) => truthy(v),
@@ -306,6 +314,7 @@ impl NaiGateway {
             "anlasFixed": 0.max(fixed),
             "anlasPurchased": 0.max(purchased),
             "usagePercent": usage_percent,
+            "usagePurchasedPercent": purchased_percent,
             "usageNegative": truthy(first_truthy(get(&usage, "isNegative"), get(&usage, "is_negative"))),
             "expiresAt": first_truthy(get(&data, "expiresAt"), get(&data, "expires_at")).clone(),
         }))
@@ -553,13 +562,14 @@ mod tests {
         let base = serve_once(
             "200 OK",
             "application/json",
-            r#"{"tier":3,"trainingStepsLeft":{"fixedTrainingStepsLeft":100,"purchasedTrainingSteps":5},"active":true}"#,
+            r#"{"tier":3,"trainingStepsLeft":{"fixedTrainingStepsLeft":100,"purchasedTrainingSteps":5},"active":true,"usage":{"percent":0,"purchasedPercent":11,"isNegative":false}}"#,
         );
         gw.set_base_url_provider(Arc::new(move || base.clone()));
         let sub = gw.fetch_subscription(Some("sk-test")).await.unwrap();
         assert_eq!(sub["tierName"], "Opus");
         assert_eq!(sub["opus"], true);
         assert_eq!(sub["anlas"], 105);
+        assert_eq!(sub["usagePurchasedPercent"].as_f64(), Some(11.0));
     }
 
     #[tokio::test]

@@ -21,6 +21,7 @@ export { useArtistQuickGen } from "./artistQuickGen";
 export { useTestRunStore } from "./testRunStore";
 export { useStudioActions, useStudioEstimate, useStudioSync, saveStudioCurrent, closeStudioMenus, openStudioPop, openTokenPop, closeMetaDialog } from "./studio";
 export { useStudioStore } from "./studioStore";
+export { useTagCounters } from "./tagCounters";
 export { confirmDialog } from "./confirm";
 export { saveShotsToAlbum, deleteHistoryShots, loadShotParams, copyShotPrompt } from "./history";
 export type { SaveReport } from "./history";

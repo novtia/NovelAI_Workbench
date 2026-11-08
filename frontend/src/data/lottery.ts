@@ -1,5 +1,6 @@
 import { blobUrl, isAssetUrl, itemImageUrl } from "@/api/assets";
 import { stripArtist, tagKey } from "./hashKey";
+import { placeChain } from "./insertTag";
 import type { Artwork, DrawBatch, DrawResult, DrawRow, Job, LotteryBoard, LotteryControls, LotShot, PoolArtist } from "./types";
 
 export const BAR_COLORS = ["#bc4a32", "#c98a3d", "#8a9a4b", "#3f8f66", "#4a7fb5", "#7c5fb0", "#b5537a", "#5a8f8a"];
@@ -322,9 +323,7 @@ export function placeLotPop(w: number, h: number, trigger: { left: number; top: 
   return { left: Math.round(left), top: Math.round(top) };
 }
 
+/** 抽奖的最终 Prompt：画师串放到 <插入位置:抽奖,...> 标签处，没有标签就加在最前。 */
 export function lotteryPrompt(chain: string, extra: string) {
-  const a = chainText(chain).trim();
-  const b = String(extra || "").trim();
-  if (a && b) return `${a}, ${b}`;
-  return a || b;
+  return placeChain(chainText(chain), extra, "抽奖");
 }

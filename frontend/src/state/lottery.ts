@@ -13,6 +13,7 @@ import {
   isListed,
   jobIsActive,
   lotteryPrompt,
+  hasInsertTag,
   matchDrawJob,
   parseCapInput,
   placeLotPop,
@@ -230,6 +231,14 @@ export function useLottery() {
     const chain = chainText(text);
     const hasChar = (form.characters || []).some((c) => String(c.prompt || "").trim());
     if (!hasChar) form.characters = [{ prompt: "girl, solo", uc: "", x: 0.5, y: 0.5 }];
+    // 预设里写了 <插入位置:抽奖,...> 标签：画师串就地替换，不再加在最前。
+    if (hasInsertTag(form.prompt, "抽奖")) {
+      return {
+        ...formToPayload({ ...form, prompt: lotteryPrompt(chain, form.prompt) }, { artists: "", source: "lottery" }),
+        source: "lottery",
+        client: { ...client, form },
+      };
+    }
     return {
       ...formToPayload(form, { artists: chain, source: "lottery" }),
       source: "lottery",

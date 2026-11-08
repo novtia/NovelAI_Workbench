@@ -322,7 +322,17 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border: 0; bord
 .tb-progress { font-family: var(--mono); font-size: 12px; color: var(--zhu); line-height: 34px; white-space: nowrap; }
 .tb-progress.is-warn { color: var(--ink-3); }
 .g-testbar .mini { height: 34px; }
-.g-scroll { flex: 1; overflow: auto; padding: 22px 32px 70px; }
+.g-wrap { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.g-scroll { flex: 1; min-height: 0; overflow: auto; padding: 22px 32px 70px; }
+.g-top {
+  position: absolute; right: 30px; bottom: 26px; width: 40px; height: 40px; display: grid; place-items: center;
+  background: var(--paper-3); color: var(--ink); border: 1px solid var(--line-2); border-radius: 50%;
+  box-shadow: 0 10px 22px -10px rgba(40, 30, 10, .6); cursor: pointer;
+  opacity: 0; transform: translateY(8px); pointer-events: none; transition: opacity .25s var(--ease), transform .25s var(--ease), border-color .2s;
+}
+.g-top.show { opacity: 1; transform: none; pointer-events: auto; }
+.g-top:hover { border-color: var(--zhu); color: var(--zhu); }
+.g-top svg { width: 18px; height: 18px; }
 /* 所有收藏夹都按行排：第 1 张在左上，向右依次排，排满再换行（不用 columns 瀑布流，它是先竖着填满一列） */
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--card-min, 230px), 1fr)); column-gap: 28px; align-items: start; }
 .grid.compact { grid-template-columns: repeat(auto-fill, minmax(var(--card-min-compact, 150px), 1fr)); column-gap: 14px; }
@@ -336,7 +346,18 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border: 0; bord
 }
 .grid.compact .card { margin-bottom: 14px; padding: 5px 5px 0; }
 .grid .card:hover, .grid .card:focus-visible { transform: translateY(-5px) rotate(-.5deg); box-shadow: 0 0 0 1px var(--line-2), 0 28px 40px -22px rgba(40, 30, 10, .6); }
-.grid .card.sel { box-shadow: 0 0 0 2px var(--zhu), 0 28px 40px -22px rgba(120, 20, 10, .45); }
+.grid .card.sel, .grid .card.picked { box-shadow: 0 0 0 2px var(--zhu), 0 28px 40px -22px rgba(120, 20, 10, .45); }
+.g-check {
+  position: absolute; z-index: 3; right: 8px; top: 8px; width: 18px; height: 18px; border-radius: 50%; pointer-events: none;
+  background: var(--zhu); box-shadow: 0 0 0 1.5px var(--paper-3);
+}
+.g-check::after {
+  content: ""; position: absolute; left: 6px; top: 3px; width: 4px; height: 8px;
+  border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+.g-selbar { display: flex; align-items: center; gap: 12px; padding: 8px 32px 0; font-size: 12px; letter-spacing: .08em; color: var(--zhu); }
+.g-selbar button { font-size: 12px; color: var(--ink-3); text-decoration: underline; text-underline-offset: 3px; }
+.g-scroll { user-select: none; }
 .grid .card.sel::after {
   content: "選"; position: absolute; top: -9px; right: -9px; width: 26px; height: 26px; display: grid; place-items: center;
   background: var(--zhu); color: #fff; font-family: var(--brush); font-size: 17px; transform: rotate(8deg); filter: url(#rough);
@@ -828,12 +849,26 @@ pre.prompt {
 .ai-adv summary::-webkit-details-marker { display: none; }
 .ai-adv summary::before { content: "＋ "; color: var(--zhu); }
 .ai-adv[open] summary::before { content: "－ "; }
+.tf-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.tf-empty { margin: 0; font-size: 11px; line-height: 1.7; color: var(--ink-4); }
+.tf-card { border: 1px solid var(--line-2); background: var(--paper-3); border-radius: 2px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.tf-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.tf-head code { font-family: var(--mono); font-size: 12px; color: var(--zhu); }
+.tf-pos { font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+.tf-body { font-size: 11px; color: var(--ink-3); line-height: 1.6; word-break: break-all; }
+.tf-body b { color: var(--ink); font-weight: 600; }
+.tf-actions { display: flex; gap: 10px; }
+.tf-actions button { font-size: 11px; color: var(--zhu); text-decoration: underline; text-underline-offset: 3px; }
+.tf-actions button.on { font-weight: 600; }
+.tf-loop { font-size: 11px; color: var(--zhu); letter-spacing: .06em; }
 .extra { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
 .extra label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--ink-3); }
-.quota { padding: 0 2px 4px; background: linear-gradient(var(--line), var(--line)) no-repeat 0 100% / 100% 2px; }
+.quota { padding: 0 2px 4px; }
 .quota .row { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--ink-3); }
 .quota .row button { color: var(--zhu); text-decoration: underline; text-underline-offset: 3px; font-size: 11.5px; }
-.quota .bar { display: block; height: 2px; background: var(--dai); margin-top: 6px; margin-bottom: -4px; transition: width .5s var(--ease); }
+.quota .bar { display: flex; height: 2px; width: 100%; margin-top: 6px; background: var(--line); }
+.quota .bar i { display: block; height: 100%; margin: 0; background: var(--dai); transition: width .5s var(--ease); }
+.quota .bar i.boost { background: var(--huang); }
 .gen-bg-hint { margin: 0; font-size: 10.5px; color: var(--ink-4); letter-spacing: .2em; text-align: center; }
 .gen {
   height: 54px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px 0 22px; position: relative; overflow: hidden;
@@ -988,13 +1023,25 @@ pre.prompt {
 .job-row .x { width: 28px; height: 28px; font-size: 16px; color: var(--ink-4); border-radius: 2px; }
 .job-row .x:hover { color: #fff; background: var(--zhu); }
 .jobs-pop-empty { font-size: 12px; color: var(--ink-4); padding: 8px; margin: 0; }
-.quota-pop { width: 270px; padding: 12px; }
-.quota-pop-meter { display: flex; align-items: center; gap: 14px; padding: 6px 4px 12px; }
-.quota-pop-meter b { display: block; font-family: var(--brush); font-weight: 400; font-size: 24px; line-height: 1.1; }
-.quota-pop-meter span { font-size: 11px; color: var(--ink-4); }
-.quota-pop-meta { font-size: 12px; color: var(--ink-3); line-height: 1.75; margin: 0 4px 10px; }
-.quota-pop-manage { width: 100%; height: 32px; border: 1px solid var(--ink); font-size: 12px; letter-spacing: .24em; border-radius: 2px; transition: .2s; }
-.quota-pop-manage:hover { background: var(--ink); color: var(--paper-3); }
+/* ---------- 额度面板：跟其他弹层同一套纸面样式 ---------- */
+.quota-pop { width: 280px; padding: 14px 16px 16px; }
+.quota-pop .pop-h { padding: 2px 0 12px; }
+.qp-line { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+.qp-line span { font-size: 12px; letter-spacing: .12em; color: var(--ink-3); }
+.qp-line b { font-family: var(--mono); font-size: 18px; font-weight: 600; color: var(--ink); }
+.qp-line b em { font-style: normal; font-size: 12px; margin-left: 1px; color: var(--ink-3); }
+.qp-bar { display: flex; height: 3px; background: var(--line); margin-bottom: 14px; }
+.qp-bar i { display: block; height: 100%; background: var(--dai); transition: width .4s var(--ease); }
+.qp-bar[data-level=mid] i { background: var(--ochre); }
+.qp-bar[data-level=low] i, .qp-bar[data-level=empty] i { background: var(--zhu); }
+.qp-bar i.boost { margin: 0; background: var(--huang); }
+.qp-note { margin: 0 0 14px; font-size: 12.5px; line-height: 1.7; color: var(--ink-3); }
+.qp-anlas { display: flex; gap: 18px; margin-bottom: 14px; }
+.qp-anlas div { display: flex; flex-direction: column; gap: 2px; }
+.qp-anlas small { font-size: 11px; letter-spacing: .14em; color: var(--ink-4); }
+.qp-anlas b { font-family: var(--mono); font-size: 13px; font-weight: 600; }
+.qp-manage { width: 100%; height: 32px; border: 1px solid var(--ink); background: var(--ink); color: var(--paper-3); font-size: 12px; letter-spacing: .16em; border-radius: 2px; transition: .2s; }
+.qp-manage:hover { background: var(--zhu); border-color: var(--zhu); }
 
 /* ---------- 对话框 ---------- */
 dialog.modal { border: 0; padding: 0; background: var(--paper-3); color: var(--ink); min-width: 400px; box-shadow: 0 0 0 1px var(--line-2), 0 44px 90px -30px rgba(20, 14, 6, .65); overflow: visible; }

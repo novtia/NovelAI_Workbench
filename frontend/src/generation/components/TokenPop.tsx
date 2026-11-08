@@ -1,4 +1,4 @@
-import { formatTokenStatus, tokenDotClass } from "@/data";
+import { extraUsageText, formatTokenStatus, tokenDotClass } from "@/data";
 import { useNaiStatusQuery, useStudioActions, useStudioStore } from "@/state";
 
 export function TokenPop() {
@@ -11,7 +11,7 @@ export function TokenPop() {
   const open = pop === "token";
   const sub = status?.subscription;
   const detail = sub
-    ? [`固定 ${sub.anlasFixed ?? 0}`, `购买 ${sub.anlasPurchased ?? 0}`, sub.usagePercent != null ? `Opus ${sub.usagePercent}%` : ""]
+    ? [`固定 ${sub.anlasFixed ?? 0}`, `购买 ${sub.anlasPurchased ?? 0}`, sub.usagePercent != null ? `Opus ${sub.usagePercent}%` : "", extraUsageText(sub)]
         .filter(Boolean)
         .join(" · ")
     : status?.error || "";

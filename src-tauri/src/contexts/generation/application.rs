@@ -875,7 +875,18 @@ impl GenerationService {
         if truthy(get(client, "testSetId")) {
             meta.insert("testSetId".into(), json!(set_id));
         }
-        self.promote(&set_id, &hashes, &Value::Object(meta)).unwrap_or_default()
+        let saved = self.promote(&set_id, &hashes, &Value::Object(meta)).unwrap_or_default();
+        // 重绘：新图已经落库，再删掉被替换的旧图（新图没存成功就保留旧图）。
+        let replace_id = pick("replaceItemId");
+        if !saved.is_empty() && !replace_id.is_empty() && truthy(get(client, "testSetId")) {
+            let rid = replace_id.trim();
+            // 只允许删同一个测试集里的图，防止误删别的收藏夹。
+            let same_set = matches!(self.gallery.get_item(rid, false), Ok(Some(it)) if it["albumId"].as_str() == Some(set_id.as_str()));
+            if same_set {
+                let _ = self.gallery.delete_item(rid);
+            }
+        }
+        saved
     }
 }
 

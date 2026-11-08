@@ -1,5 +1,6 @@
 import { blobUrl } from "@/api/assets";
 import { stripMutedArtists } from "./artistCards";
+import { stripInsertTags } from "./insertTag";
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
 import type {
   Artwork,
@@ -140,7 +141,7 @@ export function enabledCharacters(form: StudioForm) {
 
 export function formToPayload(form: StudioForm, extras: Record<string, unknown> = {}) {
   return {
-    prompt: stripMutedArtists(form.prompt),
+    prompt: stripInsertTags(stripMutedArtists(form.prompt)),
     uc: stripMutedArtists(form.uc),
     characters: enabledCharacters(form),
     model: form.model,
@@ -649,6 +650,17 @@ export type OpusMeter = {
   title: string;
 };
 
+/** 官方 Usage Boost 电池的额外额度，没有（或为 0）返回空串。 */
+export function extraUsagePercent(sub?: TokenStatus["subscription"] | null): number {
+  const n = Number(sub?.usagePurchasedPercent);
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
+}
+
+export function extraUsageText(sub?: TokenStatus["subscription"] | null) {
+  const n = extraUsagePercent(sub);
+  return n ? `额外额度 +${n}%` : "";
+}
+
 export function opusMeter(data?: TokenStatus | null): OpusMeter {
   const sub = data?.subscription;
   const opus = Boolean(sub?.opus);
@@ -672,6 +684,8 @@ export function opusMeter(data?: TokenStatus | null): OpusMeter {
     fill = over ? 0 : n;
     shown = over ? "0" : String(Math.round(n));
     title = over ? `Opus 额度已超额（${Math.round(n)}%）` : `剩余 ${Math.round(n)}% Opus 额度`;
+    const extra = extraUsageText(sub);
+    if (extra) title += `，${extra}`;
   } else if (sub && !opus) {
     title = `${sub.tierName || "非 Opus"} · Anlas ${sub.anlas}`;
   } else if (sub) {

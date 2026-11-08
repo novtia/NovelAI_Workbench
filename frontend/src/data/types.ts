@@ -189,6 +189,8 @@ export type TokenStatus = {
     opus?: boolean;
     usagePercent?: number | null;
     usageNegative?: boolean;
+    /** 官方 Usage Boost 电池剩余比例（网页的 +N% Extra Usage）。 */
+    usagePurchasedPercent?: number | null;
     anlas?: number;
     anlasFixed?: number;
     anlasPurchased?: number;
