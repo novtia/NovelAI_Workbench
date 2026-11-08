@@ -20,7 +20,10 @@ impl PyRandom {
         if key.is_empty() {
             key.push(0);
         }
-        let mut r = PyRandom { mt: [0; N], idx: N + 1 };
+        let mut r = PyRandom {
+            mt: [0; N],
+            idx: N + 1,
+        };
         r.init_by_array(&key);
         r
     }
@@ -29,7 +32,9 @@ impl PyRandom {
         self.mt[0] = s;
         for i in 1..N {
             let prev = self.mt[i - 1];
-            self.mt[i] = 1812433253u32.wrapping_mul(prev ^ (prev >> 30)).wrapping_add(i as u32);
+            self.mt[i] = 1812433253u32
+                .wrapping_mul(prev ^ (prev >> 30))
+                .wrapping_add(i as u32);
         }
         self.idx = N;
     }
@@ -58,7 +63,8 @@ impl PyRandom {
         k = N - 1;
         while k > 0 {
             let prev = self.mt[i - 1];
-            self.mt[i] = (self.mt[i] ^ (prev ^ (prev >> 30)).wrapping_mul(1566083941)).wrapping_sub(i as u32);
+            self.mt[i] = (self.mt[i] ^ (prev ^ (prev >> 30)).wrapping_mul(1566083941))
+                .wrapping_sub(i as u32);
             i += 1;
             if i >= N {
                 self.mt[0] = self.mt[N - 1];

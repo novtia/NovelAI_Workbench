@@ -9,14 +9,23 @@ pub const FULL_MODEL: &str = "nai-diffusion-5-full";
 pub const MEDIUM_MODEL: &str = "nai-diffusion-5-full-medium";
 pub const CURATED_MODEL: &str = "nai-diffusion-5-curated";
 pub const MODELS: [&str; 3] = [FULL_MODEL, MEDIUM_MODEL, CURATED_MODEL];
-pub const SAMPLERS: [&str; 6] =
-    ["k_euler_ancestral", "k_euler", "k_dpmpp_2s_ancestral", "k_dpmpp_2m", "k_dpmpp_2m_sde", "k_dpmpp_sde"];
+pub const SAMPLERS: [&str; 6] = [
+    "k_euler_ancestral",
+    "k_euler",
+    "k_dpmpp_2s_ancestral",
+    "k_dpmpp_2m",
+    "k_dpmpp_2m_sde",
+    "k_dpmpp_sde",
+];
 pub const SCHEDULES: [&str; 4] = ["karras", "native", "exponential", "polyexponential"];
 
 pub const QUALITY_PRESETS: [(&str, &str); 3] = [
     ("off", ""),
     ("official", "very aesthetic, masterpiece, no text"),
-    ("gallery", "ultra complexity, very aesthetic, best quality, amazing quality, absurdres"),
+    (
+        "gallery",
+        "ultra complexity, very aesthetic, best quality, amazing quality, absurdres",
+    ),
 ];
 
 pub const UC_PRESETS: [(&str, &str); 3] = [
@@ -40,7 +49,14 @@ pub fn uc_presets_json() -> Value {
 }
 
 pub const MAX_CHARS: usize = 22;
-pub const JOB_KINDS: [&str; 6] = ["generate", "img2img", "variation", "infill", "enhance", "upscale"];
+pub const JOB_KINDS: [&str; 6] = [
+    "generate",
+    "img2img",
+    "variation",
+    "infill",
+    "enhance",
+    "upscale",
+];
 pub const IMAGE_KINDS: [&str; 4] = ["img2img", "variation", "infill", "enhance"];
 pub const VARIATION_SAMPLES: i64 = 3;
 pub const VARIATION_STRENGTH: f64 = 0.6;
@@ -98,7 +114,10 @@ pub struct NaiError {
 
 impl NaiError {
     pub fn new(status: u16, message: impl Into<String>) -> Self {
-        NaiError { status, message: message.into() }
+        NaiError {
+            status,
+            message: message.into(),
+        }
     }
 }
 
@@ -136,7 +155,11 @@ fn int_or(body: &Value, key: &str, default: i64) -> NaiRes<i64> {
 
 fn str_or(body: &Value, key: &str, default: &str) -> String {
     let v = get(body, key);
-    if truthy(v) { py_str(v) } else { default.to_string() }
+    if truthy(v) {
+        py_str(v)
+    } else {
+        default.to_string()
+    }
 }
 
 fn join(parts: &[&str]) -> String {
@@ -149,14 +172,21 @@ fn join(parts: &[&str]) -> String {
 }
 
 fn quality_of(key: &str) -> Option<&'static str> {
-    QUALITY_PRESETS.iter().find(|(k, _)| *k == key).map(|(_, v)| *v)
+    QUALITY_PRESETS
+        .iter()
+        .find(|(k, _)| *k == key)
+        .map(|(_, v)| *v)
 }
 
 pub fn assemble_prompt(body: &Value) -> (String, String) {
     let prompt = str_or(body, "prompt", "").trim().to_string();
     let artist_src = {
         let a = get(body, "artists");
-        if truthy(a) { py_str(a) } else { str_or(body, "artistLine", "") }
+        if truthy(a) {
+            py_str(a)
+        } else {
+            str_or(body, "artistLine", "")
+        }
     };
     let artists = pad_numeric_closers(artist_src.trim());
     let mut quality_key = str_or(body, "quality", "gallery");
@@ -165,7 +195,11 @@ pub fn assemble_prompt(body: &Value) -> (String, String) {
     }
     let mut quality = quality_of(&quality_key).unwrap_or("");
     let v5_mode = str_or(body, "v5Mode", "anime");
-    let prefix = if v5_mode == "furry" { "fur dataset" } else { "" };
+    let prefix = if v5_mode == "furry" {
+        "fur dataset"
+    } else {
+        ""
+    };
     if !quality.is_empty() && prompt.to_lowercase().contains(&quality.to_lowercase()) {
         quality = "";
     }
@@ -183,7 +217,9 @@ struct Character {
 }
 
 fn characters(body: &Value) -> Vec<Character> {
-    let Some(raw) = get(body, "characters").as_array() else { return vec![] };
+    let Some(raw) = get(body, "characters").as_array() else {
+        return vec![];
+    };
     let mut out = Vec::new();
     for item in raw.iter().take(MAX_CHARS) {
         if !item.is_object() {
@@ -254,25 +290,45 @@ pub fn build_payload(body: &Value) -> NaiRes<(Value, Value)> {
     }
     let width = snap64(int_or(body, "width", 832)?);
     let height = snap64(int_or(body, "height", 1216)?);
-    let steps = if medium { 14 } else { int_or(body, "steps", 28)?.clamp(1, 50).max(1) };
+    let steps = if medium {
+        14
+    } else {
+        int_or(body, "steps", 28)?.clamp(1, 50).max(1)
+    };
     let scale = {
         let v = get(body, "scale");
-        let f = if v.is_null() { 5.0 } else { to_float(v).ok_or_else(|| NaiError::new(400, "参数 scale 格式错误"))? };
+        let f = if v.is_null() {
+            5.0
+        } else {
+            to_float(v).ok_or_else(|| NaiError::new(400, "参数 scale 格式错误"))?
+        };
         f.clamp(0.0, 30.0)
     };
     let cfg_rescale = if medium {
         0.0
     } else {
         let v = get(body, "cfgRescale");
-        let f = if truthy(v) { to_float(v).ok_or_else(|| NaiError::new(400, "参数 cfgRescale 格式错误"))? } else { 0.0 };
+        let f = if truthy(v) {
+            to_float(v).ok_or_else(|| NaiError::new(400, "参数 cfgRescale 格式错误"))?
+        } else {
+            0.0
+        };
         f.clamp(0.0, 1.0)
     };
     let n_samples = int_or(body, "nSamples", 1)?.clamp(1, 4);
-    let sampler = if medium { "k_euler_ancestral".to_string() } else { str_or(body, "sampler", "k_euler_ancestral") };
+    let sampler = if medium {
+        "k_euler_ancestral".to_string()
+    } else {
+        str_or(body, "sampler", "k_euler_ancestral")
+    };
     if !SAMPLERS.contains(&sampler.as_str()) {
         return Err(NaiError::new(400, "不支持的 sampler"));
     }
-    let mut schedule = if medium { "karras".to_string() } else { str_or(body, "noiseSchedule", "karras") };
+    let mut schedule = if medium {
+        "karras".to_string()
+    } else {
+        str_or(body, "noiseSchedule", "karras")
+    };
     if !SCHEDULES.contains(&schedule.as_str()) {
         return Err(NaiError::new(400, "不支持的 noise schedule"));
     }
@@ -299,12 +355,20 @@ pub fn build_payload(body: &Value) -> NaiRes<(Value, Value)> {
     } else {
         bool_of(use_coords_raw)
     };
-    let char_captions: Vec<Value> =
-        chars.iter().map(|c| json!({"char_caption": c.prompt, "centers": [center(c)]})).collect();
-    let neg_captions: Vec<Value> =
-        chars.iter().map(|c| json!({"char_caption": c.uc, "centers": [center(c)]})).collect();
+    let char_captions: Vec<Value> = chars
+        .iter()
+        .map(|c| json!({"char_caption": c.prompt, "centers": [center(c)]}))
+        .collect();
+    let neg_captions: Vec<Value> = chars
+        .iter()
+        .map(|c| json!({"char_caption": c.uc, "centers": [center(c)]}))
+        .collect();
     let straight_alpha_raw = get(body, "straightAlpha");
-    let straight_alpha = if straight_alpha_raw.is_null() { true } else { bool_of(straight_alpha_raw) };
+    let straight_alpha = if straight_alpha_raw.is_null() {
+        true
+    } else {
+        bool_of(straight_alpha_raw)
+    };
     let prefer_brownian = if medium {
         true
     } else {
@@ -366,9 +430,12 @@ pub fn build_payload(body: &Value) -> NaiRes<(Value, Value)> {
                 .collect(),
         );
     }
-    let payload = json!({"input": prompt, "model": model, "action": "generate", "parameters": parameters});
-    let meta_chars: Vec<Value> =
-        chars.iter().map(|c| json!({"prompt": c.prompt, "uc": c.uc, "center": center(c)})).collect();
+    let payload =
+        json!({"input": prompt, "model": model, "action": "generate", "parameters": parameters});
+    let meta_chars: Vec<Value> = chars
+        .iter()
+        .map(|c| json!({"prompt": c.prompt, "uc": c.uc, "center": center(c)}))
+        .collect();
     let meta = json!({
         "prompt": prompt,
         "uc": uc,
@@ -429,8 +496,16 @@ pub fn enhance_params(body: &Value) -> EnhanceParams {
     }
     let strength = get(body, "strength");
     let noise = get(body, "noise");
-    let strength_v = if strength.is_null() { num_f(enhance_strength(magnitude)) } else { strength.clone() };
-    let noise_v = if noise.is_null() { num_f(ENHANCE_NOISE) } else { noise.clone() };
+    let strength_v = if strength.is_null() {
+        num_f(enhance_strength(magnitude))
+    } else {
+        strength.clone()
+    };
+    let noise_v = if noise.is_null() {
+        num_f(ENHANCE_NOISE)
+    } else {
+        noise.clone()
+    };
     EnhanceParams {
         magnitude,
         scale: enhance_scale(&amount).unwrap_or(1.0),
@@ -485,7 +560,10 @@ pub fn enhance_output_size(width: i64, height: i64, amount: &str) -> (i64, i64) 
     }
     if amount == "max" && width * height < ENHANCE_MAX_PIXELS {
         let factor = (ENHANCE_MAX_PIXELS as f64 / (width * height) as f64).sqrt();
-        return ((width as f64 * factor).floor() as i64, (height as f64 * factor).floor() as i64);
+        return (
+            (width as f64 * factor).floor() as i64,
+            (height as f64 * factor).floor() as i64,
+        );
     }
     (width, height)
 }
@@ -503,17 +581,33 @@ pub fn enhance_cost(
     if opus && ow * oh <= OPUS_FREE_PIXELS {
         return 0;
     }
-    let factor = if explicit { strength } else { enhance_bill_factor(magnitude) };
+    let factor = if explicit {
+        strength
+    } else {
+        enhance_bill_factor(magnitude)
+    };
     ANLAS_I2I_MIN.max((base_cost(ow, oh, ENHANCE_BILL_STEPS) as f64 * factor).ceil() as i64)
 }
 
 fn snap_from(v: &Value, fallback: i64) -> i64 {
-    snap64(if truthy(v) { to_int(v).unwrap_or(fallback) } else { fallback })
+    snap64(if truthy(v) {
+        to_int(v).unwrap_or(fallback)
+    } else {
+        fallback
+    })
 }
 
 pub fn generate_cost(body: &Value, steps: i64) -> i64 {
-    let gw_raw = if truthy(get(body, "genWidth")) { get(body, "genWidth") } else { get(body, "width") };
-    let gh_raw = if truthy(get(body, "genHeight")) { get(body, "genHeight") } else { get(body, "height") };
+    let gw_raw = if truthy(get(body, "genWidth")) {
+        get(body, "genWidth")
+    } else {
+        get(body, "width")
+    };
+    let gh_raw = if truthy(get(body, "genHeight")) {
+        get(body, "genHeight")
+    } else {
+        get(body, "height")
+    };
     let gw = snap_from(gw_raw, 832);
     let gh = snap_from(gh_raw, 1216);
     let mut samples = clamp_num(get(body, "genSamples"), 1.0, 4.0, 1.0) as i64;
@@ -529,19 +623,33 @@ pub fn generate_cost(body: &Value, steps: i64) -> i64 {
 }
 
 fn fit_from(v: &Value, fallback: i64) -> i64 {
-    fit64(if truthy(v) { to_float(v).unwrap_or(fallback as f64) } else { fallback as f64 })
+    fit64(if truthy(v) {
+        to_float(v).unwrap_or(fallback as f64)
+    } else {
+        fallback as f64
+    })
 }
 
 /// 工具栏按钮旁边的 Anlas 估算：width/height 是当前图的尺寸。
 pub fn estimate_costs(body: &Value) -> Value {
     let width = fit_from(get(body, "width"), 832);
     let height = fit_from(get(body, "height"), 1216);
-    let steps = (if uses_medium(body) { 14 } else { clamp_num(get(body, "steps"), 1.0, 50.0, 28.0) as i64 }).max(1);
+    let steps = (if uses_medium(body) {
+        14
+    } else {
+        clamp_num(get(body, "steps"), 1.0, 50.0, 28.0) as i64
+    })
+    .max(1);
     let variation = i2i_cost(
         width,
         height,
         steps,
-        clamp_num(get(body, "variationStrength"), 0.01, 0.99, VARIATION_STRENGTH),
+        clamp_num(
+            get(body, "variationStrength"),
+            0.01,
+            0.99,
+            VARIATION_STRENGTH,
+        ),
         VARIATION_SAMPLES,
     );
     let enh = enhance_params(body);
@@ -583,7 +691,10 @@ mod tests {
         assert_eq!(payload["parameters"]["width"], 832);
         assert_eq!(payload["parameters"]["seed"], 7);
         assert_eq!(meta["effort"], "high");
-        assert!(payload["input"].as_str().unwrap().contains("artist:foo, 1girl"));
+        assert!(payload["input"]
+            .as_str()
+            .unwrap()
+            .contains("artist:foo, 1girl"));
         assert!(build_payload(&json!({"prompt": "", "quality": "off"})).is_err());
     }
 

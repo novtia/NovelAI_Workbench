@@ -1,13 +1,14 @@
 use super::domain::{Album, ArtistBasket, Artwork, GalleryView, ARTIST_BASKET_ID, GALLERY_VIEW_ID};
 use super::projectors::{album_row, artwork_row};
 use super::rules::{
-    is_single_artist_album, is_test_set_album, is_test_set_id, unique_artist_keys, SINGLE_ARTIST_ALBUM_ID,
-    SINGLE_ARTIST_ALBUM_NAME, SINGLE_ARTIST_IMPORT_ERROR, TEST_SET_ID_PREFIX,
+    is_single_artist_album, is_test_set_album, is_test_set_id, unique_artist_keys,
+    SINGLE_ARTIST_ALBUM_ID, SINGLE_ARTIST_ALBUM_NAME, SINGLE_ARTIST_IMPORT_ERROR,
+    TEST_SET_ID_PREFIX,
 };
 use crate::kernel::blobs::{gallery_target, png_size, sniff_mime, Bucket, Slot};
+use crate::kernel::bus::Kernel;
 use crate::kernel::clock::{new_id, now_ms};
 use crate::kernel::hashes::sha256_bytes;
-use crate::kernel::bus::Kernel;
 use crate::kernel::purge::{plan_job_items, Purge};
 use crate::kernel::{Aggregate, DomainError, Res};
 use crate::util::{get, has_value, py_str, take_chars, to_int, truthy};
@@ -16,7 +17,10 @@ use serde_json::{json, Map, Value};
 use std::sync::Arc;
 
 pub fn valid_id(s: &str) -> bool {
-    !s.is_empty() && s.chars().count() <= 64 && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    !s.is_empty()
+        && s.chars().count() <= 64
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
 pub struct GalleryService {
@@ -124,7 +128,9 @@ impl GalleryService {
                 test_set_id.clear();
             }
         }
-        Ok(json!({"albumId": album_id, "testSetId": test_set_id, "presetId": preset_id, "version": version}))
+        Ok(
+            json!({"albumId": album_id, "testSetId": test_set_id, "presetId": preset_id, "version": version}),
+        )
     }
 
     pub fn select_view(&self, data: &Value) -> Res<Value> {
@@ -147,8 +153,9 @@ impl GalleryService {
 
     pub fn basket(&self) -> Res<Vec<Value>> {
         let conn = self.k.store.connect()?;
-        let mut stmt =
-            conn.prepare("SELECT key, name, added_at FROM projections_artist_basket ORDER BY sort_order ASC")?;
+        let mut stmt = conn.prepare(
+            "SELECT key, name, added_at FROM projections_artist_basket ORDER BY sort_order ASC",
+        )?;
         let rows = stmt.query_map([], |r| {
             Ok(json!({"key": r.get::<_, String>(0)?, "name": r.get::<_, String>(1)?, "addedAt": r.get::<_, i64>(2)?}))
         })?;
@@ -192,12 +199,19 @@ impl GalleryService {
             return Err(DomainError::bad("「单画师」为系统收藏夹名称"));
         }
         self.assert_test_set_name_free(name, None)?;
-        self.create_album(name, Some(&format!("{TEST_SET_ID_PREFIX}{}", new_id())), false, true)
+        self.create_album(
+            name,
+            Some(&format!("{TEST_SET_ID_PREFIX}{}", new_id())),
+            false,
+            true,
+        )
     }
 
     fn assert_test_set_name_free(&self, name: &str, except_id: Option<&str>) -> Res<()> {
         for album in self.list_albums(false)? {
-            if Some(album["id"].as_str().unwrap_or("")) == except_id || !is_test_set_album(Some(&album)) {
+            if Some(album["id"].as_str().unwrap_or("")) == except_id
+                || !is_test_set_album(Some(&album))
+            {
                 continue;
             }
             if album["name"].as_str() == Some(name) {
@@ -207,7 +221,13 @@ impl GalleryService {
         Ok(())
     }
 
-    pub fn create_album(&self, name: &str, album_id: Option<&str>, system: bool, test_set: bool) -> Res<Value> {
+    pub fn create_album(
+        &self,
+        name: &str,
+        album_id: Option<&str>,
+        system: bool,
+        test_set: bool,
+    ) -> Res<Value> {
         let name = name.trim();
         let album_id = match album_id {
             Some(id) if !id.is_empty() => id.to_string(),
@@ -229,8 +249,13 @@ impl GalleryService {
         let created = now_ms();
         let mut album: Album = self.k.load(&album_id)?;
         album.register(name, created, created, None)?;
-        self.k.commit(&mut album, Some(&format!("album.register:{album_id}:{created}")))?;
-        let mut found = self.get_album(&album_id)?.ok_or_else(|| DomainError::internal("创建失败"))?;
+        self.k.commit(
+            &mut album,
+            Some(&format!("album.register:{album_id}:{created}")),
+        )?;
+        let mut found = self
+            .get_album(&album_id)?
+            .ok_or_else(|| DomainError::internal("创建失败"))?;
         found["count"] = json!(0);
         Ok(found)
     }
@@ -254,7 +279,8 @@ impl GalleryService {
         let mut album: Album = self.k.load(album_id)?;
         album.rename(name)?;
         self.k.commit(&mut album, None)?;
-        self.get_album(album_id)?.ok_or_else(|| DomainError::not_found("收藏夹不存在"))
+        self.get_album(album_id)?
+            .ok_or_else(|| DomainError::not_found("收藏夹不存在"))
     }
 
     pub fn delete_album(&self, album_id: &str) -> Res<()> {
@@ -285,7 +311,8 @@ impl GalleryService {
         let mut album: Album = self.k.load(album_id)?;
         album.restore()?;
         self.k.commit(&mut album, None)?;
-        self.get_album(album_id)?.ok_or_else(|| DomainError::not_found("收藏夹不存在"))
+        self.get_album(album_id)?
+            .ok_or_else(|| DomainError::not_found("收藏夹不存在"))
     }
 
     pub fn list_items(
@@ -315,7 +342,8 @@ impl GalleryService {
         if let Some(limit) = limit {
             sql.push_str(" LIMIT ?2 OFFSET ?3");
             let mut stmt = conn.prepare(&sql)?;
-            let rows = stmt.query_map(params![album_id, limit.max(0), offset.max(0)], artwork_row)?;
+            let rows =
+                stmt.query_map(params![album_id, limit.max(0), offset.max(0)], artwork_row)?;
             for r in rows {
                 out.push(r?);
             }
@@ -357,14 +385,24 @@ impl GalleryService {
         Ok(found.is_some())
     }
 
-    pub fn import_bytes(&self, album_id: &str, data: &[u8], meta: &Value, opts: ImportOptions) -> Res<Value> {
+    pub fn import_bytes(
+        &self,
+        album_id: &str,
+        data: &[u8],
+        meta: &Value,
+        opts: ImportOptions,
+    ) -> Res<Value> {
         let album = self.get_album(album_id)?;
         let album = match album {
             Some(a) if !a["deleted"].as_bool().unwrap_or(false) => a,
             _ => return Err(DomainError::not_found("收藏夹不存在")),
         };
         let empty = json!([]);
-        let artists = if get(meta, "artists").is_array() { get(meta, "artists") } else { &empty };
+        let artists = if get(meta, "artists").is_array() {
+            get(meta, "artists")
+        } else {
+            &empty
+        };
         self.assert_single_artist_meta(&album, artists)?;
         let digest = sha256_bytes(data);
         if self.has_hash(album_id, &digest)? {
@@ -379,7 +417,11 @@ impl GalleryService {
         let item_id = match opts.item_id {
             Some(id) if !id.is_empty() => id.to_string(),
             _ => {
-                let from_meta = if truthy(get(meta, "id")) { py_str(get(meta, "id")) } else { String::new() };
+                let from_meta = if truthy(get(meta, "id")) {
+                    py_str(get(meta, "id"))
+                } else {
+                    String::new()
+                };
                 if from_meta.is_empty() {
                     new_id()
                 } else {
@@ -390,20 +432,41 @@ impl GalleryService {
         if !valid_id(&item_id) {
             return Err(DomainError::bad("无效的图片 id"));
         }
-        let params_v = if get(meta, "params").is_object() { get(meta, "params").clone() } else { json!({}) };
-        let name = if truthy(get(meta, "name")) { py_str(get(meta, "name")) } else { "image".into() };
-        let added_at = if truthy(get(meta, "addedAt")) { to_int(get(meta, "addedAt")).unwrap_or_else(now_ms) } else { now_ms() };
+        let params_v = if get(meta, "params").is_object() {
+            get(meta, "params").clone()
+        } else {
+            json!({})
+        };
+        let name = if truthy(get(meta, "name")) {
+            py_str(get(meta, "name"))
+        } else {
+            "image".into()
+        };
+        let added_at = if truthy(get(meta, "addedAt")) {
+            to_int(get(meta, "addedAt")).unwrap_or_else(now_ms)
+        } else {
+            now_ms()
+        };
         let width = if has_value(meta, "width") {
-            to_int(get(meta, "width")).map(Value::from).ok_or_else(|| DomainError::bad("width 格式错误"))?
+            to_int(get(meta, "width"))
+                .map(Value::from)
+                .ok_or_else(|| DomainError::bad("width 格式错误"))?
         } else {
             size.map(|s| Value::from(s.0)).unwrap_or(Value::Null)
         };
         let height = if has_value(meta, "height") {
-            to_int(get(meta, "height")).map(Value::from).ok_or_else(|| DomainError::bad("height 格式错误"))?
+            to_int(get(meta, "height"))
+                .map(Value::from)
+                .ok_or_else(|| DomainError::bad("height 格式错误"))?
         } else {
             size.map(|s| Value::from(s.1)).unwrap_or(Value::Null)
         };
-        let artist_strs: Vec<Value> = artists.as_array().unwrap().iter().map(|a| Value::String(py_str(a))).collect();
+        let artist_strs: Vec<Value> = artists
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| Value::String(py_str(a)))
+            .collect();
         let payload = json!({
             "albumId": album_id,
             "addedAt": added_at,
@@ -422,8 +485,10 @@ impl GalleryService {
         art.import(payload, opts.command_id)?;
         // 幂等键带上图片 id：同一次请求重试不会重复写入；删除 / 移走后再导入同一张图（新 id）必须能成功。
         let default_cid = format!("artwork.import:{item_id}:{blob_hash}:{album_id}");
-        self.k.commit(&mut art, Some(opts.command_id.unwrap_or(&default_cid)))?;
-        self.get_item(&item_id, false)?.ok_or_else(|| DomainError::internal("导入失败"))
+        self.k
+            .commit(&mut art, Some(opts.command_id.unwrap_or(&default_cid)))?;
+        self.get_item(&item_id, false)?
+            .ok_or_else(|| DomainError::internal("导入失败"))
     }
 
     pub fn move_item(&self, item_id: &str, album_id: &str) -> Res<Value> {
@@ -431,9 +496,13 @@ impl GalleryService {
             Some(a) if !a["deleted"].as_bool().unwrap_or(false) => a,
             _ => return Err(DomainError::not_found("收藏夹不存在")),
         };
-        let item = self.get_item(item_id, false)?.ok_or_else(|| DomainError::not_found("图片不存在"))?;
+        let item = self
+            .get_item(item_id, false)?
+            .ok_or_else(|| DomainError::not_found("图片不存在"))?;
         self.assert_single_artist_meta(&album, &item["artists"])?;
-        if item["albumId"].as_str() != Some(album_id) && self.has_hash(album_id, item["hash"].as_str().unwrap_or(""))? {
+        if item["albumId"].as_str() != Some(album_id)
+            && self.has_hash(album_id, item["hash"].as_str().unwrap_or(""))?
+        {
             return Err(DomainError::conflict("目标收藏夹已有这张图"));
         }
         let old_album = item["albumId"].as_str().unwrap_or("").to_string();
@@ -459,11 +528,14 @@ impl GalleryService {
             }
             self.k.release_files(&files)?;
         }
-        self.get_item(item_id, false)?.ok_or_else(|| DomainError::not_found("图片不存在"))
+        self.get_item(item_id, false)?
+            .ok_or_else(|| DomainError::not_found("图片不存在"))
     }
 
     pub fn delete_item(&self, item_id: &str) -> Res<()> {
-        let item = self.get_item(item_id, false)?.ok_or_else(|| DomainError::not_found("图片不存在"))?;
+        let item = self
+            .get_item(item_id, false)?
+            .ok_or_else(|| DomainError::not_found("图片不存在"))?;
         let album = item["albumId"].as_str().unwrap_or("").to_string();
         let hash = item["hash"].as_str().unwrap_or("").to_string();
         let mut plan = Purge::default();
@@ -499,7 +571,13 @@ impl GalleryService {
 
     pub fn artwork_at(&self, item_id: &str, version: i64) -> Res<Value> {
         let mut art = Artwork::create(item_id);
-        let stream: Vec<_> = self.k.store.load_stream(item_id)?.into_iter().filter(|e| e.version <= version).collect();
+        let stream: Vec<_> = self
+            .k
+            .store
+            .load_stream(item_id)?
+            .into_iter()
+            .filter(|e| e.version <= version)
+            .collect();
         if stream.is_empty() {
             return Err(DomainError::not_found("图片不存在"));
         }
@@ -534,11 +612,19 @@ impl GalleryService {
         let mut stmt = conn.prepare(
             "SELECT id, client_json, items_json FROM projections_jobs WHERE source='gallery' AND status='done'",
         )?;
-        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?, r.get::<_, Option<String>>(2)?)))?;
+        let rows = stmt.query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, Option<String>>(1)?,
+                r.get::<_, Option<String>>(2)?,
+            ))
+        })?;
         let mut out = Vec::new();
         for row in rows {
             let (id, client, items) = row?;
-            let client = client.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or(Value::Null);
+            let client = client
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or(Value::Null);
             let items = items
                 .and_then(|s| serde_json::from_str::<Value>(&s).ok())
                 .and_then(|v| v.as_array().cloned())
@@ -549,7 +635,13 @@ impl GalleryService {
     }
 
     /// 目标收藏夹是 `album`、而且用到这张图的生图任务：拿掉这张，空了就整段清除。
-    fn plan_jobs_without(&self, conn: &rusqlite::Connection, album: &str, hash: &str, plan: &mut Purge) -> Res<()> {
+    fn plan_jobs_without(
+        &self,
+        conn: &rusqlite::Connection,
+        album: &str,
+        hash: &str,
+        plan: &mut Purge,
+    ) -> Res<()> {
         let hash = hash.to_lowercase();
         for (id, client, items) in Self::gallery_jobs(conn)? {
             if gallery_target(&client).as_deref() != Some(album) {
@@ -568,7 +660,12 @@ impl GalleryService {
         Ok(())
     }
 
-    fn plan_jobs_for_album(&self, conn: &rusqlite::Connection, album: &str, plan: &mut Purge) -> Res<()> {
+    fn plan_jobs_for_album(
+        &self,
+        conn: &rusqlite::Connection,
+        album: &str,
+        plan: &mut Purge,
+    ) -> Res<()> {
         for (id, client, _) in Self::gallery_jobs(conn)? {
             if gallery_target(&client).as_deref() == Some(album) {
                 plan.drop_aggregate(&id);
@@ -589,7 +686,8 @@ impl GalleryService {
 
     fn item_ids(&self, album_id: &str, deleted: bool) -> Res<Vec<String>> {
         let conn = self.k.store.connect()?;
-        let mut stmt = conn.prepare("SELECT id FROM projections_artworks WHERE album_id=?1 AND deleted=?2")?;
+        let mut stmt =
+            conn.prepare("SELECT id FROM projections_artworks WHERE album_id=?1 AND deleted=?2")?;
         let rows = stmt.query_map(params![album_id, deleted as i64], |r| r.get::<_, String>(0))?;
         let mut out = Vec::new();
         for r in rows {
@@ -610,7 +708,11 @@ impl GalleryService {
 }
 
 pub fn ensure_default_album(svc: &GalleryService) -> Res<()> {
-    if svc.list_albums(false)?.iter().any(|a| !is_test_set_album(Some(a))) {
+    if svc
+        .list_albums(false)?
+        .iter()
+        .any(|a| !is_test_set_album(Some(a)))
+    {
         return Ok(());
     }
     svc.create_album("默认收藏夹", Some("default"), false, false)?;
@@ -624,7 +726,12 @@ pub fn ensure_single_artist_album(svc: &GalleryService) -> Res<()> {
         }
         return Ok(());
     }
-    svc.create_album(SINGLE_ARTIST_ALBUM_NAME, Some(SINGLE_ARTIST_ALBUM_ID), true, false)?;
+    svc.create_album(
+        SINGLE_ARTIST_ALBUM_NAME,
+        Some(SINGLE_ARTIST_ALBUM_ID),
+        true,
+        false,
+    )?;
     Ok(())
 }
 

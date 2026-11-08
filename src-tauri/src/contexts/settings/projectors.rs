@@ -15,10 +15,20 @@ impl Projector for SettingsProjector {
             return Ok(());
         }
         let row: Option<String> = conn
-            .query_row("SELECT data_json FROM projections_settings WHERE id=?1", params![SETTINGS_ID], |r| r.get(0))
+            .query_row(
+                "SELECT data_json FROM projections_settings WHERE id=?1",
+                params![SETTINGS_ID],
+                |r| r.get(0),
+            )
             .ok();
-        let current: Value = row.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_else(|| json!({}));
-        let payload = if event.payload.is_null() { json!({}) } else { event.payload.clone() };
+        let current: Value = row
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_else(|| json!({}));
+        let payload = if event.payload.is_null() {
+            json!({})
+        } else {
+            event.payload.clone()
+        };
         let data = apply_change(&current, &event.event_type, &payload);
         conn.execute(
             "INSERT INTO projections_settings (id, data_json, version) VALUES (?1, ?2, ?3)

@@ -4,18 +4,18 @@
 //! 返回给前端的 JSON 一律过一遍 `to_client`，把库里保存的旧式 `/api/blobs/...` 地址换成 `wb://` 协议地址。
 
 use crate::app::Services;
-use crate::kernel::integrity::{backup_hint, rebuild_projections, verify_all};
-use crate::kernel::bus::verify_chain;
-use crate::kernel::transfer::{export_db, export_pack, import_db};
-use tauri::{Emitter, Manager};
-use crate::kernel::{DomainError, Res};
-use crate::contexts::generation::nai_payload::uc_presets_json;
 use crate::contexts::gallery::application::ImportOptions;
+use crate::contexts::generation::nai_payload::uc_presets_json;
+use crate::kernel::bus::verify_chain;
+use crate::kernel::integrity::{backup_hint, rebuild_projections, verify_all};
+use crate::kernel::transfer::{export_db, export_pack, import_db};
+use crate::kernel::{DomainError, Res};
 use crate::util::{get, py_str, to_client, truthy};
 use serde_json::{json, Value};
 use std::sync::Arc;
 use tauri::ipc::{InvokeBody, Request};
 use tauri::State;
+use tauri::{Emitter, Manager};
 
 type S<'a> = State<'a, Arc<Services>>;
 type R = Result<Value, DomainError>;
@@ -25,7 +25,9 @@ fn out(v: Value) -> R {
 }
 
 fn is_hash(s: &str) -> bool {
-    s.len() == 64 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    s.len() == 64
+        && s.bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
 fn raw_body<'a>(req: &'a Request<'_>) -> Res<&'a [u8]> {
@@ -36,7 +38,11 @@ fn raw_body<'a>(req: &'a Request<'_>) -> Res<&'a [u8]> {
 }
 
 fn text_of(v: &Value) -> String {
-    if truthy(v) { py_str(v) } else { String::new() }
+    if truthy(v) {
+        py_str(v)
+    } else {
+        String::new()
+    }
 }
 
 // ---------- 健康检查 / 完整性 ----------
@@ -80,13 +86,26 @@ fn jobs_busy_error() -> DomainError {
 /// 导出/导入大文件时把进度推给前端：`transfer-progress` 事件，`{phase, done, total}`。
 fn progress_emitter(app: &tauri::AppHandle) -> impl Fn(&str, u64, u64) + '_ {
     move |phase: &str, done: u64, total: u64| {
-        let _ = app.emit("transfer-progress", json!({"phase": phase, "done": done, "total": total}));
+        let _ = app.emit(
+            "transfer-progress",
+            json!({"phase": phase, "done": done, "total": total}),
+        );
     }
 }
 
-fn save_dialog(app: &tauri::AppHandle, title: &str, name: String, filter: (&str, &[&str])) -> Option<tauri_plugin_dialog::FilePath> {
+fn save_dialog(
+    app: &tauri::AppHandle,
+    title: &str,
+    name: String,
+    filter: (&str, &[&str]),
+) -> Option<tauri_plugin_dialog::FilePath> {
     use tauri_plugin_dialog::DialogExt;
-    let mut dialog = app.dialog().file().set_title(title).set_file_name(name).add_filter(filter.0, filter.1);
+    let mut dialog = app
+        .dialog()
+        .file()
+        .set_title(title)
+        .set_file_name(name)
+        .add_filter(filter.0, filter.1);
     if let Some(win) = app.get_webview_window("main") {
         dialog = dialog.set_parent(&win);
     }
@@ -94,7 +113,8 @@ fn save_dialog(app: &tauri::AppHandle, title: &str, name: String, filter: (&str,
 }
 
 fn picked_path(p: tauri_plugin_dialog::FilePath) -> Res<std::path::PathBuf> {
-    p.into_path().map_err(|e| DomainError::bad(format!("无法使用所选路径：{e}")))
+    p.into_path()
+        .map_err(|e| DomainError::bad(format!("无法使用所选路径：{e}")))
 }
 
 /// 弹出系统「另存为」对话框，把事件库导出成单个 SQLite 文件（不含图片）。用户取消返回 `{cancelled: true}`。
@@ -105,7 +125,12 @@ pub async fn db_export(app: tauri::AppHandle, s: S<'_>, suggested_name: Option<S
         let name = suggested_name
             .filter(|n| !n.trim().is_empty())
             .unwrap_or_else(|| "workbench-events.sqlite".to_string());
-        let Some(picked) = save_dialog(&app, "导出数据库", name, ("SQLite 数据库", &["sqlite", "db"])) else {
+        let Some(picked) = save_dialog(
+            &app,
+            "导出数据库",
+            name,
+            ("SQLite 数据库", &["sqlite", "db"]),
+        ) else {
             return Ok(json!({"cancelled": true}));
         };
         let mut info = export_db(&svc.kernel.store, &picked_path(picked)?)?;
@@ -124,11 +149,18 @@ pub async fn db_export_pack(app: tauri::AppHandle, s: S<'_>, suggested_name: Opt
         let name = suggested_name
             .filter(|n| !n.trim().is_empty())
             .unwrap_or_else(|| "workbench-pack.zip".to_string());
-        let Some(picked) = save_dialog(&app, "导出数据库和图片", name, ("完整包 (zip)", &["zip"])) else {
+        let Some(picked) = save_dialog(&app, "导出数据库和图片", name, ("完整包 (zip)", &["zip"]))
+        else {
             return Ok(json!({"cancelled": true}));
         };
         let emit = progress_emitter(&app);
-        let mut info = export_pack(&svc.kernel.store, &svc.kernel.blobs, &svc.data_dir, &picked_path(picked)?, &emit)?;
+        let mut info = export_pack(
+            &svc.kernel.store,
+            &svc.kernel.blobs,
+            &svc.data_dir,
+            &picked_path(picked)?,
+            &emit,
+        )?;
         info["cancelled"] = json!(false);
         Ok(info)
     })
@@ -163,7 +195,14 @@ pub async fn db_import(app: tauri::AppHandle, s: S<'_>) -> R {
             return Err(jobs_busy_error());
         }
         let emit = progress_emitter(&app);
-        let mut info = import_db(&svc.kernel.store, &svc.kernel.blobs, &svc.kernel.projectors, &svc.data_dir, &path, &emit)?;
+        let mut info = import_db(
+            &svc.kernel.store,
+            &svc.kernel.blobs,
+            &svc.kernel.projectors,
+            &svc.data_dir,
+            &path,
+            &emit,
+        )?;
         svc.settings.reload()?;
         svc.generation.invalidate_status();
         crate::app::ensure_defaults(&svc)?;
@@ -188,7 +227,8 @@ pub fn settings_put(s: S<'_>, patch: Value) -> R {
 
 #[tauri::command(async)]
 pub fn settings_reset(s: S<'_>, section: Option<String>) -> R {
-    Ok(s.settings.reset(section.as_deref().filter(|x| !x.is_empty()))?)
+    Ok(s.settings
+        .reset(section.as_deref().filter(|x| !x.is_empty()))?)
 }
 
 #[tauri::command(async)]
@@ -218,7 +258,10 @@ pub fn storage_plan(s: S<'_>) -> R {
 #[tauri::command(async)]
 pub fn storage_migrate(s: S<'_>) -> R {
     let svc = s.inner().clone();
-    out(crate::contexts::storage::migrate(&svc.kernel, &svc.data_dir)?)
+    out(crate::contexts::storage::migrate(
+        &svc.kernel,
+        &svc.data_dir,
+    )?)
 }
 
 #[tauri::command(async)]
@@ -235,7 +278,12 @@ pub fn gallery_list_albums(s: S<'_>) -> R {
 
 #[tauri::command(async)]
 pub fn gallery_create_album(s: S<'_>, name: Option<String>, id: Option<String>) -> R {
-    let album = s.gallery.create_album(name.as_deref().unwrap_or(""), id.as_deref().filter(|x| !x.is_empty()), false, false)?;
+    let album = s.gallery.create_album(
+        name.as_deref().unwrap_or(""),
+        id.as_deref().filter(|x| !x.is_empty()),
+        false,
+        false,
+    )?;
     out(json!({"album": album}))
 }
 
@@ -334,7 +382,8 @@ pub fn gallery_import_item(s: S<'_>, request: Request<'_>) -> R {
     if body.len() < 4 + head_len {
         return Err(DomainError::bad("请求格式错误"));
     }
-    let head: Value = serde_json::from_slice(&body[4..4 + head_len]).map_err(|_| DomainError::bad("请求格式错误"))?;
+    let head: Value = serde_json::from_slice(&body[4..4 + head_len])
+        .map_err(|_| DomainError::bad("请求格式错误"))?;
     let rest = &body[4 + head_len..];
     let thumb_len = head["thumbLen"].as_u64().unwrap_or(0) as usize;
     if rest.len() < thumb_len {
@@ -353,7 +402,11 @@ pub fn gallery_import_item(s: S<'_>, request: Request<'_>) -> R {
         &album_id,
         file,
         &meta,
-        ImportOptions { thumb: if thumb.is_empty() { None } else { Some(thumb) }, command_id: None, item_id: None },
+        ImportOptions {
+            thumb: if thumb.is_empty() { None } else { Some(thumb) },
+            command_id: None,
+            item_id: None,
+        },
     )?;
     out(json!({"item": item}))
 }
@@ -425,7 +478,10 @@ pub async fn nai_status(s: S<'_>) -> R {
 
 #[tauri::command]
 pub async fn nai_save_token(s: S<'_>, token: Option<String>) -> R {
-    out(s.generation.set_token(token.as_deref().unwrap_or("")).await?)
+    out(s
+        .generation
+        .set_token(token.as_deref().unwrap_or(""))
+        .await?)
 }
 
 #[tauri::command]
@@ -506,8 +562,17 @@ pub fn nai_get_job(s: S<'_>, id: String) -> R {
 }
 
 #[tauri::command(async)]
-pub fn nai_history(s: S<'_>, before: Option<i64>, before_id: Option<String>, limit: Option<i64>) -> R {
-    out(s.generation.list_history(before, before_id.as_deref().unwrap_or(""), limit.unwrap_or(60))?)
+pub fn nai_history(
+    s: S<'_>,
+    before: Option<i64>,
+    before_id: Option<String>,
+    limit: Option<i64>,
+) -> R {
+    out(s.generation.list_history(
+        before,
+        before_id.as_deref().unwrap_or(""),
+        limit.unwrap_or(60),
+    )?)
 }
 
 #[tauri::command(async)]
@@ -523,7 +588,11 @@ pub fn nai_promote(s: S<'_>, body: Value) -> R {
     let album_id = text_of(get(&body, "albumId"));
     let mut hashes: Vec<Value> = {
         let a = get(&body, "tempIds");
-        let src = if truthy(a) { a } else { get(&body, "blobHashes") };
+        let src = if truthy(a) {
+            a
+        } else {
+            get(&body, "blobHashes")
+        };
         src.as_array().cloned().unwrap_or_default()
     };
     if truthy(get(&body, "tempId")) {
@@ -540,7 +609,10 @@ pub fn nai_promote(s: S<'_>, body: Value) -> R {
         for job in s.generation.list_jobs()? {
             for item in get(&job, "items").as_array().cloned().unwrap_or_default() {
                 let id_match = get(&item, "id").as_str() == Some(h.as_str());
-                let prefix_match = get(&item, "blobHash").as_str().map(|b| b.starts_with(&h)).unwrap_or(false);
+                let prefix_match = get(&item, "blobHash")
+                    .as_str()
+                    .map(|b| b.starts_with(&h))
+                    .unwrap_or(false);
                 if id_match || prefix_match {
                     resolved.push(py_str(get(&item, "blobHash")));
                 }
@@ -550,6 +622,10 @@ pub fn nai_promote(s: S<'_>, body: Value) -> R {
     if album_id.is_empty() || resolved.is_empty() {
         return Err(DomainError::bad("缺少收藏夹或图片"));
     }
-    let meta = if truthy(get(&body, "meta")) { get(&body, "meta").clone() } else { json!({}) };
+    let meta = if truthy(get(&body, "meta")) {
+        get(&body, "meta").clone()
+    } else {
+        json!({})
+    };
     out(json!({"items": s.generation.promote(&album_id, &resolved, &meta)?, "saved": true}))
 }

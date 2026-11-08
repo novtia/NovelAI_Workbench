@@ -1,6 +1,8 @@
 //! 装配：把事件库、投影器和各个上下文的服务拼起来（对应 Python 的 `create_app`）。
 
-use crate::contexts::gallery::application::{ensure_default_album, ensure_single_artist_album, GalleryService};
+use crate::contexts::gallery::application::{
+    ensure_default_album, ensure_single_artist_album, GalleryService,
+};
 use crate::contexts::gallery::migrate::migrate_legacy;
 use crate::contexts::gallery::projectors::GalleryProjector;
 use crate::contexts::generation::application::GenerationService;
@@ -68,17 +70,30 @@ pub fn build(data_dir: &Path) -> Res<Services> {
     let gateway = Arc::new(NaiGateway::new(vault.clone()));
     {
         let s = settings.clone();
-        gateway.set_timeout_provider(Arc::new(move || s.value_f64("generation", "timeoutSec", 180.0)));
+        gateway.set_timeout_provider(Arc::new(move || {
+            s.value_f64("generation", "timeoutSec", 180.0)
+        }));
         let s = settings.clone();
         gateway.set_base_url_provider(Arc::new(move || {
-            s.value("account", "gatewayUrl").as_str().unwrap_or("").to_string()
+            s.value("account", "gatewayUrl")
+                .as_str()
+                .unwrap_or("")
+                .to_string()
         }));
     }
     {
         let s = settings.clone();
         gateway.set_net_provider(Arc::new(move || NetConfig {
-            mode: s.value("network", "proxyMode").as_str().unwrap_or("system").to_string(),
-            proxy_url: s.value("network", "proxyUrl").as_str().unwrap_or("").to_string(),
+            mode: s
+                .value("network", "proxyMode")
+                .as_str()
+                .unwrap_or("system")
+                .to_string(),
+            proxy_url: s
+                .value("network", "proxyUrl")
+                .as_str()
+                .unwrap_or("")
+                .to_string(),
             connect_timeout: s.value_f64("network", "connectTimeoutSec", 10.0),
         }));
     }
@@ -108,7 +123,14 @@ pub fn build(data_dir: &Path) -> Res<Services> {
             }
         }));
     }
-    Ok(Services { data_dir: data_dir.to_path_buf(), kernel, gallery, lottery, settings, generation })
+    Ok(Services {
+        data_dir: data_dir.to_path_buf(),
+        kernel,
+        gallery,
+        lottery,
+        settings,
+        generation,
+    })
 }
 
 /// 启动时的数据准备：空库时从旧版 `ddd/data` 迁入，并保证默认收藏夹存在。

@@ -11,10 +11,18 @@ pub fn float_repr(x: f64) -> String {
         return "NaN".into();
     }
     if x.is_infinite() {
-        return if x > 0.0 { "Infinity".into() } else { "-Infinity".into() };
+        return if x > 0.0 {
+            "Infinity".into()
+        } else {
+            "-Infinity".into()
+        };
     }
     if x == 0.0 {
-        return if x.is_sign_negative() { "-0.0".into() } else { "0.0".into() };
+        return if x.is_sign_negative() {
+            "-0.0".into()
+        } else {
+            "0.0".into()
+        };
     }
     let sci = format!("{:e}", x.abs());
     let (mant, exp) = sci.split_once('e').expect("LowerExp 一定带 e");
@@ -23,7 +31,11 @@ pub fn float_repr(x: f64) -> String {
     let n = digits.len() as i32;
     let sign = if x < 0.0 { "-" } else { "" };
     if !(-4..16).contains(&exp) {
-        let m = if n == 1 { digits.clone() } else { format!("{}.{}", &digits[..1], &digits[1..]) };
+        let m = if n == 1 {
+            digits.clone()
+        } else {
+            format!("{}.{}", &digits[..1], &digits[1..])
+        };
         let es = if exp < 0 { '-' } else { '+' };
         return format!("{sign}{m}e{es}{:02}", exp.abs());
     }
@@ -33,7 +45,11 @@ pub fn float_repr(x: f64) -> String {
             let zeros = "0".repeat((int_len - n) as usize);
             format!("{sign}{digits}{zeros}.0")
         } else {
-            format!("{sign}{}.{}", &digits[..int_len as usize], &digits[int_len as usize..])
+            format!(
+                "{sign}{}.{}",
+                &digits[..int_len as usize],
+                &digits[int_len as usize..]
+            )
         }
     } else {
         let zeros = "0".repeat((-exp - 1) as usize);

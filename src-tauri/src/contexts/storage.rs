@@ -3,6 +3,7 @@
 //! 先给出一份清单（不改图片文件），确认后再执行。执行前会把数据库备份到 `backups/`。
 
 use crate::app::projectors;
+use crate::contexts::lottery::domain::{lottery_client_draw_id, stamp_draw_ids};
 use crate::kernel::blobs::{gallery_target, BlobStore, Bucket};
 use crate::kernel::bus::Kernel;
 use crate::kernel::clock::now_ms;
@@ -12,7 +13,6 @@ use crate::kernel::refs;
 use crate::kernel::store::EventStore;
 use crate::kernel::transfer::export_db;
 use crate::kernel::{DomainError, Res};
-use crate::contexts::lottery::domain::{lottery_client_draw_id, stamp_draw_ids};
 use rusqlite::Connection;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -32,7 +32,8 @@ pub fn status(k: &Kernel) -> Res<Value> {
     let count = |sql: &str| -> Res<i64> { Ok(conn.query_row(sql, [], |r| r.get(0))?) };
     let legacy = k.blobs.legacy_files().len();
     let previews = preview_files(&preview_dir(&k.blobs)).len();
-    let failed = count("SELECT COUNT(*) FROM projections_jobs WHERE status IN ('error', 'cancelled')")?;
+    let failed =
+        count("SELECT COUNT(*) FROM projections_jobs WHERE status IN ('error', 'cancelled')")?;
     let deleted_albums = count("SELECT COUNT(*) FROM projections_albums WHERE deleted=1")?;
     let deleted_artworks = count("SELECT COUNT(*) FROM projections_artworks WHERE deleted=1")?;
     Ok(json!({
@@ -65,7 +66,9 @@ pub fn plan(k: &Kernel, data_dir: &Path) -> Res<Value> {
 
 pub fn migrate(k: &Kernel, data_dir: &Path) -> Res<Value> {
     ensure_idle(&k.store)?;
-    let backup = data_dir.join("backups").join(format!("events-before-migrate-{}.sqlite", now_ms()));
+    let backup = data_dir
+        .join("backups")
+        .join(format!("events-before-migrate-{}.sqlite", now_ms()));
     let saved = export_db(&k.store, &backup)?;
     let mut report = apply(k)?;
     report["backup"] = saved.get("path").cloned().unwrap_or(Value::Null);
@@ -81,12 +84,16 @@ pub fn apply(k: &Kernel) -> Res<Value> {
 }
 
 pub fn vacuum(store: &EventStore) -> Res<Value> {
-    let before = std::fs::metadata(&store.db_path).map(|m| m.len()).unwrap_or(0);
+    let before = std::fs::metadata(&store.db_path)
+        .map(|m| m.len())
+        .unwrap_or(0);
     store.with_write_lock(|| -> Res<()> {
         store.connect()?.execute_batch("VACUUM")?;
         Ok(())
     })?;
-    let after = std::fs::metadata(&store.db_path).map(|m| m.len()).unwrap_or(0);
+    let after = std::fs::metadata(&store.db_path)
+        .map(|m| m.len())
+        .unwrap_or(0);
     Ok(json!({"before": before, "after": after}))
 }
 
@@ -97,7 +104,9 @@ fn ensure_idle(store: &EventStore) -> Res<()> {
         |r| r.get(0),
     )?;
     if n > 0 {
-        return Err(DomainError::conflict("还有生图任务在排队或进行中，请等它们结束或取消后再整理"));
+        return Err(DomainError::conflict(
+            "还有生图任务在排队或进行中，请等它们结束或取消后再整理",
+        ));
     }
     Ok(())
 }
@@ -130,12 +139,18 @@ fn run_organize(k: &Kernel, files: &BlobStore, apply: bool) -> Res<Value> {
 }
 
 fn preview_dir(blobs: &BlobStore) -> PathBuf {
-    blobs.root.parent().map(|p| p.join("previews")).unwrap_or_else(|| PathBuf::from("previews"))
+    blobs
+        .root
+        .parent()
+        .map(|p| p.join("previews"))
+        .unwrap_or_else(|| PathBuf::from("previews"))
 }
 
 fn preview_files(dir: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
-    let Ok(rd) = std::fs::read_dir(dir) else { return out };
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return out;
+    };
     for entry in rd.flatten() {
         let name = entry.file_name().to_string_lossy().to_string();
         if name.ends_with(".png") {
@@ -148,7 +163,9 @@ fn preview_files(dir: &Path) -> Vec<PathBuf> {
 fn gc_inputs(k: &Kernel) -> Res<()> {
     let conn = k.store.connect()?;
     for file in k.blobs.files() {
-        let Some(slot) = file.slot.clone() else { continue };
+        let Some(slot) = file.slot.clone() else {
+            continue;
+        };
         if !matches!(slot.bucket, Bucket::Inputs) {
             continue;
         }
@@ -173,7 +190,10 @@ fn build_purge(store: &EventStore) -> Res<Purge> {
     let conn = store.connect()?;
     let mut plan = Purge::default();
 
-    let deleted_albums: HashSet<String> = query_ids(&conn, "SELECT id FROM projections_albums WHERE deleted=1")?.into_iter().collect();
+    let deleted_albums: HashSet<String> =
+        query_ids(&conn, "SELECT id FROM projections_albums WHERE deleted=1")?
+            .into_iter()
+            .collect();
     for id in &deleted_albums {
         plan.drop_aggregate(id);
         let mut stmt = conn.prepare("SELECT id FROM projections_artworks WHERE album_id=?1")?;
@@ -185,13 +205,17 @@ fn build_purge(store: &EventStore) -> Res<Purge> {
     for id in query_ids(&conn, "SELECT id FROM projections_artworks WHERE deleted=1")? {
         plan.drop_aggregate(&id);
     }
-    for id in query_ids(&conn, "SELECT id FROM projections_param_sets WHERE deleted=1")? {
+    for id in query_ids(
+        &conn,
+        "SELECT id FROM projections_param_sets WHERE deleted=1",
+    )? {
         plan.drop_aggregate(&id);
     }
 
     let mut live: HashMap<String, HashSet<String>> = HashMap::new();
     {
-        let mut stmt = conn.prepare("SELECT album_id, hash FROM projections_artworks WHERE deleted=0")?;
+        let mut stmt =
+            conn.prepare("SELECT album_id, hash FROM projections_artworks WHERE deleted=0")?;
         let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
         for row in rows {
             let (album, hash) = row?;
@@ -203,8 +227,15 @@ fn build_purge(store: &EventStore) -> Res<Purge> {
 
     let mut batches: HashMap<String, (bool, BTreeSet<String>, Vec<Value>)> = HashMap::new();
     {
-        let mut stmt = conn.prepare("SELECT id, deleted, draws_json FROM projections_lottery_batches")?;
-        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, String>(2)?)))?;
+        let mut stmt =
+            conn.prepare("SELECT id, deleted, draws_json FROM projections_lottery_batches")?;
+        let rows = stmt.query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, i64>(1)?,
+                r.get::<_, String>(2)?,
+            ))
+        })?;
         for row in rows {
             let (id, deleted, draws_json) = row?;
             let draws = clean_draws(&id, &draws_json);
@@ -232,7 +263,12 @@ fn build_purge(store: &EventStore) -> Res<Purge> {
                 if job.items.is_empty() {
                     plan.drop_aggregate(&job.id);
                 } else {
-                    plan_job_items(&conn, &job.id, &label(&job.items, &Bucket::Studio), &mut plan)?;
+                    plan_job_items(
+                        &conn,
+                        &job.id,
+                        &label(&job.items, &Bucket::Studio),
+                        &mut plan,
+                    )?;
                 }
             }
             "gallery" => {
@@ -249,7 +285,9 @@ fn build_purge(store: &EventStore) -> Res<Purge> {
                     .items
                     .iter()
                     .filter(|it| {
-                        let h = crate::util::py_str(crate::util::get(it, "blobHash")).trim().to_lowercase();
+                        let h = crate::util::py_str(crate::util::get(it, "blobHash"))
+                            .trim()
+                            .to_lowercase();
                         hashes.map(|set| set.contains(&h)).unwrap_or(false)
                     })
                     .cloned()
@@ -257,7 +295,12 @@ fn build_purge(store: &EventStore) -> Res<Purge> {
                 if keep.is_empty() {
                     plan.drop_aggregate(&job.id);
                 } else {
-                    plan_job_items(&conn, &job.id, &label(&keep, &Bucket::Favorites(album)), &mut plan)?;
+                    plan_job_items(
+                        &conn,
+                        &job.id,
+                        &label(&keep, &Bucket::Favorites(album)),
+                        &mut plan,
+                    )?;
                 }
             }
             "lottery" => {
@@ -265,7 +308,10 @@ fn build_purge(store: &EventStore) -> Res<Purge> {
                 let draw = lottery_client_draw_id(&batch_id, &job.client);
                 let doomed = batch_id.is_empty()
                     || draw.is_empty()
-                    || batches.get(&batch_id).map(|(deleted, ids, _)| *deleted || !ids.contains(&draw)).unwrap_or(true);
+                    || batches
+                        .get(&batch_id)
+                        .map(|(deleted, ids, _)| *deleted || !ids.contains(&draw))
+                        .unwrap_or(true);
                 if doomed {
                     plan.drop_aggregate(&job.id);
                 } else {
@@ -276,7 +322,12 @@ fn build_purge(store: &EventStore) -> Res<Purge> {
                 if job.items.is_empty() {
                     plan.drop_aggregate(&job.id);
                 } else {
-                    plan_job_items(&conn, &job.id, &label(&job.items, &Bucket::Studio), &mut plan)?;
+                    plan_job_items(
+                        &conn,
+                        &job.id,
+                        &label(&job.items, &Bucket::Studio),
+                        &mut plan,
+                    )?;
                 }
             }
         }
@@ -293,7 +344,12 @@ fn build_purge(store: &EventStore) -> Res<Purge> {
         }
         for (i, job) in group.iter().enumerate() {
             if i == keep_at {
-                plan_job_items(&conn, &job.id, &label(&job.items, &Bucket::Lottery), &mut plan)?;
+                plan_job_items(
+                    &conn,
+                    &job.id,
+                    &label(&job.items, &Bucket::Lottery),
+                    &mut plan,
+                )?;
             } else {
                 plan.drop_aggregate(&job.id);
             }
@@ -323,7 +379,9 @@ fn build_purge(store: &EventStore) -> Res<Purge> {
     }
 
     {
-        let mut stmt = conn.prepare("SELECT global_seq, aggregate_id FROM events WHERE event_type='JobPreviewed'")?;
+        let mut stmt = conn.prepare(
+            "SELECT global_seq, aggregate_id FROM events WHERE event_type='JobPreviewed'",
+        )?;
         let rows = stmt.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))?;
         for row in rows {
             let (seq, agg) = row?;
@@ -358,7 +416,10 @@ fn load_jobs(conn: &Connection) -> Res<Vec<JobRow>> {
             source,
             status,
             client: parse_json(client, Value::Null),
-            items: parse_json(items, json!([])).as_array().cloned().unwrap_or_default(),
+            items: parse_json(items, json!([]))
+                .as_array()
+                .cloned()
+                .unwrap_or_default(),
             finished: finished.unwrap_or(0),
             created,
         });
@@ -377,7 +438,9 @@ fn query_ids(conn: &Connection, sql: &str) -> Res<Vec<String>> {
 }
 
 fn parse_json(raw: Option<String>, fallback: Value) -> Value {
-    raw.filter(|s| !s.is_empty()).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or(fallback)
+    raw.filter(|s| !s.is_empty())
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or(fallback)
 }
 
 fn text_field(v: &Value, key: &str) -> String {
@@ -417,4 +480,3 @@ fn clean_draws(batch_id: &str, raw: &str) -> Vec<Value> {
     }
     draws
 }
-

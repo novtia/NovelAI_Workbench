@@ -1,6 +1,7 @@
 use super::algorithm::{draw_from_pool, parse_entries, pool_hash, tag_key, DrawParams};
 use super::domain::{
-    attach_job_previews, default_controls, lottery_client_draw_id, stamp_draw_ids, DrawBatch, LotteryBoard, BOARD_ID,
+    attach_job_previews, default_controls, lottery_client_draw_id, stamp_draw_ids, DrawBatch,
+    LotteryBoard, BOARD_ID,
 };
 use super::projectors::LotteryProjector;
 use crate::contexts::gallery::application::GalleryService;
@@ -27,22 +28,36 @@ pub struct LotteryService {
 }
 
 fn text_or(raw: Option<String>, fallback: &str) -> Value {
-    let text = raw.filter(|s| !s.is_empty()).unwrap_or_else(|| fallback.to_string());
+    let text = raw
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| fallback.to_string());
     serde_json::from_str(&text).unwrap_or_else(|_| serde_json::from_str(fallback).unwrap())
 }
 
 impl LotteryService {
     pub fn new(k: Arc<Kernel>, gallery: Arc<GalleryService>) -> Self {
-        LotteryService { k, gallery, default_controls_provider: RwLock::new(None) }
+        LotteryService {
+            k,
+            gallery,
+            default_controls_provider: RwLock::new(None),
+        }
     }
 
     pub fn set_default_controls(&self, provider: ControlsProvider) {
-        *self.default_controls_provider.write().unwrap_or_else(|e| e.into_inner()) = Some(provider);
+        *self
+            .default_controls_provider
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = Some(provider);
     }
 
     fn defaults(&self) -> Map<String, Value> {
         let mut out = default_controls();
-        if let Some(p) = self.default_controls_provider.read().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        if let Some(p) = self
+            .default_controls_provider
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+        {
             let preferred = p();
             if let Some(o) = preferred.as_object() {
                 for (k, v) in o {
@@ -57,10 +72,30 @@ impl LotteryService {
 
     pub fn board(&self) -> Res<Value> {
         let conn = self.k.store.connect()?;
-        let row: Option<(String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, i64)> = conn
-            .query_row("SELECT * FROM projections_lottery_board WHERE id=?1", params![BOARD_ID], |r| {
-                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?))
-            })
+        let row: Option<(
+            String,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            i64,
+        )> = conn
+            .query_row(
+                "SELECT * FROM projections_lottery_board WHERE id=?1",
+                params![BOARD_ID],
+                |r| {
+                    Ok((
+                        r.get(0)?,
+                        r.get(1)?,
+                        r.get(2)?,
+                        r.get(3)?,
+                        r.get(4)?,
+                        r.get(5)?,
+                        r.get(6)?,
+                    ))
+                },
+            )
             .ok();
         let Some((id, album_id, excluded, pinned, caps, controls, version)) = row else {
             return Ok(json!({
@@ -138,9 +173,12 @@ impl LotteryService {
         if !weighted {
             return self.gallery.pool_for_album(album_id);
         }
-        let items = self.gallery.list_items(album_id, false, None, 0, "added_desc")?;
+        let items = self
+            .gallery
+            .list_items(album_id, false, None, 0, "added_desc")?;
         let mut order: Vec<String> = Vec::new();
-        let mut seen: std::collections::HashMap<String, (String, f64)> = std::collections::HashMap::new();
+        let mut seen: std::collections::HashMap<String, (String, f64)> =
+            std::collections::HashMap::new();
         for item in &items {
             let params_v = get(item, "params");
             let part = |v: &Value| if truthy(v) { py_str(v) } else { String::new() };
@@ -153,13 +191,21 @@ impl LotteryService {
             .filter(|x| !x.is_empty())
             .collect::<Vec<_>>()
             .join(", ");
-            let mut weights: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+            let mut weights: std::collections::HashMap<String, f64> =
+                std::collections::HashMap::new();
             for entry in parse_entries(&text) {
                 for tag in &entry.tags {
                     let key = tag_key(tag);
                     if !key.is_empty() {
                         let cur = weights.get(&key).copied().unwrap_or(0.0);
-                        weights.insert(key, if entry.weight > cur { entry.weight } else { cur });
+                        weights.insert(
+                            key,
+                            if entry.weight > cur {
+                                entry.weight
+                            } else {
+                                cur
+                            },
+                        );
                     }
                 }
             }
@@ -172,7 +218,11 @@ impl LotteryService {
                         continue;
                     }
                     local.insert(key.clone());
-                    let w = weights.get(&key).copied().filter(|w| *w != 0.0).unwrap_or(1.0);
+                    let w = weights
+                        .get(&key)
+                        .copied()
+                        .filter(|w| *w != 0.0)
+                        .unwrap_or(1.0);
                     match seen.get_mut(&key) {
                         None => {
                             order.push(key.clone());
@@ -199,7 +249,9 @@ impl LotteryService {
 
     fn cap_item(&self, src: &Value, caps: Option<&Value>, key: &str) -> Value {
         let mut item = src.clone();
-        let Some(caps) = caps.filter(|c| c.is_object()) else { return item };
+        let Some(caps) = caps.filter(|c| c.is_object()) else {
+            return item;
+        };
         let mut cap = get(caps, key);
         if cap.is_null() {
             let tag = get(src, "tag");
@@ -224,9 +276,20 @@ impl LotteryService {
             let src = if truthy(b) { b } else { get(&board, key) };
             src.as_array().cloned().unwrap_or_default()
         };
-        let excluded: BTreeSet<String> = pick("excluded").iter().map(|x| tag_key(&py_str(x))).collect();
-        let caps_src = if truthy(get(body, "weightCaps")) { get(body, "weightCaps").clone() } else { get(&board, "weightCaps").clone() };
-        let caps = if caps_src.is_object() { caps_src } else { json!({}) };
+        let excluded: BTreeSet<String> = pick("excluded")
+            .iter()
+            .map(|x| tag_key(&py_str(x)))
+            .collect();
+        let caps_src = if truthy(get(body, "weightCaps")) {
+            get(body, "weightCaps").clone()
+        } else {
+            get(&board, "weightCaps").clone()
+        };
+        let caps = if caps_src.is_object() {
+            caps_src
+        } else {
+            json!({})
+        };
         let pinned_keys: Vec<String> = pick("pinned").iter().map(|x| tag_key(&py_str(x))).collect();
         let mut active = Vec::new();
         let mut by_key: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
@@ -244,12 +307,27 @@ impl LotteryService {
                 fixed.push(self.cap_item(src, Some(&caps), k));
             }
         }
-        Ok(Prepared { active, excluded, fixed, board, caps })
+        Ok(Prepared {
+            active,
+            excluded,
+            fixed,
+            board,
+            caps,
+        })
     }
 
     pub fn draw(&self, album_id: &str, body: &Value) -> Res<Value> {
-        let Prepared { active, excluded, fixed, board, caps } = self.prepare_pool(album_id, body, true)?;
-        let mut controls = get(&board, "controls").as_object().cloned().unwrap_or_default();
+        let Prepared {
+            active,
+            excluded,
+            fixed,
+            board,
+            caps,
+        } = self.prepare_pool(album_id, body, true)?;
+        let mut controls = get(&board, "controls")
+            .as_object()
+            .cloned()
+            .unwrap_or_default();
         if let Some(o) = get(body, "controls").as_object() {
             for (k, v) in o {
                 controls.insert(k.clone(), v.clone());
@@ -258,11 +336,19 @@ impl LotteryService {
         let ctl = |key: &str| controls.get(key).cloned().unwrap_or(Value::Null);
         let int_or = |key: &str, fallback: i64| -> i64 {
             let v = ctl(key);
-            if truthy(&v) { to_int(&v).unwrap_or(fallback) } else { fallback }
+            if truthy(&v) {
+                to_int(&v).unwrap_or(fallback)
+            } else {
+                fallback
+            }
         };
         let float_or = |key: &str, fallback: f64| -> f64 {
             let v = ctl(key);
-            if truthy(&v) { to_float(&v).unwrap_or(fallback) } else { fallback }
+            if truthy(&v) {
+                to_float(&v).unwrap_or(fallback)
+            } else {
+                fallback
+            }
         };
         let locked_n = fixed.len() as i64;
         let rest_n = (active.len() as i64 - locked_n).max(0);
@@ -284,7 +370,11 @@ impl LotteryService {
         let mut rng = PyRandom::new(seed);
         let count = int_or("draws", 1).max(1).min(50);
         let boost_v = ctl("boost");
-        let boost = if boost_v.is_null() { 0.4 } else { to_float(&boost_v).unwrap_or(0.4) };
+        let boost = if boost_v.is_null() {
+            0.4
+        } else {
+            to_float(&boost_v).unwrap_or(0.4)
+        };
         let target = float_or("target", 1.0);
         let jitter = float_or("jitter", 0.0);
         let min_weight = float_or("wmin", 0.01);
@@ -343,12 +433,18 @@ impl LotteryService {
         });
         let mut batch: DrawBatch = self.k.load(&batch_id)?;
         batch.create_batch(payload)?;
-        self.k.commit(&mut batch, Some(&format!("lottery.draw:{seed}:{digest}:{created}")))?;
-        self.get_batch(&batch_id, false)?.ok_or_else(|| DomainError::internal("抽奖失败"))
+        self.k.commit(
+            &mut batch,
+            Some(&format!("lottery.draw:{seed}:{digest}:{created}")),
+        )?;
+        self.get_batch(&batch_id, false)?
+            .ok_or_else(|| DomainError::internal("抽奖失败"))
     }
 
     pub fn verify(&self, batch_id: &str) -> Res<Value> {
-        let found = self.get_batch(batch_id, true)?.ok_or_else(|| DomainError::not_found("批次不存在"))?;
+        let found = self
+            .get_batch(batch_id, true)?
+            .ok_or_else(|| DomainError::not_found("批次不存在"))?;
         let stored = get(&found, "params").clone();
         let weighted = truthy(get(&stored, "weighted"));
         let album_id = py_str(get(&found, "albumId"));
@@ -357,7 +453,11 @@ impl LotteryService {
             .as_array()
             .map(|a| a.iter().map(py_str).collect())
             .unwrap_or_default();
-        let caps = if get(&stored, "weightCaps").is_object() { get(&stored, "weightCaps").clone() } else { json!({}) };
+        let caps = if get(&stored, "weightCaps").is_object() {
+            get(&stored, "weightCaps").clone()
+        } else {
+            json!({})
+        };
         let mut active = Vec::new();
         let mut by_key: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
         for p in &pool {
@@ -373,20 +473,40 @@ impl LotteryService {
         let hash_ok = expected_hash == stored_hash;
         let seed = to_int(get(&found, "seed")).unwrap_or(0);
         let mut rng = PyRandom::new(seed);
-        let truthy_int = |v: &Value| -> Option<i64> { if truthy(v) { to_int(v) } else { None } };
-        let n_min = truthy_int(get(&stored, "nMin")).or_else(|| truthy_int(get(&stored, "n"))).unwrap_or(1);
+        let truthy_int = |v: &Value| -> Option<i64> {
+            if truthy(v) {
+                to_int(v)
+            } else {
+                None
+            }
+        };
+        let n_min = truthy_int(get(&stored, "nMin"))
+            .or_else(|| truthy_int(get(&stored, "n")))
+            .unwrap_or(1);
         let n_max = truthy_int(get(&stored, "nMax")).unwrap_or(n_min);
         let fixed: Vec<Value> = get(&stored, "fixed")
             .as_array()
-            .map(|a| a.iter().filter_map(|k| by_key.get(&py_str(k)).cloned()).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|k| by_key.get(&py_str(k)).cloned())
+                    .collect()
+            })
             .unwrap_or_default();
         let opt_f = |key: &str| -> Option<f64> {
             let v = get(&stored, key);
-            if v.is_null() { None } else { to_float(v) }
+            if v.is_null() {
+                None
+            } else {
+                to_float(v)
+            }
         };
         let or0 = |key: &str| -> f64 {
             let v = get(&stored, key);
-            if truthy(v) { to_float(v).unwrap_or(0.0) } else { 0.0 }
+            if truthy(v) {
+                to_float(v).unwrap_or(0.0)
+            } else {
+                0.0
+            }
         };
         let make = |n: i64, count: f64| DrawParams {
             fixed: fixed.clone(),
@@ -405,12 +525,20 @@ impl LotteryService {
                     // 抽奖时每一条之前都先 randint 选一次串长，重放也要同样消耗一次随机数，否则从第二条起就错位了。
                     // （Python 版漏了这一步，所以它对串长有区间的批次永远校验失败。）
                     rng.randint(n_min, n_max);
-                    replayed.extend(draw_from_pool(&active, &make(to_int(n).unwrap_or(1), 1.0), &mut rng));
+                    replayed.extend(draw_from_pool(
+                        &active,
+                        &make(to_int(n).unwrap_or(1), 1.0),
+                        &mut rng,
+                    ));
                 }
             }
             None => {
                 let n = rng.randint(n_min, n_max);
-                let count = if truthy(get(&stored, "count")) { to_float(get(&stored, "count")).unwrap_or(1.0) } else { 1.0 };
+                let count = if truthy(get(&stored, "count")) {
+                    to_float(get(&stored, "count")).unwrap_or(1.0)
+                } else {
+                    1.0
+                };
                 replayed = draw_from_pool(&active, &make(n, count), &mut rng);
             }
         }
@@ -418,7 +546,10 @@ impl LotteryService {
             .as_array()
             .map(|a| a.iter().map(|d| get(d, "outputText").clone()).collect())
             .unwrap_or_default();
-        let replay_texts: Vec<Value> = replayed.iter().map(|d| get(d, "outputText").clone()).collect();
+        let replay_texts: Vec<Value> = replayed
+            .iter()
+            .map(|d| get(d, "outputText").clone())
+            .collect();
         let draws_match = texts == replay_texts;
         Ok(json!({
             "ok": hash_ok && draws_match,
@@ -430,11 +561,17 @@ impl LotteryService {
     }
 
     pub fn remove_draw(&self, batch_id: &str, draw_ref: &str) -> Res<Value> {
-        let found = self.get_batch(batch_id, false)?.ok_or_else(|| DomainError::not_found("批次不存在"))?;
+        let found = self
+            .get_batch(batch_id, false)?
+            .ok_or_else(|| DomainError::not_found("批次不存在"))?;
         let draws = get(&found, "draws").as_array().cloned().unwrap_or_default();
         let id_of = |d: &Value| -> String {
             let v = get(d, "id");
-            if truthy(v) { py_str(v) } else { String::new() }
+            if truthy(v) {
+                py_str(v)
+            } else {
+                String::new()
+            }
         };
         let mut index: Option<usize> = None;
         let mut draw_id = String::new();
@@ -448,7 +585,10 @@ impl LotteryService {
         let index = match index {
             Some(i) => i,
             None => {
-                let parsed: i64 = draw_ref.trim().parse().map_err(|_| DomainError::not_found("条目不存在"))?;
+                let parsed: i64 = draw_ref
+                    .trim()
+                    .parse()
+                    .map_err(|_| DomainError::not_found("条目不存在"))?;
                 if parsed < 0 || parsed as usize >= draws.len() {
                     return Err(DomainError::not_found("条目不存在"));
                 }
@@ -487,7 +627,10 @@ impl LotteryService {
         let batch_owned = batch_id.to_string();
         self.k.purge_with(&plan, &mut |conn| {
             let jobs = jobs_of_batch(conn, &batch_owned)?;
-            let events = completed_events(conn, &jobs.iter().map(|(id, _, _)| id.clone()).collect::<Vec<_>>())?;
+            let events = completed_events(
+                conn,
+                &jobs.iter().map(|(id, _, _)| id.clone()).collect::<Vec<_>>(),
+            )?;
             let projector = LotteryProjector;
             for event in &events {
                 projector.handle(event, conn)?;
@@ -518,7 +661,14 @@ impl LotteryService {
         let missing = batches.iter().any(|b| {
             get(b, "draws")
                 .as_array()
-                .map(|ds| ds.iter().any(|d| !get(d, "previews").as_array().map(|a| !a.is_empty()).unwrap_or(false)))
+                .map(|ds| {
+                    ds.iter().any(|d| {
+                        !get(d, "previews")
+                            .as_array()
+                            .map(|a| !a.is_empty())
+                            .unwrap_or(false)
+                    })
+                })
                 .unwrap_or(false)
         });
         if !missing {
@@ -539,13 +689,23 @@ impl LotteryService {
                 if !client.is_object() {
                     continue;
                 }
-                let batch_id = if truthy(get(&client, "batchId")) { py_str(get(&client, "batchId")).trim().to_string() } else { String::new() };
-                let Some(pos) = batches.iter().position(|b| get(b, "id").as_str() == Some(batch_id.as_str())) else {
+                let batch_id = if truthy(get(&client, "batchId")) {
+                    py_str(get(&client, "batchId")).trim().to_string()
+                } else {
+                    String::new()
+                };
+                let Some(pos) = batches
+                    .iter()
+                    .position(|b| get(b, "id").as_str() == Some(batch_id.as_str()))
+                else {
                     continue;
                 };
                 let items = text_or(items_json, "[]");
                 let items = if items.is_array() { items } else { json!([]) };
-                let mut draws = get(&batches[pos], "draws").as_array().cloned().unwrap_or_default();
+                let mut draws = get(&batches[pos], "draws")
+                    .as_array()
+                    .cloned()
+                    .unwrap_or_default();
                 if attach_job_previews(&mut draws, &batch_id, &job_id, &client, &items, true) {
                     batches[pos]["draws"] = Value::Array(draws);
                     changed.insert(pos);
@@ -564,7 +724,10 @@ impl LotteryService {
 
     fn batch_row(&self, row: &Row) -> rusqlite::Result<Value> {
         let id: String = row.get("id")?;
-        let mut draws: Vec<Value> = text_or(row.get("draws_json")?, "[]").as_array().cloned().unwrap_or_default();
+        let mut draws: Vec<Value> = text_or(row.get("draws_json")?, "[]")
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
         if stamp_draw_ids(&mut draws, &id) {
             if let Ok(conn) = self.k.store.connect() {
                 let _ = conn.execute(
@@ -614,15 +777,28 @@ fn job_matches_draw(batch_id: &str, client: &Value, draw_id: &str, index: usize)
 }
 
 fn jobs_of_batch(conn: &rusqlite::Connection, batch_id: &str) -> Res<Vec<(String, Value, String)>> {
-    let mut stmt = conn.prepare("SELECT id, status, client_json FROM projections_jobs WHERE source='lottery'")?;
-    let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?)))?;
+    let mut stmt = conn
+        .prepare("SELECT id, status, client_json FROM projections_jobs WHERE source='lottery'")?;
+    let rows = stmt.query_map([], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, Option<String>>(2)?,
+        ))
+    })?;
     let mut out = Vec::new();
     for row in rows {
         let (id, status, client_json) = row?;
-        let client = client_json.and_then(|s| serde_json::from_str::<Value>(&s).ok()).unwrap_or(Value::Null);
+        let client = client_json
+            .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+            .unwrap_or(Value::Null);
         let row_batch = {
             let v = get(&client, "batchId");
-            if truthy(v) { py_str(v).trim().to_string() } else { String::new() }
+            if truthy(v) {
+                py_str(v).trim().to_string()
+            } else {
+                String::new()
+            }
         };
         if row_batch == batch_id {
             out.push((id, client, status));
@@ -631,7 +807,12 @@ fn jobs_of_batch(conn: &rusqlite::Connection, batch_id: &str) -> Res<Vec<(String
     Ok(out)
 }
 
-fn rewrite_created(conn: &rusqlite::Connection, batch_id: &str, draws: &[Value], plan: &mut Purge) -> Res<()> {
+fn rewrite_created(
+    conn: &rusqlite::Connection,
+    batch_id: &str,
+    draws: &[Value],
+    plan: &mut Purge,
+) -> Res<()> {
     let rows = stream_events(conn, batch_id)?;
     let mut saw = false;
     for row in &rows {

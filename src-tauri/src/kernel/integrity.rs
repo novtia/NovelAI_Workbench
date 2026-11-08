@@ -64,7 +64,9 @@ pub fn projection_checksum_of(store: &EventStore, tables: &[&str]) -> Res<String
                 let v = match row.get_ref(i)? {
                     ValueRef::Null => Value::Null,
                     ValueRef::Integer(n) => json!(n),
-                    ValueRef::Real(f) => serde_json::Number::from_f64(f).map(Value::Number).unwrap_or(Value::Null),
+                    ValueRef::Real(f) => serde_json::Number::from_f64(f)
+                        .map(Value::Number)
+                        .unwrap_or(Value::Null),
                     ValueRef::Text(t) => Value::String(String::from_utf8_lossy(t).to_string()),
                     ValueRef::Blob(b) => Value::String(format!("{b:?}")),
                 };
@@ -122,7 +124,11 @@ pub fn check_files(store: &EventStore, blobs: &BlobStore) -> Res<Value> {
     }))
 }
 
-pub fn verify_all(store: &EventStore, blobs: &BlobStore, projectors: &[Box<dyn Projector>]) -> Res<Value> {
+pub fn verify_all(
+    store: &EventStore,
+    blobs: &BlobStore,
+    projectors: &[Box<dyn Projector>],
+) -> Res<Value> {
     let chain = verify_chain(store)?;
     let files = check_files(store, blobs)?;
     let before = projection_checksum(store)?;

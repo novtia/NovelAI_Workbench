@@ -13,7 +13,9 @@ pub fn default_controls() -> Map<String, Value> {
 
 fn list_of(v: &Value) -> Value {
     if truthy(v) {
-        v.as_array().map(|a| Value::Array(a.clone())).unwrap_or_else(|| json!([]))
+        v.as_array()
+            .map(|a| Value::Array(a.clone()))
+            .unwrap_or_else(|| json!([]))
     } else {
         json!([])
     }
@@ -21,7 +23,9 @@ fn list_of(v: &Value) -> Value {
 
 fn dict_of(v: &Value) -> Value {
     if truthy(v) {
-        v.as_object().map(|a| Value::Object(a.clone())).unwrap_or_else(|| json!({}))
+        v.as_object()
+            .map(|a| Value::Object(a.clone()))
+            .unwrap_or_else(|| json!({}))
     } else {
         json!({})
     }
@@ -59,7 +63,9 @@ impl LotteryBoard {
 impl Aggregate for LotteryBoard {
     const TYPE: &'static str = "LotteryBoard";
     fn create(id: &str) -> Self {
-        LotteryBoard { core: Core::new(id) }
+        LotteryBoard {
+            core: Core::new(id),
+        }
     }
     fn core(&self) -> &Core {
         &self.core
@@ -74,8 +80,13 @@ impl Aggregate for LotteryBoard {
 pub fn stamp_draw_ids(draws: &mut [Value], batch_id: &str) -> bool {
     let mut changed = false;
     for (i, raw) in draws.iter_mut().enumerate() {
-        let Some(obj) = raw.as_object_mut() else { continue };
-        let existing = obj.get("id").map(|v| if truthy(v) { py_str(v) } else { String::new() }).unwrap_or_default();
+        let Some(obj) = raw.as_object_mut() else {
+            continue;
+        };
+        let existing = obj
+            .get("id")
+            .map(|v| if truthy(v) { py_str(v) } else { String::new() })
+            .unwrap_or_default();
         if !existing.trim().is_empty() {
             continue;
         }
@@ -86,7 +97,11 @@ pub fn stamp_draw_ids(draws: &mut [Value], batch_id: &str) -> bool {
 }
 
 pub fn lottery_client_draw_id(batch_id: &str, client: &Value) -> String {
-    let draw_id = if truthy(get(client, "drawId")) { py_str(get(client, "drawId")).trim().to_string() } else { String::new() };
+    let draw_id = if truthy(get(client, "drawId")) {
+        py_str(get(client, "drawId")).trim().to_string()
+    } else {
+        String::new()
+    };
     if !draw_id.is_empty() {
         return draw_id;
     }
@@ -102,15 +117,27 @@ pub fn lottery_client_draw_id(batch_id: &str, client: &Value) -> String {
 
 pub fn preview_items(items: &Value) -> Vec<Value> {
     let mut out = Vec::new();
-    let Some(list) = items.as_array() else { return out };
+    let Some(list) = items.as_array() else {
+        return out;
+    };
     for raw in list {
         if !raw.is_object() {
             continue;
         }
-        let s = |k: &str| if truthy(get(raw, k)) { py_str(get(raw, k)) } else { String::new() };
+        let s = |k: &str| {
+            if truthy(get(raw, k)) {
+                py_str(get(raw, k))
+            } else {
+                String::new()
+            }
+        };
         let digest = {
             let a = s("blobHash");
-            if a.is_empty() { s("id") } else { a }
+            if a.is_empty() {
+                s("id")
+            } else {
+                a
+            }
         };
         let digest = digest.trim().to_string();
         if digest.is_empty() {
@@ -126,7 +153,11 @@ pub fn preview_items(items: &Value) -> Vec<Value> {
         }
         let id = {
             let x = s("id");
-            if x.is_empty() { digest.chars().take(32).collect() } else { x }
+            if x.is_empty() {
+                digest.chars().take(32).collect()
+            } else {
+                x
+            }
         };
         let mut rec = Map::new();
         rec.insert("id".into(), json!(id));
@@ -163,8 +194,13 @@ pub fn attach_job_previews(
         return false;
     }
     for raw in draws.iter_mut() {
-        let Some(obj) = raw.as_object_mut() else { continue };
-        let cur = obj.get("id").map(|v| if truthy(v) { py_str(v) } else { String::new() }).unwrap_or_default();
+        let Some(obj) = raw.as_object_mut() else {
+            continue;
+        };
+        let cur = obj
+            .get("id")
+            .map(|v| if truthy(v) { py_str(v) } else { String::new() })
+            .unwrap_or_default();
         if cur != draw_id {
             continue;
         }
@@ -213,7 +249,11 @@ impl DrawBatch {
             Some(d) if !d.is_empty() => d.to_string(),
             _ => {
                 let v = get(&self.draws[index as usize], "id");
-                if truthy(v) { py_str(v) } else { String::new() }
+                if truthy(v) {
+                    py_str(v)
+                } else {
+                    String::new()
+                }
             }
         };
         let rid = rid.trim().to_string();
@@ -278,16 +318,27 @@ impl Aggregate for DrawBatch {
                 self.pool_revision = to_int(get(p, "poolRevision")).unwrap_or(0);
                 self.pool_hash = py_str(get(p, "poolHash"));
                 self.params = dict_of(get(p, "params"));
-                self.draws = list_of(get(p, "draws")).as_array().cloned().unwrap_or_default();
+                self.draws = list_of(get(p, "draws"))
+                    .as_array()
+                    .cloned()
+                    .unwrap_or_default();
                 self.created_at = to_int(get(p, "createdAt")).unwrap_or(0);
                 self.deleted = false;
             }
             "DrawRemoved" => {
-                let did = if truthy(get(p, "id")) { py_str(get(p, "id")).trim().to_string() } else { String::new() };
+                let did = if truthy(get(p, "id")) {
+                    py_str(get(p, "id")).trim().to_string()
+                } else {
+                    String::new()
+                };
                 if !did.is_empty() {
                     for i in 0..self.draws.len() {
                         let cur = get(&self.draws[i], "id");
-                        let cur = if truthy(cur) { py_str(cur) } else { String::new() };
+                        let cur = if truthy(cur) {
+                            py_str(cur)
+                        } else {
+                            String::new()
+                        };
                         if cur == did {
                             self.draws.remove(i);
                             return;

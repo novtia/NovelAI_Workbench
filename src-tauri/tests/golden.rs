@@ -27,12 +27,15 @@ use workbench_lib::kernel::bus::verify_chain;
 use workbench_lib::kernel::integrity::{projection_checksum_of, rebuild_projections};
 
 fn env_path(name: &str) -> Option<std::path::PathBuf> {
-    std::env::var_os(name).map(std::path::PathBuf::from).filter(|p| p.is_file())
+    std::env::var_os(name)
+        .map(std::path::PathBuf::from)
+        .filter(|p| p.is_file())
 }
 
 #[test]
 fn matches_python_on_real_data() {
-    let (Some(db), Some(baseline)) = (env_path("WB_GOLDEN_DB"), env_path("WB_GOLDEN_BASELINE")) else {
+    let (Some(db), Some(baseline)) = (env_path("WB_GOLDEN_DB"), env_path("WB_GOLDEN_BASELINE"))
+    else {
         eprintln!("跳过：未设置 WB_GOLDEN_DB / WB_GOLDEN_BASELINE");
         return;
     };
@@ -45,25 +48,40 @@ fn matches_python_on_real_data() {
 
     // 1. 哈希链（同时覆盖 canonical JSON 与 Python 逐字节一致：event_hash 对不上就会报错）
     let chain = verify_chain(store).unwrap();
-    assert_eq!(chain["ok"], base["chain"]["ok"], "哈希链结果不一致：{}", chain["errors"]);
+    assert_eq!(
+        chain["ok"], base["chain"]["ok"],
+        "哈希链结果不一致：{}",
+        chain["errors"]
+    );
     assert_eq!(chain["events"], base["chain"]["events"]);
     assert_eq!(chain["head"], base["chain"]["head"]);
 
     // 2. 现有投影（Python 写的）的 checksum：验证 Rust 的 checksum 算法和 Python 一致
     let legacy: Vec<&str> = workbench_lib::kernel::store::PROJECTION_TABLES[..11].to_vec();
     let before = projection_checksum_of(store, &legacy).unwrap();
-    assert_eq!(before, base["before"].as_str().unwrap(), "投影 checksum（重建前）不一致");
+    assert_eq!(
+        before,
+        base["before"].as_str().unwrap(),
+        "投影 checksum（重建前）不一致"
+    );
 
     // 3. 用 Rust 投影器重建后，必须与 Python 重建后的结果逐行一致
     let n = rebuild_projections(store, &services.kernel.projectors).unwrap();
     assert_eq!(n as u64, base["chain"]["events"].as_u64().unwrap());
     if let Some(dump) = std::env::var_os("WB_GOLDEN_DUMP") {
         // 排查差异用：把重建后的库留下来，配合 py_diff.py 逐表逐行对比
-        let _ = store.connect().unwrap().execute_batch("PRAGMA wal_checkpoint(TRUNCATE)");
+        let _ = store
+            .connect()
+            .unwrap()
+            .execute_batch("PRAGMA wal_checkpoint(TRUNCATE)");
         std::fs::copy(dir.path().join("events.sqlite"), dump).unwrap();
     }
     let after = projection_checksum_of(store, &legacy).unwrap();
-    assert_eq!(after, base["after"].as_str().unwrap(), "投影 checksum（重建后）不一致");
+    assert_eq!(
+        after,
+        base["after"].as_str().unwrap(),
+        "投影 checksum（重建后）不一致"
+    );
 
     // 4. 抽奖批次 verify：池哈希必须和 Python 完全一致。
     //    Rust 修正了 Python 重放时漏掉每条先 randint 的错位问题，所以 drawsMatch / ok 只要求
@@ -77,7 +95,11 @@ fn matches_python_on_real_data() {
         }
         for key in ["ok", "drawsMatch"] {
             if expected[key] == Value::Bool(true) {
-                assert_eq!(got[key], Value::Bool(true), "批次 {id}：Python 判对而 Rust 判错（{key}）");
+                assert_eq!(
+                    got[key],
+                    Value::Bool(true),
+                    "批次 {id}：Python 判对而 Rust 判错（{key}）"
+                );
             }
         }
         if got["ok"] == Value::Bool(true) {
@@ -85,5 +107,8 @@ fn matches_python_on_real_data() {
         }
         checked += 1;
     }
-    eprintln!("golden: {} 条事件、{} 个抽奖批次对得上（其中 Rust 重放通过 {} 个）", n, checked, rust_ok);
+    eprintln!(
+        "golden: {} 条事件、{} 个抽奖批次对得上（其中 Rust 重放通过 {} 个）",
+        n, checked, rust_ok
+    );
 }

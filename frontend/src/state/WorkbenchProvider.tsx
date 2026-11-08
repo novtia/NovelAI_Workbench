@@ -50,7 +50,8 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onHash = () => {
       const raw = location.hash.replace("#", "");
-      if (isViewId(raw) && raw !== useSession.getState().view) useSession.getState().setView(raw);
+      // 详细页靠标签上的收藏夹 id，不能单凭 #album 把当前标签改过去。
+      if (raw !== "album" && isViewId(raw) && raw !== useSession.getState().view) useSession.getState().setView(raw);
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);

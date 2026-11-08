@@ -41,6 +41,10 @@ export type Settings = {
     draftSave: boolean;
     draftDebounceMs: number;
     concurrency: number;
+    /** 队列里下一张发出前的随机等待下限（秒）。与上限都为 0 则关闭。 */
+    queueDelayMinSec: number;
+    /** 队列里下一张发出前的随机等待上限（秒）。 */
+    queueDelayMaxSec: number;
     timeoutSec: number;
     jobsKeep: number;
     autoOpenJobs: boolean;
@@ -151,6 +155,8 @@ export const DEFAULT_SETTINGS: Settings = {
     draftSave: true,
     draftDebounceMs: 1200,
     concurrency: 1,
+    queueDelayMinSec: 8,
+    queueDelayMaxSec: 30,
     timeoutSec: 180,
     jobsKeep: 80,
     autoOpenJobs: false,

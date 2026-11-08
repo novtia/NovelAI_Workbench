@@ -8,7 +8,7 @@ import type { Artwork } from "@/data/types";
 import { confirmDialog, getSettings, pushToast, useCollection, useCommands, useSession, useSettings, useTestRun } from "@/state";
 import { IconUp } from "@/generation/components/icons";
 import { useContextMenu, useRegisterMenu } from "@/ui/contextMenu";
-import { useScrollMemory } from "../useScrollMemory";
+import { useScrollMemory } from "@/ui/useScrollMemory";
 import { ArtworkCard } from "./ArtworkCard";
 import { ArtworkPendingCard } from "./ArtworkPendingCard";
 import { EmptyDropzone } from "./EmptyDropzone";

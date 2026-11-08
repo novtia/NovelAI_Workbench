@@ -208,7 +208,10 @@ impl EventStore {
         let conn = open_connection(db_path)?;
         conn.execute_batch(SCHEMA)?;
         conn.execute_batch("PRAGMA journal_mode = WAL;")?;
-        Ok(EventStore { db_path: db_path.to_path_buf(), write_lock: Mutex::new(()) })
+        Ok(EventStore {
+            db_path: db_path.to_path_buf(),
+            write_lock: Mutex::new(()),
+        })
     }
 
     pub fn connect(&self) -> Res<Connection> {
@@ -217,34 +220,43 @@ impl EventStore {
 
     pub fn latest_hash(conn: &Connection) -> Res<String> {
         let row: Option<String> = conn
-            .query_row("SELECT event_hash FROM events ORDER BY global_seq DESC LIMIT 1", [], |r| r.get(0))
+            .query_row(
+                "SELECT event_hash FROM events ORDER BY global_seq DESC LIMIT 1",
+                [],
+                |r| r.get(0),
+            )
             .ok();
         Ok(row.unwrap_or_else(|| GENESIS_HASH.to_string()))
     }
 
     pub fn events_for_command(&self, command_id: &str) -> Res<Vec<StoredEvent>> {
         let conn = self.connect()?;
-        let mut stmt = conn.prepare("SELECT * FROM events WHERE command_id = ?1 ORDER BY global_seq")?;
+        let mut stmt =
+            conn.prepare("SELECT * FROM events WHERE command_id = ?1 ORDER BY global_seq")?;
         let rows = stmt.query_map(params![command_id], |r| Ok(row_to_event(r)))?;
         collect_events(rows)
     }
 
     pub fn load_stream(&self, aggregate_id: &str) -> Res<Vec<StoredEvent>> {
         let conn = self.connect()?;
-        let mut stmt = conn.prepare("SELECT * FROM events WHERE aggregate_id = ?1 ORDER BY version")?;
+        let mut stmt =
+            conn.prepare("SELECT * FROM events WHERE aggregate_id = ?1 ORDER BY version")?;
         let rows = stmt.query_map(params![aggregate_id], |r| Ok(row_to_event(r)))?;
         collect_events(rows)
     }
 
     pub fn has_events(&self) -> Res<bool> {
         let conn = self.connect()?;
-        let found: Option<i64> = conn.query_row("SELECT 1 FROM events LIMIT 1", [], |r| r.get(0)).ok();
+        let found: Option<i64> = conn
+            .query_row("SELECT 1 FROM events LIMIT 1", [], |r| r.get(0))
+            .ok();
         Ok(found.is_some())
     }
 
     pub fn load_after(&self, after: i64, limit: i64) -> Res<Vec<StoredEvent>> {
         let conn = self.connect()?;
-        let mut stmt = conn.prepare("SELECT * FROM events WHERE global_seq > ?1 ORDER BY global_seq LIMIT ?2")?;
+        let mut stmt = conn
+            .prepare("SELECT * FROM events WHERE global_seq > ?1 ORDER BY global_seq LIMIT ?2")?;
         let rows = stmt.query_map(params![after, limit], |r| Ok(row_to_event(r)))?;
         collect_events(rows)
     }
@@ -304,9 +316,11 @@ impl EventStore {
                     digest,
                 ],
             )?;
-            let item = tx.query_row("SELECT * FROM events WHERE event_id = ?1", params![event.event_id], |r| {
-                Ok(row_to_event(r))
-            })??;
+            let item = tx.query_row(
+                "SELECT * FROM events WHERE event_id = ?1",
+                params![event.event_id],
+                |r| Ok(row_to_event(r)),
+            )??;
             stored.push(item);
             prev = digest;
         }
@@ -337,7 +351,11 @@ impl EventStore {
 /// 把一行 `events` 解析成事件。payload 重新从落库的 JSON 解析，保证键顺序和数字类型与 Python 重放时一致。
 pub fn row_to_event(row: &Row) -> Res<StoredEvent> {
     let payload_json: String = row.get("payload_json")?;
-    let payload = serde_json::from_str(if payload_json.is_empty() { "{}" } else { &payload_json })?;
+    let payload = serde_json::from_str(if payload_json.is_empty() {
+        "{}"
+    } else {
+        &payload_json
+    })?;
     Ok(StoredEvent {
         global_seq: row.get("global_seq")?,
         event_id: row.get("event_id")?,
@@ -355,7 +373,9 @@ pub fn row_to_event(row: &Row) -> Res<StoredEvent> {
     })
 }
 
-fn collect_events(rows: impl Iterator<Item = rusqlite::Result<Res<StoredEvent>>>) -> Res<Vec<StoredEvent>> {
+fn collect_events(
+    rows: impl Iterator<Item = rusqlite::Result<Res<StoredEvent>>>,
+) -> Res<Vec<StoredEvent>> {
     let mut out = Vec::new();
     for r in rows {
         out.push(r??);

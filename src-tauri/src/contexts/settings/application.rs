@@ -15,7 +15,10 @@ pub struct SettingsService {
 
 impl SettingsService {
     pub fn new(k: Arc<Kernel>) -> Self {
-        SettingsService { k, cache: Mutex::new(None) }
+        SettingsService {
+            k,
+            cache: Mutex::new(None),
+        }
     }
 
     fn load(&self) -> Res<(Value, i64)> {
@@ -42,7 +45,10 @@ impl SettingsService {
         if guard.is_none() {
             *guard = Some(self.load().unwrap_or_else(|_| (defaults(), 0)));
         }
-        guard.as_ref().map(|(v, _)| v.clone()).unwrap_or_else(defaults)
+        guard
+            .as_ref()
+            .map(|(v, _)| v.clone())
+            .unwrap_or_else(defaults)
     }
 
     pub fn section(&self, name: &str) -> Value {
@@ -53,10 +59,11 @@ impl SettingsService {
     }
 
     pub fn value(&self, section: &str, key: &str) -> Value {
-        self.section(section)
-            .get(key)
-            .cloned()
-            .unwrap_or_else(|| spec_of(section, key).map(|s| s.default.clone()).unwrap_or(Value::Null))
+        self.section(section).get(key).cloned().unwrap_or_else(|| {
+            spec_of(section, key)
+                .map(|s| s.default.clone())
+                .unwrap_or(Value::Null)
+        })
     }
 
     pub fn value_f64(&self, section: &str, key: &str, fallback: f64) -> f64 {
@@ -73,7 +80,13 @@ impl SettingsService {
 
     pub fn public(&self) -> Value {
         let settings = self.get();
-        let version = self.cache.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|(_, v)| *v).unwrap_or(0);
+        let version = self
+            .cache
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map(|(_, v)| *v)
+            .unwrap_or(0);
         json!({"settings": settings, "version": version})
     }
 
@@ -139,7 +152,9 @@ impl SettingsService {
         }
         let mut buckets = serde_json::Map::new();
         let mut add = |key: &str, file: &BlobFile| {
-            let entry = buckets.entry(key.to_string()).or_insert_with(|| json!({"count": 0, "bytes": 0}));
+            let entry = buckets
+                .entry(key.to_string())
+                .or_insert_with(|| json!({"count": 0, "bytes": 0}));
             entry["count"] = json!(entry["count"].as_u64().unwrap_or(0) + 1);
             entry["bytes"] = json!(entry["bytes"].as_u64().unwrap_or(0) + file.size);
         };

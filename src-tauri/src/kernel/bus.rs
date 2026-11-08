@@ -22,7 +22,12 @@ pub struct Kernel {
 
 impl Kernel {
     pub fn new(store: EventStore, blobs: BlobStore, projectors: Vec<Box<dyn Projector>>) -> Self {
-        Kernel { store, blobs, projectors, purge_hooks: RwLock::new(Vec::new()) }
+        Kernel {
+            store,
+            blobs,
+            projectors,
+            purge_hooks: RwLock::new(Vec::new()),
+        }
     }
 
     pub fn load<A: Aggregate>(&self, id: &str) -> Res<A> {
@@ -34,7 +39,11 @@ impl Kernel {
     }
 
     /// 一个聚合的待提交事件 = 一次提交：同一个事务里写事件和投影。
-    pub fn commit<A: Aggregate>(&self, agg: &mut A, command_id: Option<&str>) -> Res<Vec<StoredEvent>> {
+    pub fn commit<A: Aggregate>(
+        &self,
+        agg: &mut A,
+        command_id: Option<&str>,
+    ) -> Res<Vec<StoredEvent>> {
         if agg.core().pending.is_empty() {
             return Ok(vec![]);
         }

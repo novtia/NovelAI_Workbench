@@ -27,7 +27,9 @@ fn resolve_data_dir(app: &tauri::AppHandle) -> PathBuf {
             return dir;
         }
     }
-    app.path().app_data_dir().unwrap_or_else(|_| PathBuf::from("data"))
+    app.path()
+        .app_data_dir()
+        .unwrap_or_else(|_| PathBuf::from("data"))
 }
 
 /// 旧版 `ddd/data`（只在开发目录结构下存在），用于空库时的一次性迁入。
@@ -37,7 +39,10 @@ fn resolve_legacy_dir() -> Option<PathBuf> {
     }
     if cfg!(debug_assertions) {
         let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        return manifest.parent()?.parent().map(|p| p.join("ddd").join("data"));
+        return manifest
+            .parent()?
+            .parent()
+            .map(|p| p.join("ddd").join("data"));
     }
     None
 }
@@ -52,7 +57,9 @@ pub fn run() {
                 let response = match app.try_state::<Arc<app::Services>>() {
                     Some(svc) => protocol::handle(svc.inner(), &request),
                     None => {
-                        let mut r = tauri::http::Response::new(std::borrow::Cow::Borrowed(&b"starting"[..]));
+                        let mut r = tauri::http::Response::new(std::borrow::Cow::Borrowed(
+                            &b"starting"[..],
+                        ));
                         *r.status_mut() = tauri::http::StatusCode::SERVICE_UNAVAILABLE;
                         r
                     }
@@ -62,8 +69,12 @@ pub fn run() {
         })
         .setup(|app| {
             let data_dir = resolve_data_dir(app.handle());
-            let services = Arc::new(app::build(&data_dir).map_err(|e| format!("无法打开数据目录 {}：{}", data_dir.display(), e))?);
-            app::prepare(&services, resolve_legacy_dir().as_deref()).map_err(|e| format!("初始化数据失败：{e}"))?;
+            let services = Arc::new(
+                app::build(&data_dir)
+                    .map_err(|e| format!("无法打开数据目录 {}：{}", data_dir.display(), e))?,
+            );
+            app::prepare(&services, resolve_legacy_dir().as_deref())
+                .map_err(|e| format!("初始化数据失败：{e}"))?;
             {
                 let handle = app.handle().clone();
                 services.generation.set_emitter(Arc::new(move |payload| {

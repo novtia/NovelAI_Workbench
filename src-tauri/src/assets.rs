@@ -37,9 +37,15 @@ mod tests {
 
     #[test]
     fn rewrites_known_prefixes_only() {
-        assert!(rewrite_legacy("/api/blobs/abc").unwrap().ends_with("/blobs/abc"));
-        assert!(rewrite_legacy("/api/nai/jobs/j1/preview?sample=2").unwrap().ends_with("/jobs/j1/preview?sample=2"));
-        assert!(rewrite_legacy("/api/items/x/image").unwrap().ends_with("/items/x/image"));
+        assert!(rewrite_legacy("/api/blobs/abc")
+            .unwrap()
+            .ends_with("/blobs/abc"));
+        assert!(rewrite_legacy("/api/nai/jobs/j1/preview?sample=2")
+            .unwrap()
+            .ends_with("/jobs/j1/preview?sample=2"));
+        assert!(rewrite_legacy("/api/items/x/image")
+            .unwrap()
+            .ends_with("/items/x/image"));
         assert!(rewrite_legacy("hello").is_none());
     }
 }

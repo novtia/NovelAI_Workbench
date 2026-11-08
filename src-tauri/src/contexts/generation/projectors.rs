@@ -90,7 +90,11 @@ impl Projector for GenerationProjector {
             }
             "JobParked" => {
                 let row: Option<Option<String>> = conn
-                    .query_row("SELECT progress_json FROM projections_jobs WHERE id=?1", params![id], |r| r.get(0))
+                    .query_row(
+                        "SELECT progress_json FROM projections_jobs WHERE id=?1",
+                        params![id],
+                        |r| r.get(0),
+                    )
                     .ok();
                 let mut progress = row
                     .flatten()
@@ -108,7 +112,11 @@ impl Projector for GenerationProjector {
             }
             "JobPreviewed" => {
                 let row: Option<Option<String>> = conn
-                    .query_row("SELECT progress_json FROM projections_jobs WHERE id=?1", params![id], |r| r.get(0))
+                    .query_row(
+                        "SELECT progress_json FROM projections_jobs WHERE id=?1",
+                        params![id],
+                        |r| r.get(0),
+                    )
                     .ok();
                 let mut progress = row
                     .flatten()
@@ -116,7 +124,11 @@ impl Projector for GenerationProjector {
                     .and_then(|s| serde_json::from_str::<Value>(&s).ok())
                     .filter(|v| v.is_object())
                     .unwrap_or_else(|| json!({}));
-                let text = if truthy(get(p, "text")) { py_str(get(p, "text")) } else { "生成中".into() };
+                let text = if truthy(get(p, "text")) {
+                    py_str(get(p, "text"))
+                } else {
+                    "生成中".into()
+                };
                 progress["step"] = get(p, "step").clone();
                 progress["sample"] = get(p, "sample").clone();
                 progress["text"] = json!(text);
@@ -140,7 +152,11 @@ impl Projector for GenerationProjector {
                     params_from_iter([
                         S::Text(dumps(nz(get(p, "items"), &empty_list))),
                         S::Text(dumps(nz(get(p, "meta"), &empty_obj))),
-                        if sub.is_null() { S::Null } else { S::Text(dumps(sub)) },
+                        if sub.is_null() {
+                            S::Null
+                        } else {
+                            S::Text(dumps(sub))
+                        },
                         sql(get(p, "finishedAt")),
                         S::Integer(event.version),
                         S::Text(dumps(&json!({"text": "完成"}))),
@@ -150,7 +166,11 @@ impl Projector for GenerationProjector {
             }
             "JobItemsRemoved" => {
                 let row: Option<Option<String>> = conn
-                    .query_row("SELECT items_json FROM projections_jobs WHERE id=?1", params![id], |r| r.get(0))
+                    .query_row(
+                        "SELECT items_json FROM projections_jobs WHERE id=?1",
+                        params![id],
+                        |r| r.get(0),
+                    )
                     .ok();
                 if let Some(text) = row {
                     let gone: std::collections::HashSet<String> = get(p, "itemIds")

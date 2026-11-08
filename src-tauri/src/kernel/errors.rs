@@ -13,7 +13,10 @@ pub type Res<T> = Result<T, DomainError>;
 
 impl DomainError {
     pub fn new(message: impl Into<String>, status: u16) -> Self {
-        Self { message: message.into(), status }
+        Self {
+            message: message.into(),
+            status,
+        }
     }
 
     /// 默认 400。

@@ -103,7 +103,15 @@ pub fn encode_inpaint_mask(mask_bytes: &[u8], width: u32, height: u32) -> NaiRes
     let gray = inpaint_mask_luma(mask_bytes, width, height)?;
     let mut rgba = RgbaImage::new(gray.width(), gray.height());
     for (x, y, p) in gray.enumerate_pixels() {
-        rgba.put_pixel(x, y, if p[0] != 0 { Rgba([255, 255, 255, 255]) } else { Rgba([0, 0, 0, 255]) });
+        rgba.put_pixel(
+            x,
+            y,
+            if p[0] != 0 {
+                Rgba([255, 255, 255, 255])
+            } else {
+                Rgba([0, 0, 0, 255])
+            },
+        );
     }
     Ok(STANDARD.encode(encode_png(&DynamicImage::ImageRgba8(rgba))))
 }
@@ -111,7 +119,10 @@ pub fn encode_inpaint_mask(mask_bytes: &[u8], width: u32, height: u32) -> NaiRes
 /// 官网把 add_original_image 关掉，生成后再把蒙版外的像素贴回原图。
 pub fn composite_infill(original: &[u8], generated: &[u8], mask_bytes: &[u8]) -> NaiRes<Vec<u8>> {
     let flat = flatten_rgb(original, "底图")?;
-    let (width, height) = (fit64(flat.width() as f64) as u32, fit64(flat.height() as f64) as u32);
+    let (width, height) = (
+        fit64(flat.width() as f64) as u32,
+        fit64(flat.height() as f64) as u32,
+    );
     let mut src = DynamicImage::ImageRgb8(flat).to_rgba8();
     if src.dimensions() != (width, height) {
         src = imageops::resize(&src, width, height, FilterType::Lanczos3);
@@ -124,7 +135,11 @@ pub fn composite_infill(original: &[u8], generated: &[u8], mask_bytes: &[u8]) ->
     let mask = inpaint_mask_luma(mask_bytes, width, height)?;
     let mut out = RgbaImage::new(width, height);
     for (x, y, p) in out.enumerate_pixels_mut() {
-        *p = if mask.get_pixel(x, y)[0] != 0 { *gen.get_pixel(x, y) } else { *src.get_pixel(x, y) };
+        *p = if mask.get_pixel(x, y)[0] != 0 {
+            *gen.get_pixel(x, y)
+        } else {
+            *src.get_pixel(x, y)
+        };
     }
     Ok(encode_png(&DynamicImage::ImageRgba8(out)))
 }
@@ -133,12 +148,17 @@ pub fn unzip_images(blob: &[u8]) -> NaiRes<Vec<Vec<u8>>> {
     let mut images = Vec::new();
     if let Ok(mut zf) = zip::ZipArchive::new(Cursor::new(blob)) {
         for i in 0..zf.len() {
-            let Ok(mut file) = zf.by_index(i) else { continue };
+            let Ok(mut file) = zf.by_index(i) else {
+                continue;
+            };
             if file.is_dir() {
                 continue;
             }
             let name = file.name().to_lowercase();
-            if [".png", ".webp", ".jpg", ".jpeg"].iter().any(|ext| name.ends_with(ext)) {
+            if [".png", ".webp", ".jpg", ".jpeg"]
+                .iter()
+                .any(|ext| name.ends_with(ext))
+            {
                 let mut data = Vec::new();
                 if file.read_to_end(&mut data).is_ok() {
                     images.push(data);
@@ -168,15 +188,19 @@ pub fn decode_image_b64(raw: &str) -> NaiRes<Vec<u8>> {
         }
     }
     // Python 的 b64decode 会丢弃字母表以外的字符
-    let cleaned: String =
-        text.chars().filter(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '/')).collect();
+    let cleaned: String = text
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '/'))
+        .collect();
     let engine = GeneralPurpose::new(
         &alphabet::STANDARD,
         GeneralPurposeConfig::new()
             .with_decode_padding_mode(DecodePaddingMode::Indifferent)
             .with_decode_allow_trailing_bits(true),
     );
-    engine.decode(cleaned.as_bytes()).map_err(|_| NaiError::new(502, "无法解码流式图片"))
+    engine
+        .decode(cleaned.as_bytes())
+        .map_err(|_| NaiError::new(502, "无法解码流式图片"))
 }
 
 fn clamp_or(body: &Value, key: &str, lo: f64, hi: f64, default: f64) -> f64 {
@@ -184,8 +208,16 @@ fn clamp_or(body: &Value, key: &str, lo: f64, hi: f64, default: f64) -> f64 {
 }
 
 /// 图生图 / 局部重绘 / 增强：在 build_payload 的基础上换 action 并附上底图与蒙版。
-pub fn build_image_payload(body: &Value, image_bytes: &[u8], mask_bytes: Option<&[u8]>) -> NaiRes<(Value, Value)> {
-    let kind = if truthy(get(body, "kind")) { py_str(get(body, "kind")) } else { "img2img".into() };
+pub fn build_image_payload(
+    body: &Value,
+    image_bytes: &[u8],
+    mask_bytes: Option<&[u8]>,
+) -> NaiRes<(Value, Value)> {
+    let kind = if truthy(get(body, "kind")) {
+        py_str(get(body, "kind"))
+    } else {
+        "img2img".into()
+    };
     if !IMAGE_KINDS.contains(&kind.as_str()) {
         return Err(NaiError::new(400, "不支持的图片任务类型"));
     }
@@ -240,22 +272,38 @@ pub fn build_image_payload(body: &Value, image_bytes: &[u8], mask_bytes: Option<
         params["extra_noise_seed"] = seed;
         params["add_original_image"] = json!(true);
     }
-    payload["action"] = json!(if kind == "infill" { "infill" } else { "img2img" });
+    payload["action"] = json!(if kind == "infill" {
+        "infill"
+    } else {
+        "img2img"
+    });
     if kind == "infill" {
         // 官网在请求里关掉这项，生成完再自己把蒙版外贴回原图。开着会把笔刷形状涂成色块。
         let strength_i = clamp_or(body, "inpaintStrength", 0.01, 1.0, 1.0);
         let params = &mut payload["parameters"];
         params["add_original_image"] = json!(false);
-        params["mask"] = json!(encode_inpaint_mask(mask_bytes.unwrap_or(&[]), width as u32, height as u32)?);
+        params["mask"] = json!(encode_inpaint_mask(
+            mask_bytes.unwrap_or(&[]),
+            width as u32,
+            height as u32
+        )?);
         params["inpaintImg2ImgStrength"] = num_f(strength_i);
-        let model = format!("{}{}", payload["model"].as_str().unwrap_or(""), INPAINT_SUFFIX);
+        let model = format!(
+            "{}{}",
+            payload["model"].as_str().unwrap_or(""),
+            INPAINT_SUFFIX
+        );
         payload["model"] = json!(model);
         meta["model"] = json!(model);
         meta["inpaintStrength"] = num_f(strength_i);
     }
     if let Some(e) = &enh {
         if e.upscale_amount == "1.5x" {
-            let input = format!("{}, {}", payload["input"].as_str().unwrap_or(""), ENHANCE_TAIL);
+            let input = format!(
+                "{}, {}",
+                payload["input"].as_str().unwrap_or(""),
+                ENHANCE_TAIL
+            );
             payload["input"] = json!(input);
             payload["parameters"]["v4_prompt"]["caption"]["base_caption"] = json!(input);
         }
@@ -266,7 +314,11 @@ pub fn build_image_payload(body: &Value, image_bytes: &[u8], mask_bytes: Option<
     meta["noise"] = num_f(noise);
     meta["width"] = json!(width);
     meta["height"] = json!(height);
-    meta["sourceHash"] = json!(if truthy(get(body, "imageHash")) { py_str(get(body, "imageHash")) } else { String::new() });
+    meta["sourceHash"] = json!(if truthy(get(body, "imageHash")) {
+        py_str(get(body, "imageHash"))
+    } else {
+        String::new()
+    });
     if let Some(e) = &enh {
         meta["magnitude"] = json!(e.magnitude);
         meta["upscaleAmount"] = json!(e.upscale_amount);

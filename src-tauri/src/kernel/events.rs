@@ -79,7 +79,11 @@ pub struct Core {
 
 impl Core {
     pub fn new(id: &str) -> Self {
-        Core { id: id.to_string(), version: 0, pending: Vec::new() }
+        Core {
+            id: id.to_string(),
+            version: 0,
+            pending: Vec::new(),
+        }
     }
 }
 

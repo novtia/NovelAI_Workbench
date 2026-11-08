@@ -12,6 +12,7 @@ import { resolveTheme } from "@/ui/applySettings";
 import { inkSwitchTheme, warmUpInkSwitch } from "@/ui/themeInk";
 
 const GalleryView = lazy(() => import("../gallery").then((m) => ({ default: m.GalleryView })));
+const AlbumDetailView = lazy(() => import("../gallery/detail/AlbumDetailView").then((m) => ({ default: m.AlbumDetailView })));
 const LotteryView = lazy(() => import("../lottery").then((m) => ({ default: m.LotteryView })));
 const StudioView = lazy(() => import("../generation/StudioView").then((m) => ({ default: m.StudioView })));
 const SettingsView = lazy(() => import("../settings/SettingsView").then((m) => ({ default: m.SettingsView })));
@@ -174,6 +175,7 @@ export function Workbench() {
             <Fragment key={activeTabId}>
               <Suspense fallback={null}>
                 {view === "gallery" ? <GalleryView /> : null}
+                {view === "album" ? <AlbumDetailView /> : null}
                 {view === "lottery" ? <LotteryView /> : null}
                 {view === "studio" ? <StudioView /> : null}
                 {view === "history" ? <HistoryView /> : null}

@@ -10,7 +10,9 @@ use serde_json::{json, Value};
 pub struct LotteryProjector;
 
 fn parse(text: Option<String>, fallback: Value) -> Value {
-    text.filter(|s| !s.is_empty()).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or(fallback)
+    text.filter(|s| !s.is_empty())
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or(fallback)
 }
 
 impl Projector for LotteryProjector {
@@ -68,19 +70,33 @@ impl Projector for LotteryProjector {
             }
             "DrawRemoved" => {
                 let row: Option<String> = conn
-                    .query_row("SELECT draws_json FROM projections_lottery_batches WHERE id=?1", params![id], |r| r.get(0))
+                    .query_row(
+                        "SELECT draws_json FROM projections_lottery_batches WHERE id=?1",
+                        params![id],
+                        |r| r.get(0),
+                    )
                     .ok();
                 let Some(text) = row else { return Ok(()) };
-                let mut draws: Vec<Value> =
-                    parse(Some(text), json!([])).as_array().cloned().unwrap_or_default();
-                let did = if truthy(get(p, "id")) { py_str(get(p, "id")).trim().to_string() } else { String::new() };
+                let mut draws: Vec<Value> = parse(Some(text), json!([]))
+                    .as_array()
+                    .cloned()
+                    .unwrap_or_default();
+                let did = if truthy(get(p, "id")) {
+                    py_str(get(p, "id")).trim().to_string()
+                } else {
+                    String::new()
+                };
                 let mut removed = false;
                 if !did.is_empty() {
                     let kept: Vec<Value> = draws
                         .iter()
                         .filter(|d| {
                             let cur = get(d, "id");
-                            (if truthy(cur) { py_str(cur) } else { String::new() }) != did
+                            (if truthy(cur) {
+                                py_str(cur)
+                            } else {
+                                String::new()
+                            }) != did
                         })
                         .cloned()
                         .collect();
@@ -115,11 +131,15 @@ impl Projector for LotteryProjector {
             }
             "JobCompleted" => {
                 let job: Option<(Option<String>, Option<String>)> = conn
-                    .query_row("SELECT source, client_json FROM projections_jobs WHERE id=?1", params![id], |r| {
-                        Ok((r.get(0)?, r.get(1)?))
-                    })
+                    .query_row(
+                        "SELECT source, client_json FROM projections_jobs WHERE id=?1",
+                        params![id],
+                        |r| Ok((r.get(0)?, r.get(1)?)),
+                    )
                     .ok();
-                let Some((source, client_json)) = job else { return Ok(()) };
+                let Some((source, client_json)) = job else {
+                    return Ok(());
+                };
                 if source.unwrap_or_default() != "lottery" {
                     return Ok(());
                 }
@@ -127,7 +147,11 @@ impl Projector for LotteryProjector {
                 if !client.is_object() {
                     return Ok(());
                 }
-                let batch_id = if truthy(get(&client, "batchId")) { py_str(get(&client, "batchId")).trim().to_string() } else { String::new() };
+                let batch_id = if truthy(get(&client, "batchId")) {
+                    py_str(get(&client, "batchId")).trim().to_string()
+                } else {
+                    String::new()
+                };
                 if batch_id.is_empty() {
                     return Ok(());
                 }
@@ -140,7 +164,9 @@ impl Projector for LotteryProjector {
                     .ok();
                 let Some(text) = row else { return Ok(()) };
                 let parsed = parse(Some(text), json!([]));
-                let Some(mut draws) = parsed.as_array().cloned() else { return Ok(()) };
+                let Some(mut draws) = parsed.as_array().cloned() else {
+                    return Ok(());
+                };
                 let items = or_else(get(p, "items"), &json!([])).clone();
                 if attach_job_previews(&mut draws, &batch_id, id, &client, &items, false) {
                     conn.execute(

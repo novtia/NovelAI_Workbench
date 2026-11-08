@@ -11,6 +11,7 @@ export const VIEW_META: Record<ViewId, { label: string; Icon: LucideIcon }> = {
   studio: { label: "生图室", Icon: NAV_ICONS.studio },
   history: { label: "历史", Icon: NAV_ICONS.history },
   settings: { label: "设置", Icon: NAV_ICONS.settings },
+  album: { label: "收藏夹", Icon: NAV_ICONS.gallery },
 };
 
 function TabItem({
@@ -30,7 +31,12 @@ function TabItem({
   const busy = useStore(useStudioStore.forTab(tab.id), (s) => s.busy);
   const albums = useAlbumsQuery().data;
   const meta = VIEW_META[tab.view];
-  const title = tab.view === "gallery" ? albums?.find((a) => a.id === albumId)?.name || meta.label : meta.label;
+  const title =
+    tab.view === "album"
+      ? albums?.find((a) => a.id === tab.albumId)?.name || meta.label
+      : tab.view === "gallery"
+        ? albums?.find((a) => a.id === albumId)?.name || meta.label
+        : meta.label;
 
   function onMouseDown(e: MouseEvent) {
     // 中键关闭；默认的滚动光标要拦掉。

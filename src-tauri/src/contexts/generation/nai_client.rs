@@ -48,11 +48,14 @@ impl TokenVault {
             };
         }
         if let Some(parent) = self.path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| format!("无法创建目录 {}：{e}", parent.display()))?;
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("无法创建目录 {}：{e}", parent.display()))?;
         }
         let tmp = self.path.with_extension("token.tmp");
-        std::fs::write(&tmp, token).map_err(|e| format!("无法写入 Token 文件 {}：{e}", tmp.display()))?;
-        std::fs::rename(&tmp, &self.path).map_err(|e| format!("无法保存 Token 文件 {}：{e}", self.path.display()))?;
+        std::fs::write(&tmp, token)
+            .map_err(|e| format!("无法写入 Token 文件 {}：{e}", tmp.display()))?;
+        std::fs::rename(&tmp, &self.path)
+            .map_err(|e| format!("无法保存 Token 文件 {}：{e}", self.path.display()))?;
         match std::fs::read_to_string(&self.path) {
             Ok(back) if back.trim() == token => Ok(()),
             _ => Err(format!("Token 写入后校验失败：{}", self.path.display())),
@@ -75,7 +78,11 @@ pub struct NetConfig {
 
 impl Default for NetConfig {
     fn default() -> Self {
-        NetConfig { mode: "system".into(), proxy_url: String::new(), connect_timeout: 10.0 }
+        NetConfig {
+            mode: "system".into(),
+            proxy_url: String::new(),
+            connect_timeout: 10.0,
+        }
     }
 }
 
@@ -125,7 +132,10 @@ fn parse_error(status: u16, body: &[u8]) -> NaiError {
     let text = String::from_utf8_lossy(body);
     let message = match serde_json::from_str::<Value>(&text) {
         Ok(Value::Object(o)) => {
-            let m = o.get("message").filter(|v| truthy(v)).or_else(|| o.get("error").filter(|v| truthy(v)));
+            let m = o
+                .get("message")
+                .filter(|v| truthy(v))
+                .or_else(|| o.get("error").filter(|v| truthy(v)));
             match m {
                 None => String::new(),
                 Some(Value::Object(inner)) => match inner.get("message").filter(|v| truthy(v)) {
@@ -137,15 +147,30 @@ fn parse_error(status: u16, body: &[u8]) -> NaiError {
         }
         _ => text.chars().take(400).collect(),
     };
-    NaiError::new(status, if message.is_empty() { "NovelAI 请求失败".to_string() } else { message })
+    NaiError::new(
+        status,
+        if message.is_empty() {
+            "NovelAI 请求失败".to_string()
+        } else {
+            message
+        },
+    )
 }
 
 fn first_truthy<'a>(a: &'a Value, b: &'a Value) -> &'a Value {
-    if truthy(a) { a } else { b }
+    if truthy(a) {
+        a
+    } else {
+        b
+    }
 }
 
 fn int_of(v: &Value) -> i64 {
-    if truthy(v) { to_int(v).unwrap_or(0) } else { 0 }
+    if truthy(v) {
+        to_int(v).unwrap_or(0)
+    } else {
+        0
+    }
 }
 
 impl NaiGateway {
@@ -163,7 +188,12 @@ impl NaiGateway {
     }
 
     fn net_config(&self) -> NetConfig {
-        self.net_provider.read().unwrap_or_else(|e| e.into_inner()).as_ref().map(|p| p()).unwrap_or_default()
+        self.net_provider
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map(|p| p())
+            .unwrap_or_default()
     }
 
     /// 按网络设置套上代理；自定义地址不合法时直接报错，不要悄悄直连。
@@ -174,24 +204,39 @@ impl NaiGateway {
             "custom" => {
                 let url = cfg.proxy_url.trim();
                 if url.is_empty() {
-                    return Err(NaiError::new(400, "网络代理选了「自定义」，但没有填代理地址"));
+                    return Err(NaiError::new(
+                        400,
+                        "网络代理选了「自定义」，但没有填代理地址",
+                    ));
                 }
-                let url = if url.contains("://") { url.to_string() } else { format!("http://{url}") };
+                let url = if url.contains("://") {
+                    url.to_string()
+                } else {
+                    format!("http://{url}")
+                };
                 let proxy = reqwest::Proxy::all(&url)
                     .map_err(|e| NaiError::new(400, format!("代理地址无效 {url}：{e}")))?;
                 b = b.proxy(proxy);
             }
             _ => {}
         }
-        Ok(b.connect_timeout(Duration::from_secs_f64(cfg.connect_timeout.clamp(1.0, 120.0))))
+        Ok(b.connect_timeout(Duration::from_secs_f64(
+            cfg.connect_timeout.clamp(1.0, 120.0),
+        )))
     }
 
     pub fn set_timeout_provider(&self, p: FloatProvider) {
-        *self.timeout_provider.write().unwrap_or_else(|e| e.into_inner()) = Some(p);
+        *self
+            .timeout_provider
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = Some(p);
     }
 
     pub fn set_base_url_provider(&self, p: StringProvider) {
-        *self.base_url_provider.write().unwrap_or_else(|e| e.into_inner()) = Some(p);
+        *self
+            .base_url_provider
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = Some(p);
     }
 
     /// 网关地址；空串或非 http(s) 地址都回到官方地址。
@@ -205,11 +250,20 @@ impl NaiGateway {
             .unwrap_or_default();
         let raw = raw.trim().trim_end_matches('/').to_string();
         let lower = raw.to_lowercase();
-        if lower.starts_with("http://") || lower.starts_with("https://") { raw } else { IMAGE_API.to_string() }
+        if lower.starts_with("http://") || lower.starts_with("https://") {
+            raw
+        } else {
+            IMAGE_API.to_string()
+        }
     }
 
     fn gen_timeout(&self) -> f64 {
-        self.timeout_provider.read().unwrap_or_else(|e| e.into_inner()).as_ref().map(|p| p()).unwrap_or(180.0)
+        self.timeout_provider
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map(|p| p())
+            .unwrap_or(180.0)
     }
 
     fn gen_client(&self) -> NaiRes<reqwest::Client> {
@@ -222,13 +276,18 @@ impl NaiGateway {
     fn token(&self) -> NaiRes<String> {
         let t = self.vault.load();
         if t.is_empty() {
-            return Err(NaiError::new(401, "还没有配置 NovelAI Persistent API Token"));
+            return Err(NaiError::new(
+                401,
+                "还没有配置 NovelAI Persistent API Token",
+            ));
         }
         Ok(t)
     }
 
     fn headers(token: &str, accept: &str) -> reqwest::header::HeaderMap {
-        use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION, CONTENT_TYPE, USER_AGENT};
+        use reqwest::header::{
+            HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION, CONTENT_TYPE, USER_AGENT,
+        };
         let mut h = HeaderMap::new();
         if let Ok(v) = HeaderValue::from_str(&format!("Bearer {token}")) {
             h.insert(AUTHORIZATION, v);
@@ -269,8 +328,15 @@ impl NaiGateway {
         }
         let empty = json!({});
         let training = {
-            let t = first_truthy(get(&data, "trainingStepsLeft"), get(&data, "training_steps_left"));
-            if truthy(t) { t } else { &empty }
+            let t = first_truthy(
+                get(&data, "trainingStepsLeft"),
+                get(&data, "training_steps_left"),
+            );
+            if truthy(t) {
+                t
+            } else {
+                &empty
+            }
         };
         let fixed = int_of(first_truthy(
             get(training, "fixedTrainingStepsLeft"),
@@ -280,22 +346,41 @@ impl NaiGateway {
             let a = get(training, "purchasedTrainingSteps");
             let b = get(training, "purchased_training_steps");
             let c = get(&data, "purchasedTrainingSteps");
-            int_of(if truthy(a) { a } else if truthy(b) { b } else { c })
+            int_of(if truthy(a) {
+                a
+            } else if truthy(b) {
+                b
+            } else {
+                c
+            })
         };
         let tier = int_of(get(&data, "tier"));
         let name = {
             let a = get(&data, "tierName");
             let b = get(&data, "tier_name");
-            if truthy(a) { py_str(a) } else if truthy(b) { py_str(b) } else { tier_name(tier) }
+            if truthy(a) {
+                py_str(a)
+            } else if truthy(b) {
+                py_str(b)
+            } else {
+                tier_name(tier)
+            }
         };
-        let usage = if get(&data, "usage").is_object() { get(&data, "usage").clone() } else { json!({}) };
+        let usage = if get(&data, "usage").is_object() {
+            get(&data, "usage").clone()
+        } else {
+            json!({})
+        };
         let usage_percent = match get(&usage, "percent") {
             Value::Null => Value::Null,
             v => to_float(v).map(num_f).unwrap_or(Value::Null),
         };
         // 官方「Usage Boost」电池（5.99 刀买的额外额度）剩下的比例，网页上显示为 +N% Extra Usage。
         let purchased_percent = {
-            let v = first_truthy(get(&usage, "purchasedPercent"), get(&usage, "purchased_percent"));
+            let v = first_truthy(
+                get(&usage, "purchasedPercent"),
+                get(&usage, "purchased_percent"),
+            );
             match v {
                 Value::Null => Value::Null,
                 v => to_float(v).map(num_f).unwrap_or(Value::Null),
@@ -404,7 +489,8 @@ impl SseParser {
                 }
                 Err(e) => {
                     let valid = e.valid_up_to();
-                    self.buf.push_str(std::str::from_utf8(&self.pending[..valid]).unwrap_or(""));
+                    self.buf
+                        .push_str(std::str::from_utf8(&self.pending[..valid]).unwrap_or(""));
                     match e.error_len() {
                         Some(n) => {
                             self.buf.push('\u{FFFD}');
@@ -458,8 +544,11 @@ impl SseParser {
 
 fn parse_sse_json(event: &str) -> Option<Value> {
     let normalized = event.replace("\r\n", "\n").replace('\r', "\n");
-    let lines: Vec<&str> =
-        normalized.split('\n').filter_map(|l| l.strip_prefix("data:")).map(|l| l.trim_start()).collect();
+    let lines: Vec<&str> = normalized
+        .split('\n')
+        .filter_map(|l| l.strip_prefix("data:"))
+        .map(|l| l.trim_start())
+        .collect();
     if lines.is_empty() {
         return None;
     }
@@ -497,8 +586,14 @@ mod tests {
     #[test]
     fn error_message_shapes() {
         assert_eq!(parse_error(400, br#"{"message":"bad"}"#).message, "bad");
-        assert_eq!(parse_error(401, br#"{"error":{"message":"nope"}}"#).message, "nope");
-        assert_eq!(parse_error(500, b"<html>oops</html>").message, "<html>oops</html>");
+        assert_eq!(
+            parse_error(401, br#"{"error":{"message":"nope"}}"#).message,
+            "nope"
+        );
+        assert_eq!(
+            parse_error(500, b"<html>oops</html>").message,
+            "<html>oops</html>"
+        );
         assert_eq!(parse_error(500, br#"{}"#).message, "NovelAI 请求失败");
     }
 
@@ -527,7 +622,11 @@ mod tests {
     }
 
     /// 起一个只回固定响应的本地服务，返回它的地址。
-    fn serve_once(status_line: &'static str, content_type: &'static str, body: &'static str) -> String {
+    fn serve_once(
+        status_line: &'static str,
+        content_type: &'static str,
+        body: &'static str,
+    ) -> String {
         use std::io::{Read, Write};
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
@@ -576,7 +675,11 @@ mod tests {
     async fn gateway_error_status_carries_message() {
         let dir = tempfile::tempdir().unwrap();
         let gw = gateway(dir.path());
-        let base = serve_once("401 Unauthorized", "application/json", r#"{"message":"bad token"}"#);
+        let base = serve_once(
+            "401 Unauthorized",
+            "application/json",
+            r#"{"message":"bad token"}"#,
+        );
         gw.set_base_url_provider(Arc::new(move || base.clone()));
         let e = gw.fetch_subscription(Some("sk-test")).await.unwrap_err();
         assert_eq!((e.status, e.message.as_str()), (401, "bad token"));

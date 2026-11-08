@@ -14,7 +14,9 @@ use tauri::http::{header, Request, Response, StatusCode};
 type Body = Cow<'static, [u8]>;
 
 fn is_hash(s: &str) -> bool {
-    s.len() == 64 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    s.len() == 64
+        && s.bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
 fn json_error(status: u16, message: &str) -> Response<Body> {
@@ -40,10 +42,20 @@ fn sniff(head: &[u8]) -> &'static str {
     }
 }
 
-fn file_response(req: &Request<Vec<u8>>, path: &std::path::Path, mime: Option<&str>, digest: &str) -> Response<Body> {
+fn file_response(
+    req: &Request<Vec<u8>>,
+    path: &std::path::Path,
+    mime: Option<&str>,
+    digest: &str,
+) -> Response<Body> {
     let etag = format!("\"{digest}\"");
     let cache = "public, max-age=31536000, immutable";
-    if req.headers().get(header::IF_NONE_MATCH).and_then(|v| v.to_str().ok()) == Some(etag.as_str()) {
+    if req
+        .headers()
+        .get(header::IF_NONE_MATCH)
+        .and_then(|v| v.to_str().ok())
+        == Some(etag.as_str())
+    {
         return Response::builder()
             .status(StatusCode::NOT_MODIFIED)
             .header(header::ETAG, etag)
@@ -55,7 +67,10 @@ fn file_response(req: &Request<Vec<u8>>, path: &std::path::Path, mime: Option<&s
     let Ok(data) = std::fs::read(path) else {
         return json_error(404, "文件不存在");
     };
-    let media = mime.filter(|m| !m.is_empty()).unwrap_or_else(|| sniff(&data[..data.len().min(12)])).to_string();
+    let media = mime
+        .filter(|m| !m.is_empty())
+        .unwrap_or_else(|| sniff(&data[..data.len().min(12)]))
+        .to_string();
     Response::builder()
         .status(200)
         .header(header::CONTENT_TYPE, media)
@@ -67,12 +82,18 @@ fn file_response(req: &Request<Vec<u8>>, path: &std::path::Path, mime: Option<&s
 }
 
 fn decode(seg: &str) -> String {
-    percent_encoding::percent_decode_str(seg).decode_utf8_lossy().to_string()
+    percent_encoding::percent_decode_str(seg)
+        .decode_utf8_lossy()
+        .to_string()
 }
 
 pub fn handle(svc: &Arc<Services>, req: &Request<Vec<u8>>) -> Response<Body> {
     let path = req.uri().path().to_string();
-    let parts: Vec<String> = path.split('/').filter(|p| !p.is_empty()).map(decode).collect();
+    let parts: Vec<String> = path
+        .split('/')
+        .filter(|p| !p.is_empty())
+        .map(decode)
+        .collect();
     let parts: Vec<&str> = parts.iter().map(|s| s.as_str()).collect();
     match parts.as_slice() {
         ["blobs", digest] => {
@@ -92,18 +113,31 @@ pub fn handle(svc: &Arc<Services>, req: &Request<Vec<u8>>) -> Response<Body> {
             };
             let hash = item["hash"].as_str().unwrap_or("").to_string();
             let (digest, mime) = if *which == "thumb" {
-                let t = item["thumbHash"].as_str().filter(|t| !t.is_empty()).unwrap_or(&hash).to_string();
+                let t = item["thumbHash"]
+                    .as_str()
+                    .filter(|t| !t.is_empty())
+                    .unwrap_or(&hash)
+                    .to_string();
                 (t, Some("image/webp".to_string()))
             } else {
                 (hash, item["mime"].as_str().map(|m| m.to_string()))
             };
             let album = item["albumId"].as_str().unwrap_or("");
             let slot = if *which == "thumb" {
-                crate::kernel::blobs::Slot::thumb(crate::kernel::blobs::Bucket::Favorites(album.to_string()))
+                crate::kernel::blobs::Slot::thumb(crate::kernel::blobs::Bucket::Favorites(
+                    album.to_string(),
+                ))
             } else {
-                crate::kernel::blobs::Slot::image(crate::kernel::blobs::Bucket::Favorites(album.to_string()))
+                crate::kernel::blobs::Slot::image(crate::kernel::blobs::Bucket::Favorites(
+                    album.to_string(),
+                ))
             };
-            let Some(p) = svc.kernel.blobs.path_in(&slot, &digest).or_else(|| svc.kernel.blobs.find(&digest)) else {
+            let Some(p) = svc
+                .kernel
+                .blobs
+                .path_in(&slot, &digest)
+                .or_else(|| svc.kernel.blobs.find(&digest))
+            else {
                 return json_error(404, "文件不存在");
             };
             file_response(req, &p, mime.as_deref(), &digest)

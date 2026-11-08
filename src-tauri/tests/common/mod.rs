@@ -48,7 +48,16 @@ pub fn png_image(size: (u32, u32)) -> Vec<u8> {
 }
 
 pub fn import(svc: &Services, album_id: &str, data: &[u8], meta: Value) -> Res<Value> {
-    svc.gallery.import_bytes(album_id, data, &meta, ImportOptions { thumb: None, command_id: None, item_id: None })
+    svc.gallery.import_bytes(
+        album_id,
+        data,
+        &meta,
+        ImportOptions {
+            thumb: None,
+            command_id: None,
+            item_id: None,
+        },
+    )
 }
 
 /// 取出错误信息，断言「这里必须失败」。
@@ -60,9 +69,15 @@ pub fn err<T: std::fmt::Debug>(r: Result<T, DomainError>) -> String {
 }
 
 pub fn names(items: &[Value]) -> Vec<String> {
-    items.iter().map(|i| i["name"].as_str().unwrap_or("").to_string()).collect()
+    items
+        .iter()
+        .map(|i| i["name"].as_str().unwrap_or("").to_string())
+        .collect()
 }
 
 pub fn ids(items: &[Value]) -> Vec<String> {
-    items.iter().map(|i| i["id"].as_str().unwrap_or("").to_string()).collect()
+    items
+        .iter()
+        .map(|i| i["id"].as_str().unwrap_or("").to_string())
+        .collect()
 }

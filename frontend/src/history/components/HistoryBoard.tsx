@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { groupByDay, historyShots, type HistoryShot } from "@/data/history";
+import { queryKeys } from "@/data/queryKeys";
+import { useScrollMemory } from "@/ui/useScrollMemory";
+import { ensureHistoryLoaded } from "../historyScroll";
 import {
   applyClick,
   applyContext,
@@ -17,6 +20,7 @@ import {
   saveShotsToAlbum,
   useAlbumsQuery,
   useHistoryQuery,
+  useSession,
 } from "@/state";
 import { useContextMenu, useRegisterMenu, type MenuItem } from "@/ui/contextMenu";
 import { IconCopy, IconSparkles } from "@/generation/components/icons";
@@ -83,7 +87,10 @@ export function HistoryBoard() {
   const [sel, setSel] = useState<Selection>(EMPTY_SELECTION);
   // 详情只由左键单击打开。右键也会改选中，但不能把详情带出来。
   const [detailKey, setDetailKey] = useState<string | null>(null);
+  // 补页完成前不让底部哨兵再去翻页，免得和恢复抢同一页。
+  const [scrollSettled, setScrollSettled] = useState(false);
   const sentinel = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const shots = useMemo(() => historyShots(query.data?.pages.flatMap((page) => page.jobs) || []), [query.data]);
   const days = useMemo(() => groupByDay(shots), [shots]);
   const order = useMemo(() => shots.map((s) => s.key), [shots]);
@@ -96,9 +103,27 @@ export function HistoryBoard() {
     setSel((cur) => prune(cur, order));
   }, [order]);
 
+  // 滚动位置持久化：记下位置和已加载张数。回来时先补齐页数再滚回去。
+  const shotsRef = useRef(shots);
+  shotsRef.current = shots;
+  const fetchNextRef = useRef(query.fetchNextPage);
+  fetchNextRef.current = query.fetchNextPage;
+  const active = useSession((s) => s.view === "history");
+  const onScroll = useScrollMemory({
+    ref: scrollRef,
+    storeKey: "history",
+    storageKey: "wb.historyScroll",
+    ready: query.isSuccess,
+    active,
+    getShown: () => shotsRef.current.length,
+    prepare: (saved, isCancelled) =>
+      ensureHistoryLoaded(() => qc.getQueryData(queryKeys.history), saved.shown, () => fetchNextRef.current(), isCancelled),
+    onSettled: setScrollSettled,
+  });
+
   useEffect(() => {
     const el = sentinel.current;
-    if (!el) return;
+    if (!el || !scrollSettled) return;
     const io = new IntersectionObserver((entries) => {
       if (entries.some((entry) => entry.isIntersecting) && query.hasNextPage && !query.isFetchingNextPage) {
         void query.fetchNextPage();
@@ -106,7 +131,7 @@ export function HistoryBoard() {
     });
     io.observe(el);
     return () => io.disconnect();
-  }, [query.hasNextPage, query.isFetchingNextPage, query.fetchNextPage, days.length]);
+  }, [query.hasNextPage, query.isFetchingNextPage, query.fetchNextPage, days.length, scrollSettled]);
 
   const clear = useCallback(() => {
     setSel(EMPTY_SELECTION);
@@ -250,6 +275,8 @@ export function HistoryBoard() {
       </div>
       <div
         className="h-scroll"
+        ref={scrollRef}
+        onScroll={onScroll}
         onContextMenu={openBoardMenu}
         onClick={(e) => {
           // 点在空白处取消选择（按着修饰键时不动，免得连选时手滑清空）。

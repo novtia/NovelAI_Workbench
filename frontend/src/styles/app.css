@@ -957,6 +957,51 @@ pre.prompt {
 @keyframes spin { to { transform: rotate(360deg); } }
 .hist-foot { padding: 10px 12px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; }
 
+/* ---------- 收藏夹详细页：左缩略图、中画布、右参数 ---------- */
+#view-album.view.active { flex-direction: column; }
+.album-detail {
+  flex: 1; min-width: 0; min-height: 0;
+  display: grid; grid-template-columns: 268px minmax(0, 1fr) minmax(480px, 560px); grid-template-rows: minmax(0, 1fr);
+}
+.album-detail > .hist { border-right: 1px solid var(--line); }
+.album-detail .hist-head .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.album-rail-empty, .album-empty, .album-missing, .album-side-empty {
+  margin: 0; color: var(--ink-4); font-size: 13px; letter-spacing: .06em;
+}
+.album-rail-empty { grid-column: 1 / -1; padding: 8px 4px; }
+.album-empty { position: absolute; inset: 0; display: grid; place-items: center; }
+.album-missing { flex: 1; display: grid; place-items: center; }
+.album-detail .cv-cell { cursor: grab; box-shadow: 0 0 0 1px var(--line), 0 18px 36px -22px rgba(30, 20, 8, .55); }
+.album-detail .cv:active .cv-cell { cursor: grabbing; }
+.album-side {
+  min-width: 0; min-height: 0; display: flex; flex-direction: column;
+  border-left: 1px solid var(--line); background: rgba(250, 246, 238, .45);
+}
+.album-side-head {
+  display: flex; align-items: center; gap: 8px; padding: 16px 16px 12px; border-bottom: 1px solid var(--line);
+}
+.album-side-head .pane-title { flex: 1; }
+.album-side-body { flex: 1; min-height: 0; overflow: auto; padding: 14px 14px 18px; display: flex; flex-direction: column; gap: 12px; }
+.album-side-empty { padding: 8px 2px; }
+.album-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.album-field, .album-col {
+  min-width: 0; padding: 8px 10px; background: var(--paper-3); box-shadow: 0 0 0 1px var(--line);
+}
+.album-field .k, .album-col .k { font-size: 10px; letter-spacing: .16em; color: var(--ink-4); text-transform: uppercase; }
+.album-field .v { margin-top: 4px; font-family: var(--mono); font-size: 12.5px; line-height: 1.45; word-break: break-all; }
+.album-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: start; }
+.album-col { display: flex; flex-direction: column; gap: 6px; }
+.album-col pre {
+  margin: 0; white-space: pre-wrap; word-break: break-word; font-family: var(--mono); font-size: 12px; line-height: 1.65;
+}
+.album-cols .album-col:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.album-side-foot {
+  display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 14px 16px; border-top: 1px solid var(--line);
+}
+.album-side-foot .btn { flex: 1; justify-content: center; padding: 0 8px; }
+.album-side-foot .btn:first-child { flex: 1 1 100%; }
+.album-side-foot .btn:disabled, .album-side-head .icon-btn:disabled { opacity: .4; }
+
 /* ---------- 弹层 ---------- */
 .pop-panel {
   position: fixed; z-index: 60; min-width: 200px; padding: 8px; display: none;

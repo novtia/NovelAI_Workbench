@@ -35,14 +35,22 @@ fn draws_match_python() {
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/lottery_draws.json")).expect("读取 fixture");
     let pool: Vec<Value> = fixture["pool"].as_array().unwrap().clone();
-    assert_eq!(pool_hash(&pool), fixture["poolHash"].as_str().unwrap(), "pool_hash 不一致");
+    assert_eq!(
+        pool_hash(&pool),
+        fixture["poolHash"].as_str().unwrap(),
+        "pool_hash 不一致"
+    );
 
     for (i, case) in fixture["cases"].as_array().unwrap().iter().enumerate() {
         let f = |k: &str| case[k].as_f64();
         let fixed: Vec<Value> = case
             .get("fixed")
             .and_then(|v| v.as_array())
-            .map(|a| a.iter().map(|ix| pool[ix.as_u64().unwrap() as usize].clone()).collect())
+            .map(|a| {
+                a.iter()
+                    .map(|ix| pool[ix.as_u64().unwrap() as usize].clone())
+                    .collect()
+            })
             .unwrap_or_default();
         let params = DrawParams {
             fixed,
@@ -59,10 +67,16 @@ fn draws_match_python() {
         let expected = case["draws"].as_array().unwrap();
         assert_eq!(draws.len(), expected.len(), "case {i}: 抽出的条数不一致");
         for (j, (got, want)) in draws.iter().zip(expected).enumerate() {
-            assert_eq!(got["outputText"], want["outputText"], "case {i} draw {j}: outputText 不一致");
+            assert_eq!(
+                got["outputText"], want["outputText"],
+                "case {i} draw {j}: outputText 不一致"
+            );
             same(got, want, &format!("case{i}.draw{j}"));
         }
         let next = rng.random();
-        assert!((next - case["next"].as_f64().unwrap()).abs() < 1e-15, "case {i}: 随机数位置不一致");
+        assert!(
+            (next - case["next"].as_f64().unwrap()).abs() < 1e-15,
+            "case {i}: 随机数位置不一致"
+        );
     }
 }

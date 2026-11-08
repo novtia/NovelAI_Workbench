@@ -1,6 +1,9 @@
-import { isSingleArtistAlbum } from "@/data";
-import { useCommands, useCollection, useSession } from "@/state";
-import { IconPencil, IconPlus, IconTrash } from "@/generation/components/icons";
+import { isSingleArtistAlbum, type Album } from "@/data";
+import { useCommands, useCollection, useSession, useTabs } from "@/state";
+import { IconImage, IconPencil, IconPlus, IconTrash } from "@/generation/components/icons";
+import { useContextMenu, useRegisterMenu } from "@/ui/contextMenu";
+
+type AlbumMenuCtx = { album: Album };
 
 export function AlbumSidebar() {
   const { albums, album, albumId, items, totalCount } = useCollection();
@@ -8,6 +11,48 @@ export function AlbumSidebar() {
   const openCreateDialog = useSession((s) => s.openCreateDialog);
   const openRenameDialog = useSession((s) => s.openRenameDialog);
   const single = isSingleArtistAlbum(album);
+
+  const openAlbumMenu = useContextMenu<AlbumMenuCtx>("gallery.album", (e) => {
+    const id = (e.currentTarget as HTMLElement).dataset.albumId;
+    const target = albums.find((a) => a.id === id);
+    return target ? { album: target } : false;
+  });
+
+  useRegisterMenu<AlbumMenuCtx>("gallery.album", {
+    id: "gallery.album.open",
+    group: 1,
+    order: 0,
+    build: ({ album: target }) => [
+      {
+        id: "detail",
+        label: "收藏夹详细页",
+        icon: <IconImage />,
+        onSelect: () => useTabs.getState().openAlbumTab(target.id),
+      },
+      {
+        id: "rename",
+        label: "修改",
+        icon: <IconPencil />,
+        disabled: isSingleArtistAlbum(target),
+        onSelect: () => openRenameDialog(target.id, target.name),
+      },
+    ],
+  });
+  useRegisterMenu<AlbumMenuCtx>("gallery.album", {
+    id: "gallery.album.delete",
+    group: 2,
+    order: 0,
+    build: ({ album: target }) => [
+      {
+        id: "delete",
+        label: "删除",
+        icon: <IconTrash />,
+        danger: true,
+        disabled: isSingleArtistAlbum(target) || albums.length <= 1,
+        onSelect: () => void deleteAlbumById(target.id),
+      },
+    ],
+  });
 
   return (
     <aside className="g-side">
@@ -24,7 +69,9 @@ export function AlbumSidebar() {
               key={a.id}
               role="button"
               tabIndex={0}
+              data-album-id={a.id}
               className={`album-item${active ? " active" : ""}`}
+              onContextMenu={openAlbumMenu}
               onClick={() => selectAlbum(a.id)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {

@@ -3,7 +3,11 @@ use crate::util::{get, py_str, to_int, truthy};
 use serde_json::{json, Map, Value};
 
 fn obj_of(v: &Value) -> Map<String, Value> {
-    if truthy(v) { v.as_object().cloned().unwrap_or_default() } else { Map::new() }
+    if truthy(v) {
+        v.as_object().cloned().unwrap_or_default()
+    } else {
+        Map::new()
+    }
 }
 
 pub struct ParamSet {
@@ -24,7 +28,10 @@ impl ParamSet {
         if name.is_empty() {
             return Err(DomainError::bad("名称不能为空"));
         }
-        self.record("ParamSetSaved", json!({"name": name, "form": form, "createdAt": created_at}));
+        self.record(
+            "ParamSetSaved",
+            json!({"name": name, "form": form, "createdAt": created_at}),
+        );
         Ok(())
     }
 
@@ -33,7 +40,10 @@ impl ParamSet {
             return Err(DomainError::not_found("预设不存在"));
         }
         let name = self.name.clone();
-        self.record("ParamSetUpdated", json!({"form": form, "updatedAt": updated_at, "name": name}));
+        self.record(
+            "ParamSetUpdated",
+            json!({"form": form, "updatedAt": updated_at, "name": name}),
+        );
         Ok(())
     }
 
@@ -161,7 +171,10 @@ impl GenerationJob {
     }
 
     pub fn fail(&mut self, error: &str, finished_at: i64) {
-        self.record("JobFailed", json!({"error": error, "finishedAt": finished_at}));
+        self.record(
+            "JobFailed",
+            json!({"error": error, "finishedAt": finished_at}),
+        );
     }
 
     pub fn cancel(&mut self, finished_at: i64) {
@@ -179,8 +192,11 @@ impl GenerationJob {
         if self.status != "done" {
             return Err(DomainError::conflict("任务还没完成"));
         }
-        let wanted: std::collections::HashSet<&str> =
-            item_ids.iter().map(|s| s.as_str()).filter(|s| !s.is_empty()).collect();
+        let wanted: std::collections::HashSet<&str> = item_ids
+            .iter()
+            .map(|s| s.as_str())
+            .filter(|s| !s.is_empty())
+            .collect();
         let hit: Vec<String> = self
             .items
             .iter()
@@ -190,7 +206,10 @@ impl GenerationJob {
         if hit.is_empty() {
             return Ok(vec![]);
         }
-        self.record("JobItemsRemoved", json!({"itemIds": hit, "removedAt": removed_at}));
+        self.record(
+            "JobItemsRemoved",
+            json!({"itemIds": hit, "removedAt": removed_at}),
+        );
         Ok(hit)
     }
 }
@@ -225,7 +244,11 @@ impl Aggregate for GenerationJob {
     fn on(&mut self, t: &str, p: &Value) {
         match t {
             "JobQueued" => {
-                self.source = if truthy(get(p, "source")) { py_str(get(p, "source")) } else { "studio".into() };
+                self.source = if truthy(get(p, "source")) {
+                    py_str(get(p, "source"))
+                } else {
+                    "studio".into()
+                };
                 self.status = "queued".into();
                 self.payload = obj_of(get(p, "payload"));
                 self.client = obj_of(get(p, "client"));
@@ -246,13 +269,22 @@ impl Aggregate for GenerationJob {
             "JobPreviewed" => {
                 self.preview_hash = get(p, "previewHash").as_str().map(|s| s.to_string());
                 self.progress.insert("step".into(), get(p, "step").clone());
-                self.progress.insert("sample".into(), get(p, "sample").clone());
-                let text = if truthy(get(p, "text")) { py_str(get(p, "text")) } else { "生成中".into() };
+                self.progress
+                    .insert("sample".into(), get(p, "sample").clone());
+                let text = if truthy(get(p, "text")) {
+                    py_str(get(p, "text"))
+                } else {
+                    "生成中".into()
+                };
                 self.progress.insert("text".into(), json!(text));
             }
             "JobCompleted" => {
                 self.status = "done".into();
-                self.items = if truthy(get(p, "items")) { get(p, "items").as_array().cloned().unwrap_or_default() } else { vec![] };
+                self.items = if truthy(get(p, "items")) {
+                    get(p, "items").as_array().cloned().unwrap_or_default()
+                } else {
+                    vec![]
+                };
                 self.meta = obj_of(get(p, "meta"));
                 self.subscription = match get(p, "subscription") {
                     Value::Null => None,
@@ -279,7 +311,8 @@ impl Aggregate for GenerationJob {
                     .as_array()
                     .map(|a| a.iter().map(py_str).collect())
                     .unwrap_or_default();
-                self.items.retain(|it| !gone.contains(&py_str(get(it, "id"))));
+                self.items
+                    .retain(|it| !gone.contains(&py_str(get(it, "id"))));
             }
             _ => {}
         }

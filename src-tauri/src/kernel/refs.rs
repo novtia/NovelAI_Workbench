@@ -44,12 +44,18 @@ fn add(conn: &Connection, hash: &str, slot: &Slot, owner: &str) -> Res<()> {
 
 /// 生图请求里用到的底图 / 蒙版。
 pub fn input_hashes(request: &Value) -> Vec<String> {
-    ["imageHash", "maskHash"].iter().filter_map(|k| hash_of(get(request, k))).collect()
+    ["imageHash", "maskHash"]
+        .iter()
+        .filter_map(|k| hash_of(get(request, k)))
+        .collect()
 }
 
 /// 任务结果条目在哪个桶：条目自己记了 `bucket` 就用它，否则按任务来源推断。
 pub fn item_bucket(item: &Value, fallback: &Bucket) -> Bucket {
-    get(item, "bucket").as_str().and_then(Bucket::parse).unwrap_or_else(|| fallback.clone())
+    get(item, "bucket")
+        .as_str()
+        .and_then(Bucket::parse)
+        .unwrap_or_else(|| fallback.clone())
 }
 
 /// 一个任务结果条目占用的文件：原图和缩略图。
@@ -67,15 +73,26 @@ pub fn item_files(item: &Value, fallback: &Bucket) -> Vec<(String, Slot)> {
 
 /// 按投影里的任务行刷新它的结果图引用；底图 / 蒙版的引用不动。
 fn refresh_job_items(conn: &Connection, job_id: &str) -> Res<()> {
-    conn.execute("DELETE FROM projections_blob_refs WHERE owner=?1 AND slot<>'inputs'", params![job_id])?;
+    conn.execute(
+        "DELETE FROM projections_blob_refs WHERE owner=?1 AND slot<>'inputs'",
+        params![job_id],
+    )?;
     let row: Option<(String, Option<String>, Option<String>)> = conn
-        .query_row("SELECT source, client_json, items_json FROM projections_jobs WHERE id=?1", params![job_id], |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?))
-        })
+        .query_row(
+            "SELECT source, client_json, items_json FROM projections_jobs WHERE id=?1",
+            params![job_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
         .optional()?;
-    let Some((source, client, items)) = row else { return Ok(()) };
+    let Some((source, client, items)) = row else {
+        return Ok(());
+    };
     let fallback = Bucket::for_job(&source, &parse_json(client, "{}"));
-    for item in parse_json(items, "[]").as_array().cloned().unwrap_or_default() {
+    for item in parse_json(items, "[]")
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+    {
         for (h, slot) in item_files(&item, &fallback) {
             add(conn, &h, &slot, job_id)?;
         }
@@ -91,13 +108,20 @@ fn add_inputs(conn: &Connection, job_id: &str, queued_payload: &Value) -> Res<()
 }
 
 fn refresh_artwork(conn: &Connection, id: &str) -> Res<()> {
-    conn.execute("DELETE FROM projections_blob_refs WHERE owner=?1", params![id])?;
+    conn.execute(
+        "DELETE FROM projections_blob_refs WHERE owner=?1",
+        params![id],
+    )?;
     let row: Option<(String, String, Option<String>, i64)> = conn
-        .query_row("SELECT album_id, hash, thumb_hash, deleted FROM projections_artworks WHERE id=?1", params![id], |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
-        })
+        .query_row(
+            "SELECT album_id, hash, thumb_hash, deleted FROM projections_artworks WHERE id=?1",
+            params![id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        )
         .optional()?;
-    let Some((album, hash, thumb, deleted)) = row else { return Ok(()) };
+    let Some((album, hash, thumb, deleted)) = row else {
+        return Ok(());
+    };
     if deleted != 0 {
         return Ok(());
     }
@@ -116,11 +140,16 @@ impl Projector for RefsProjector {
         let id = &event.aggregate_id;
         match event.event_type.as_str() {
             "JobQueued" => {
-                conn.execute("DELETE FROM projections_blob_refs WHERE owner=?1", params![id])?;
+                conn.execute(
+                    "DELETE FROM projections_blob_refs WHERE owner=?1",
+                    params![id],
+                )?;
                 add_inputs(conn, id, &event.payload)?;
             }
             "JobCompleted" | "JobItemsRemoved" => refresh_job_items(conn, id)?,
-            "ArtworkImported" | "ArtworkMoved" | "ArtworkDeleted" | "ArtworkRestored" => refresh_artwork(conn, id)?,
+            "ArtworkImported" | "ArtworkMoved" | "ArtworkDeleted" | "ArtworkRestored" => {
+                refresh_artwork(conn, id)?
+            }
             _ => {}
         }
         Ok(())
@@ -155,7 +184,11 @@ pub fn slots_of(conn: &Connection, hash: &str) -> Res<Vec<Slot>> {
 /// 这张图在任何位置上还有没有人用。
 pub fn is_used(conn: &Connection, hash: &str) -> Res<bool> {
     let found: Option<i64> = conn
-        .query_row("SELECT 1 FROM projections_blob_refs WHERE hash=?1 LIMIT 1", params![hash.to_lowercase()], |r| r.get(0))
+        .query_row(
+            "SELECT 1 FROM projections_blob_refs WHERE hash=?1 LIMIT 1",
+            params![hash.to_lowercase()],
+            |r| r.get(0),
+        )
         .optional()?;
     Ok(found.is_some())
 }
@@ -165,7 +198,9 @@ pub fn files_of(conn: &Connection, owners: &BTreeSet<String>) -> Res<BTreeSet<(S
     let mut out = BTreeSet::new();
     let mut stmt = conn.prepare("SELECT hash, slot FROM projections_blob_refs WHERE owner=?1")?;
     for owner in owners {
-        let rows = stmt.query_map(params![owner], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+        let rows = stmt.query_map(params![owner], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+        })?;
         for r in rows {
             let (hash, label) = r?;
             if let Some(slot) = Slot::parse(&label) {
@@ -198,8 +233,9 @@ pub fn fill(conn: &Connection) -> Res<usize> {
             "SELECT aggregate_id, payload_json FROM events
              WHERE event_type='JobQueued' AND payload_json LIKE '%Hash%'",
         )?;
-        let rows: Vec<(String, String)> =
-            stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<Result<_, _>>()?;
+        let rows: Vec<(String, String)> = stmt
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+            .collect::<Result<_, _>>()?;
         for (job_id, payload) in rows {
             let payload: Value = serde_json::from_str(&payload).unwrap_or(Value::Null);
             add_inputs(conn, &job_id, &payload)?;
@@ -219,7 +255,11 @@ pub fn fill(conn: &Connection) -> Res<usize> {
     for id in artworks {
         refresh_artwork(conn, &id)?;
     }
-    Ok(conn.query_row("SELECT COUNT(*) FROM projections_blob_refs", [], |r| r.get::<_, i64>(0))? as usize)
+    Ok(
+        conn.query_row("SELECT COUNT(*) FROM projections_blob_refs", [], |r| {
+            r.get::<_, i64>(0)
+        })? as usize,
+    )
 }
 
 /// 旧库第一次用上引用表时补一遍。返回是否补过。
@@ -294,8 +334,13 @@ pub fn sync_files(store: &EventStore, blobs: &BlobStore, apply: bool) -> Res<Fil
 
     let mut deletes: Vec<(String, Slot, u64)> = Vec::new();
     for file in &bucket_files {
-        let Some(slot) = file.slot.clone() else { continue };
-        let referenced = refs.get(&file.hash).map(|s| s.contains(&slot)).unwrap_or(false);
+        let Some(slot) = file.slot.clone() else {
+            continue;
+        };
+        let referenced = refs
+            .get(&file.hash)
+            .map(|s| s.contains(&slot))
+            .unwrap_or(false);
         if !referenced {
             deletes.push((file.hash.clone(), slot, file.size));
         }
@@ -306,7 +351,9 @@ pub fn sync_files(store: &EventStore, blobs: &BlobStore, apply: bool) -> Res<Fil
             continue;
         }
         let fully = match refs.get(&file.hash) {
-            Some(slots) => slots.iter().all(|slot| will.contains(&(file.hash.clone(), slot.label()))),
+            Some(slots) => slots
+                .iter()
+                .all(|slot| will.contains(&(file.hash.clone(), slot.label()))),
             None => true,
         };
         if fully {
@@ -314,9 +361,16 @@ pub fn sync_files(store: &EventStore, blobs: &BlobStore, apply: bool) -> Res<Fil
         }
     }
 
-    let mut stats = FileStats { moved: moves.len(), copied: copies.len(), missing, deleted: 0, bytes: 0 };
+    let mut stats = FileStats {
+        moved: moves.len(),
+        copied: copies.len(),
+        missing,
+        deleted: 0,
+        bytes: 0,
+    };
     stats.deleted = deletes.len() + legacy_deletes.len();
-    stats.bytes = deletes.iter().map(|(_, _, n)| *n).sum::<u64>() + legacy_deletes.iter().map(|(_, n)| *n).sum::<u64>();
+    stats.bytes = deletes.iter().map(|(_, _, n)| *n).sum::<u64>()
+        + legacy_deletes.iter().map(|(_, n)| *n).sum::<u64>();
     if !apply {
         return Ok(stats);
     }

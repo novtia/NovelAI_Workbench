@@ -408,6 +408,22 @@ export const SECTIONS: SectionMeta[] = [
           },
           {
             section: "generation",
+            key: "queueDelayMinSec",
+            label: "队列间隔下限",
+            hint: "上一张请求结束后、下一张发出前，至少随机等这么多秒。每一次都重新抽，不会沿用上一次。和上限都是 0 则关闭；设成同一个秒数则是固定间隔。立即生效。",
+            keywords: "延迟 间隔 随机 队列",
+            control: { kind: "slider", min: 0, max: 120, step: 1, unit: "秒" },
+          },
+          {
+            section: "generation",
+            key: "queueDelayMaxSec",
+            label: "队列间隔上限",
+            hint: "随机间隔不超过这个秒数。抽到和上一次相同的毫秒数会重抽。队列空出来约 2 秒后的第一张不会多等。",
+            keywords: "延迟 间隔 随机",
+            control: { kind: "slider", min: 0, max: 180, step: 1, unit: "秒" },
+          },
+          {
+            section: "generation",
             key: "timeoutSec",
             label: "单次请求超时",
             hint: "超过这个时间还没出图就判定失败。",

@@ -11,19 +11,20 @@ pub fn apply_change(data: &Value, event_type: &str, payload: &Value) -> Value {
         "SettingsUpdated" => {
             let patch = payload.get("patch").cloned().unwrap_or(Value::Null);
             for (section, part) in clean_patch(&patch) {
-                if let (Some(target), Some(part)) = (out.get_mut(&section).and_then(|v| v.as_object_mut()), part.as_object()) {
+                if let (Some(target), Some(part)) = (
+                    out.get_mut(&section).and_then(|v| v.as_object_mut()),
+                    part.as_object(),
+                ) {
                     for (k, v) in part {
                         target.insert(k.clone(), v.clone());
                     }
                 }
             }
         }
-        "SettingsReset" => {
-            match payload.get("section").and_then(|v| v.as_str()) {
-                Some(s) if has_section(s) => out[s] = section_defaults(s),
-                _ => out = defaults(),
-            }
-        }
+        "SettingsReset" => match payload.get("section").and_then(|v| v.as_str()) {
+            Some(s) if has_section(s) => out[s] = section_defaults(s),
+            _ => out = defaults(),
+        },
         _ => {}
     }
     out
@@ -43,7 +44,12 @@ impl AppSettings {
             let mut diff = Map::new();
             if let Some(part) = part.as_object() {
                 for (k, v) in part {
-                    let same = self.data.get(&section).and_then(|s| s.get(k)).map(|cur| py_eq(cur, v)).unwrap_or(false);
+                    let same = self
+                        .data
+                        .get(&section)
+                        .and_then(|s| s.get(k))
+                        .map(|cur| py_eq(cur, v))
+                        .unwrap_or(false);
                     if !same {
                         diff.insert(k.clone(), v.clone());
                     }
@@ -83,7 +89,10 @@ impl AppSettings {
 impl Aggregate for AppSettings {
     const TYPE: &'static str = "AppSettings";
     fn create(id: &str) -> Self {
-        AppSettings { core: Core::new(id), data: defaults() }
+        AppSettings {
+            core: Core::new(id),
+            data: defaults(),
+        }
     }
     fn core(&self) -> &Core {
         &self.core

@@ -76,7 +76,10 @@ fn text_and_seed_settings_are_validated() {
     assert_eq!(out["seed"], 4294967295u64);
     assert_eq!(out["steps"], 30);
     assert_eq!(out["quality"], "gallery");
-    let cleared = svc.settings.update(&json!({"artistTest": {"prompt": ""}})).unwrap();
+    let cleared = svc
+        .settings
+        .update(&json!({"artistTest": {"prompt": ""}}))
+        .unwrap();
     assert_eq!(settings_of(&cleared)["artistTest"]["prompt"], "");
 }
 
@@ -84,9 +87,13 @@ fn text_and_seed_settings_are_validated() {
 fn noop_update_writes_no_event() {
     let dir = tempfile::tempdir().unwrap();
     let svc = bare(dir.path());
-    svc.settings.update(&json!({"appearance": {"theme": "dark"}})).unwrap();
+    svc.settings
+        .update(&json!({"appearance": {"theme": "dark"}}))
+        .unwrap();
     let before = svc.kernel.store.load_all().unwrap().len();
-    svc.settings.update(&json!({"appearance": {"theme": "dark"}})).unwrap();
+    svc.settings
+        .update(&json!({"appearance": {"theme": "dark"}}))
+        .unwrap();
     svc.settings.update(&json!({"appearance": {}})).unwrap();
     assert_eq!(svc.kernel.store.load_all().unwrap().len(), before);
 }
@@ -95,7 +102,9 @@ fn noop_update_writes_no_event() {
 fn reset_section_and_all() {
     let dir = tempfile::tempdir().unwrap();
     let svc = bare(dir.path());
-    svc.settings.update(&json!({"appearance": {"theme": "dark"}, "gallery": {"density": "compact"}})).unwrap();
+    svc.settings
+        .update(&json!({"appearance": {"theme": "dark"}, "gallery": {"density": "compact"}}))
+        .unwrap();
     let out = svc.settings.reset(Some("appearance")).unwrap();
     assert_eq!(settings_of(&out)["appearance"]["theme"], "light");
     assert_eq!(settings_of(&out)["gallery"]["density"], "compact");
@@ -109,8 +118,13 @@ fn reset_section_and_all() {
 fn replace_imports_whole_document() {
     let dir = tempfile::tempdir().unwrap();
     let svc = bare(dir.path());
-    svc.settings.update(&json!({"appearance": {"theme": "dark"}, "gallery": {"density": "compact"}})).unwrap();
-    let out = svc.settings.replace(&json!({"gallery": {"thumbSize": 600}})).unwrap();
+    svc.settings
+        .update(&json!({"appearance": {"theme": "dark"}, "gallery": {"density": "compact"}}))
+        .unwrap();
+    let out = svc
+        .settings
+        .replace(&json!({"gallery": {"thumbSize": 600}}))
+        .unwrap();
     let out = settings_of(&out);
     assert_eq!(out["gallery"]["thumbSize"], 600);
     assert_eq!(out["gallery"]["density"], "comfortable");
@@ -143,7 +157,10 @@ fn projection_replays_identically_after_rebuild() {
 fn schema_defaults_are_valid() {
     for (section, keys) in SCHEMA.iter() {
         for (key, spec) in keys {
-            assert!(py_eq(&spec.coerce(&spec.default), &spec.default), "{section}.{key}");
+            assert!(
+                py_eq(&spec.coerce(&spec.default), &spec.default),
+                "{section}.{key}"
+            );
         }
     }
 }
@@ -152,13 +169,26 @@ fn schema_defaults_are_valid() {
 fn gallery_list_items_sort_and_paging() {
     let dir = tempfile::tempdir().unwrap();
     let svc = common::boot(dir.path());
-    let album = svc.gallery.list_albums(false).unwrap()[0]["id"].as_str().unwrap().to_string();
+    let album = svc.gallery.list_albums(false).unwrap()[0]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
     let mut made = Vec::new();
     for i in 1..=3u8 {
-        made.push(import(&svc, &album, &png(i), json!({"name": format!("{i}.png")})).unwrap()["id"].as_str().unwrap().to_string());
+        made.push(
+            import(&svc, &album, &png(i), json!({"name": format!("{i}.png")})).unwrap()["id"]
+                .as_str()
+                .unwrap()
+                .to_string(),
+        );
     }
     let list = |sort: &str| -> Vec<String> {
-        svc.gallery.list_items(&album, false, None, 0, sort).unwrap().iter().map(|i| i["id"].as_str().unwrap().to_string()).collect()
+        svc.gallery
+            .list_items(&album, false, None, 0, sort)
+            .unwrap()
+            .iter()
+            .map(|i| i["id"].as_str().unwrap().to_string())
+            .collect()
     };
     let desc = list("added_desc");
     let asc = list("added_asc");
@@ -167,8 +197,20 @@ fn gallery_list_items_sort_and_paging() {
     sorted.sort();
     made.sort();
     assert_eq!(sorted, made);
-    assert_eq!(svc.gallery.list_items(&album, false, Some(2), 0, "added_desc").unwrap().len(), 2);
-    assert_eq!(svc.gallery.list_items(&album, false, Some(2), 2, "added_desc").unwrap().len(), 1);
+    assert_eq!(
+        svc.gallery
+            .list_items(&album, false, Some(2), 0, "added_desc")
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(
+        svc.gallery
+            .list_items(&album, false, Some(2), 2, "added_desc")
+            .unwrap()
+            .len(),
+        1
+    );
 }
 
 #[test]
@@ -192,7 +234,10 @@ fn thumb_provider_controls_size() {
 fn system_info_reports_data_dir_and_events() {
     let dir = tempfile::tempdir().unwrap();
     let svc = common::boot(dir.path());
-    let info = svc.settings.system_info(dir.path(), &svc.kernel.blobs).unwrap();
+    let info = svc
+        .settings
+        .system_info(dir.path(), &svc.kernel.blobs)
+        .unwrap();
     assert!(info["events"].as_i64().unwrap() >= 1, "{info}");
     assert!(info.get("dataDir").is_some());
 }

@@ -99,7 +99,12 @@ impl Spec {
 }
 
 fn spec(kind: Kind, default: Value, min: Option<f64>, max: Option<f64>) -> Spec {
-    Spec { kind, default, min, max }
+    Spec {
+        kind,
+        default,
+        min,
+        max,
+    }
 }
 
 fn bool_(d: bool) -> Spec {
@@ -120,7 +125,10 @@ fn choice(default: Value, choices: &[Value]) -> Spec {
 }
 
 fn strs(default: &str, choices: &[&str]) -> Spec {
-    choice(json!(default), &choices.iter().map(|c| json!(c)).collect::<Vec<_>>())
+    choice(
+        json!(default),
+        &choices.iter().map(|c| json!(c)).collect::<Vec<_>>(),
+    )
 }
 
 fn str_(d: &str, max_len: usize) -> Spec {
@@ -129,8 +137,14 @@ fn str_(d: &str, max_len: usize) -> Spec {
 
 pub type Section = Vec<(&'static str, Spec)>;
 
-const SAMPLERS: [&str; 6] =
-    ["k_euler_ancestral", "k_euler", "k_dpmpp_2s_ancestral", "k_dpmpp_2m", "k_dpmpp_2m_sde", "k_dpmpp_sde"];
+const SAMPLERS: [&str; 6] = [
+    "k_euler_ancestral",
+    "k_euler",
+    "k_dpmpp_2s_ancestral",
+    "k_dpmpp_2m",
+    "k_dpmpp_2m_sde",
+    "k_dpmpp_sde",
+];
 const SCHEDULES: [&str; 4] = ["karras", "native", "exponential", "polyexponential"];
 
 pub static SCHEMA: Lazy<Vec<(&'static str, Section)>> = Lazy::new(|| {
@@ -153,7 +167,10 @@ pub static SCHEMA: Lazy<Vec<(&'static str, Section)>> = Lazy::new(|| {
                 ("density", strs("comfortable", &["comfortable", "compact"])),
                 ("cardMinWidth", int(230, 150, 400)),
                 ("sort", strs("added_desc", &["added_desc", "added_asc"])),
-                ("pageSize", choice(json!(0), &[json!(0), json!(100), json!(200), json!(500)])),
+                (
+                    "pageSize",
+                    choice(json!(0), &[json!(0), json!(100), json!(200), json!(500)]),
+                ),
                 ("showArtists", bool_(true)),
                 ("hoverPreview", bool_(true)),
                 ("startAlbum", strs("last", &["last", "default"])),
@@ -165,7 +182,13 @@ pub static SCHEMA: Lazy<Vec<(&'static str, Section)>> = Lazy::new(|| {
         (
             "generation",
             vec![
-                ("model", strs("nai-diffusion-5-full", &["nai-diffusion-5-full", "nai-diffusion-5-curated"])),
+                (
+                    "model",
+                    strs(
+                        "nai-diffusion-5-full",
+                        &["nai-diffusion-5-full", "nai-diffusion-5-curated"],
+                    ),
+                ),
                 ("effort", strs("high", &["high", "medium"])),
                 ("v5Mode", strs("anime", &["anime", "furry"])),
                 ("quality", strs("gallery", &["off", "official", "gallery"])),
@@ -181,6 +204,8 @@ pub static SCHEMA: Lazy<Vec<(&'static str, Section)>> = Lazy::new(|| {
                 ("draftSave", bool_(true)),
                 ("draftDebounceMs", int(1200, 300, 5000)),
                 ("concurrency", int(1, 1, 3)),
+                ("queueDelayMinSec", int(8, 0, 120)),
+                ("queueDelayMaxSec", int(30, 0, 180)),
                 ("timeoutSec", int(180, 30, 600)),
                 ("jobsKeep", int(80, 20, 500)),
                 ("autoOpenJobs", bool_(false)),
@@ -195,7 +220,13 @@ pub static SCHEMA: Lazy<Vec<(&'static str, Section)>> = Lazy::new(|| {
                 ("prompt", str_("", 2000)),
                 ("character", str_("girl, solo", 500)),
                 ("ucPreset", strs("heavy", &["heavy", "comic", "none"])),
-                ("model", strs("nai-diffusion-5-full", &["nai-diffusion-5-full", "nai-diffusion-5-curated"])),
+                (
+                    "model",
+                    strs(
+                        "nai-diffusion-5-full",
+                        &["nai-diffusion-5-full", "nai-diffusion-5-curated"],
+                    ),
+                ),
                 ("effort", strs("high", &["high", "medium"])),
                 ("v5Mode", strs("anime", &["anime", "furry"])),
                 ("quality", strs("gallery", &["off", "official", "gallery"])),
@@ -234,7 +265,11 @@ pub static SCHEMA: Lazy<Vec<(&'static str, Section)>> = Lazy::new(|| {
         ),
         (
             "layout",
-            vec![("leftWidth", int(392, 300, 640)), ("histWidth", int(268, 108, 480)), ("rememberWidths", bool_(true))],
+            vec![
+                ("leftWidth", int(392, 300, 640)),
+                ("histWidth", int(268, 108, 480)),
+                ("rememberWidths", bool_(true)),
+            ],
         ),
         (
             "account",
@@ -253,7 +288,13 @@ pub static SCHEMA: Lazy<Vec<(&'static str, Section)>> = Lazy::new(|| {
                 ("connectTimeoutSec", int(10, 3, 60)),
             ],
         ),
-        ("system", vec![("ssePingSec", int(15, 5, 60)), ("importConcurrency", int(2, 1, 6))]),
+        (
+            "system",
+            vec![
+                ("ssePingSec", int(15, 5, 60)),
+                ("importConcurrency", int(2, 1, 6)),
+            ],
+        ),
     ]
 });
 
@@ -270,7 +311,10 @@ pub fn section_spec(name: &str) -> Option<&'static Section> {
 }
 
 pub fn spec_of(section: &str, key: &str) -> Option<&'static Spec> {
-    section_spec(section)?.iter().find(|(k, _)| *k == key).map(|(_, s)| s)
+    section_spec(section)?
+        .iter()
+        .find(|(k, _)| *k == key)
+        .map(|(_, s)| s)
 }
 
 pub fn defaults() -> Value {
@@ -341,9 +385,13 @@ pub fn py_eq(a: &Value, b: &Value) -> bool {
         (Value::Bool(x), Value::Number(y)) | (Value::Number(y), Value::Bool(x)) => {
             y.as_f64() == Some(if *x { 1.0 } else { 0.0 })
         }
-        (Value::Array(x), Value::Array(y)) => x.len() == y.len() && x.iter().zip(y).all(|(p, q)| py_eq(p, q)),
+        (Value::Array(x), Value::Array(y)) => {
+            x.len() == y.len() && x.iter().zip(y).all(|(p, q)| py_eq(p, q))
+        }
         (Value::Object(x), Value::Object(y)) => {
-            x.len() == y.len() && x.iter().all(|(k, v)| y.get(k).map(|w| py_eq(v, w)).unwrap_or(false))
+            x.len() == y.len()
+                && x.iter()
+                    .all(|(k, v)| y.get(k).map(|w| py_eq(v, w)).unwrap_or(false))
         }
         _ => a == b,
     }

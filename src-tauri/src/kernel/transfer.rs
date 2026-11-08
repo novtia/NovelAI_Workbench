@@ -17,11 +17,11 @@
 
 use super::blobs::{file_ext, BlobStore, Slot};
 use super::bus::{verify_chain, Projector};
-use super::refs;
 use super::clock::now_ms;
 use super::errors::{DomainError, Res};
 use super::hashes::{hex_lower, is_hash64, sha256_bytes};
 use super::integrity::rebuild_projections;
+use super::refs;
 use super::store::{open_connection, EventStore};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -58,7 +58,9 @@ const EVENT_COLUMNS: [&str; 13] = [
 pub type Progress<'a> = &'a dyn Fn(&str, u64, u64);
 
 fn path_str(p: &Path) -> Res<String> {
-    p.to_str().map(|s| s.to_string()).ok_or_else(|| DomainError::bad("文件路径包含无法识别的字符"))
+    p.to_str()
+        .map(|s| s.to_string())
+        .ok_or_else(|| DomainError::bad("文件路径包含无法识别的字符"))
 }
 
 fn zip_err(e: impl std::fmt::Display) -> DomainError {
@@ -135,7 +137,13 @@ fn stored() -> SimpleFileOptions {
 }
 
 /// 导出完整包：数据库 + 所有被事件引用且本机存在的图片，打成一个 zip。
-pub fn export_pack(store: &EventStore, blobs: &BlobStore, data_dir: &Path, dest: &Path, progress: Progress) -> Res<Value> {
+pub fn export_pack(
+    store: &EventStore,
+    blobs: &BlobStore,
+    data_dir: &Path,
+    dest: &Path,
+    progress: Progress,
+) -> Res<Value> {
     prepare_dest(store, dest)?;
     std::fs::create_dir_all(data_dir)?;
 
@@ -144,7 +152,8 @@ pub fn export_pack(store: &EventStore, blobs: &BlobStore, data_dir: &Path, dest:
     let stage = data_dir.join(format!("export-{}.sqlite", now_ms()));
     let _cleanup = Cleanup(stage.clone());
     vacuum_into(store, &stage)?;
-    let events: i64 = open_connection(&stage)?.query_row("SELECT COUNT(*) FROM events", [], |r| r.get(0))?;
+    let events: i64 =
+        open_connection(&stage)?.query_row("SELECT COUNT(*) FROM events", [], |r| r.get(0))?;
     let empty = sha256_bytes(b"");
     let mut entries: Vec<(String, PathBuf)> = Vec::new();
     let mut missing = 0usize;
@@ -184,7 +193,8 @@ pub fn export_pack(store: &EventStore, blobs: &BlobStore, data_dir: &Path, dest:
     let written = (|| -> Res<usize> {
         zip.start_file(MANIFEST, stored()).map_err(zip_err)?;
         zip.write_all(serde_json::to_string_pretty(&manifest)?.as_bytes())?;
-        zip.start_file(DB_ENTRY, stored().large_file(true)).map_err(zip_err)?;
+        zip.start_file(DB_ENTRY, stored().large_file(true))
+            .map_err(zip_err)?;
         std::io::copy(&mut BufReader::new(File::open(&stage)?), &mut zip)?;
 
         let total = entries.len() as u64;
@@ -247,7 +257,8 @@ fn read_head(src: &Path) -> Res<([u8; 16], usize)> {
 
 fn open_pack(src: &Path) -> Res<Pack> {
     let file = File::open(src).map_err(|e| DomainError::bad(format!("无法打开文件：{e}")))?;
-    ZipArchive::new(BufReader::with_capacity(1 << 20, file)).map_err(|e| DomainError::bad(format!("无法读取压缩包：{e}")))
+    ZipArchive::new(BufReader::with_capacity(1 << 20, file))
+        .map_err(|e| DomainError::bad(format!("无法读取压缩包：{e}")))
 }
 
 fn check_manifest(pack: &mut Pack) -> Res<()> {
@@ -255,14 +266,21 @@ fn check_manifest(pack: &mut Pack) -> Res<()> {
         return Ok(()); // 手工打的包没有清单也认，只要里面有 events.sqlite
     };
     let mut text = String::new();
-    entry.read_to_string(&mut text).map_err(|_| DomainError::bad("压缩包里的 manifest.json 无法读取"))?;
-    let v: Value = serde_json::from_str(&text).map_err(|_| DomainError::bad("压缩包里的 manifest.json 格式错误"))?;
+    entry
+        .read_to_string(&mut text)
+        .map_err(|_| DomainError::bad("压缩包里的 manifest.json 无法读取"))?;
+    let v: Value = serde_json::from_str(&text)
+        .map_err(|_| DomainError::bad("压缩包里的 manifest.json 格式错误"))?;
     if let Some(app) = v.get("app").and_then(|a| a.as_str()) {
         if app != APP_ID {
             return Err(DomainError::bad("这不是画师串工作台导出的完整包"));
         }
     }
-    if v.get("format").and_then(|f| f.as_i64()).unwrap_or(PACK_FORMAT) > PACK_FORMAT {
+    if v.get("format")
+        .and_then(|f| f.as_i64())
+        .unwrap_or(PACK_FORMAT)
+        > PACK_FORMAT
+    {
         return Err(DomainError::bad("这个完整包来自更新的版本，请先升级软件"));
     }
     Ok(())
@@ -308,7 +326,11 @@ struct BlobStats {
 
 fn extract_blobs(pack: &mut Pack, blobs: &BlobStore, progress: Progress) -> Res<BlobStats> {
     let total = pack.file_names().filter(|n| pack_blob(n).is_some()).count() as u64;
-    let mut stats = BlobStats { added: 0, skipped: 0, corrupt: 0 };
+    let mut stats = BlobStats {
+        added: 0,
+        skipped: 0,
+        corrupt: 0,
+    };
     let mut done = 0u64;
     let mut buf = vec![0u8; 1 << 20];
     for i in 0..pack.len() {
@@ -349,7 +371,10 @@ fn extract_blobs(pack: &mut Pack, blobs: &BlobStore, progress: Progress) -> Res<
                     PackBlob::Slot(slot, _) => {
                         let dir = blobs.slot_dir(slot);
                         std::fs::create_dir_all(&dir)?;
-                        dir.join(format!("{hash}.{}", file_ext(&super::blobs::read_head(&tmp))))
+                        dir.join(format!(
+                            "{hash}.{}",
+                            file_ext(&super::blobs::read_head(&tmp))
+                        ))
                     }
                 };
                 if let Some(parent) = dest.parent() {
@@ -386,11 +411,15 @@ fn check_events_table(stage: &Path) -> Res<()> {
         .flatten()
         .collect();
     if cols.is_empty() {
-        return Err(DomainError::bad("这不是画师串工作台的数据库（缺少 events 表）"));
+        return Err(DomainError::bad(
+            "这不是画师串工作台的数据库（缺少 events 表）",
+        ));
     }
     for name in EVENT_COLUMNS {
         if !cols.iter().any(|c| c == name) {
-            return Err(DomainError::bad(format!("数据库的 events 表缺少字段 {name}，不是兼容的版本")));
+            return Err(DomainError::bad(format!(
+                "数据库的 events 表缺少字段 {name}，不是兼容的版本"
+            )));
         }
     }
     Ok(())
@@ -417,7 +446,9 @@ pub fn import_db(
     let is_sqlite = n >= 16 && &head == SQLITE_MAGIC;
     let is_pack = n >= 4 && &head[..4] == ZIP_MAGIC;
     if !is_sqlite && !is_pack {
-        return Err(DomainError::bad("无法识别这个文件：它既不是 SQLite 数据库，也不是导出的完整包"));
+        return Err(DomainError::bad(
+            "无法识别这个文件：它既不是 SQLite 数据库，也不是导出的完整包",
+        ));
     }
 
     // 1. 取出数据库到暂存位置（不改动用户的原文件）。
@@ -455,7 +486,9 @@ pub fn import_db(
             .and_then(|a| a.first())
             .and_then(|v| v.as_str())
             .unwrap_or("未知错误");
-        return Err(DomainError::bad(format!("事件哈希链校验失败，已拒绝导入（{first}）")));
+        return Err(DomainError::bad(format!(
+            "事件哈希链校验失败，已拒绝导入（{first}）"
+        )));
     }
     drop(staged);
     progress("database", 1, 1);
@@ -468,7 +501,9 @@ pub fn import_db(
     drop(pack);
 
     // 4. 先把现有数据库备份一份，导入出问题时可以拿回来。
-    let backup_path = data_dir.join("backups").join(format!("events-before-import-{}.sqlite", now_ms()));
+    let backup_path = data_dir
+        .join("backups")
+        .join(format!("events-before-import-{}.sqlite", now_ms()));
     let backup = export_db(store, &backup_path)?;
 
     // 5. 在写锁内用导入的事件整体替换。
@@ -481,7 +516,9 @@ pub fn import_db(
             conn.execute_batch("BEGIN IMMEDIATE")?;
             conn.execute_batch("DELETE FROM events")?;
             conn.execute_batch("DELETE FROM sqlite_sequence WHERE name = 'events'")?;
-            conn.execute_batch(&format!("INSERT INTO events ({cols}) SELECT {cols} FROM imp.events ORDER BY global_seq"))?;
+            conn.execute_batch(&format!(
+                "INSERT INTO events ({cols}) SELECT {cols} FROM imp.events ORDER BY global_seq"
+            ))?;
             conn.execute_batch("COMMIT")?;
             Ok(())
         })();

@@ -29,7 +29,10 @@ pub fn strip_artist(tag: &str) -> String {
 }
 
 pub fn tag_key(tag: &str) -> String {
-    WS_UNDERSCORE.replace_all(&strip_artist(tag).to_lowercase(), " ").trim().to_string()
+    WS_UNDERSCORE
+        .replace_all(&strip_artist(tag).to_lowercase(), " ")
+        .trim()
+        .to_string()
 }
 
 /// 图库元数据里的画师列表去重后的 key；不是数组时返回空。
@@ -65,8 +68,15 @@ pub fn extract_artists(text: &str) -> (Vec<String>, String) {
             continue;
         }
         seen.push(key);
-        let weight = caps.get(1).map(|m| m.as_str().trim().to_string()).unwrap_or_default();
-        chunks.push(if weight.is_empty() { format!("artist:{name}") } else { format!("{weight}artist:{name}::") });
+        let weight = caps
+            .get(1)
+            .map(|m| m.as_str().trim().to_string())
+            .unwrap_or_default();
+        chunks.push(if weight.is_empty() {
+            format!("artist:{name}")
+        } else {
+            format!("{weight}artist:{name}::")
+        });
         names.push(name);
     }
     (names, chunks.join(", "))
@@ -93,11 +103,15 @@ fn kind_of(album: &Value) -> Option<&'static str> {
 }
 
 pub fn is_single_artist_album(album: Option<&Value>) -> bool {
-    album.map(|a| kind_of(a) == Some(SINGLE_ARTIST_KIND)).unwrap_or(false)
+    album
+        .map(|a| kind_of(a) == Some(SINGLE_ARTIST_KIND))
+        .unwrap_or(false)
 }
 
 pub fn is_test_set_album(album: Option<&Value>) -> bool {
-    album.map(|a| kind_of(a) == Some(TEST_SET_KIND)).unwrap_or(false)
+    album
+        .map(|a| kind_of(a) == Some(TEST_SET_KIND))
+        .unwrap_or(false)
 }
 
 #[cfg(test)]
@@ -112,7 +126,8 @@ mod tests {
 
     #[test]
     fn extracts_weighted_and_bracketed() {
-        let (names, line) = extract_artists("1girl, 1.4::artist:foo bar::, [artist:baz], artist:qux, red");
+        let (names, line) =
+            extract_artists("1girl, 1.4::artist:foo bar::, [artist:baz], artist:qux, red");
         assert_eq!(names, vec!["foo bar", "baz", "qux"]);
         assert_eq!(line, "1.4::artist:foo bar::, artist:baz, artist:qux");
     }

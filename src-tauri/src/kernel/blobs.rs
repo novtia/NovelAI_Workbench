@@ -61,7 +61,9 @@ impl Bucket {
     pub fn for_job(source: &str, client: &Value) -> Bucket {
         match source {
             "lottery" => Bucket::Lottery,
-            "gallery" => gallery_target(client).map(Bucket::Favorites).unwrap_or(Bucket::Studio),
+            "gallery" => gallery_target(client)
+                .map(Bucket::Favorites)
+                .unwrap_or(Bucket::Studio),
             _ => Bucket::Studio,
         }
     }
@@ -86,12 +88,22 @@ fn valid_album_id(id: &str) -> bool {
         && id.len() <= 128
         && id != "."
         && id != ".."
-        && !id.chars().any(|c| matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') || c.is_control())
+        && !id.chars().any(|c| {
+            matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') || c.is_control()
+        })
 }
 
 /// 相册 id 当目录名；正常的 id 只有字母数字和 `-`、`_`，原样使用。
 fn album_dir_name(id: &str) -> String {
-    id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect()
+    id.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
 }
 
 /// 桶里的一个位置：原图或缩略图。
@@ -103,11 +115,17 @@ pub struct Slot {
 
 impl Slot {
     pub fn image(bucket: Bucket) -> Slot {
-        Slot { bucket, thumb: false }
+        Slot {
+            bucket,
+            thumb: false,
+        }
     }
 
     pub fn thumb(bucket: Bucket) -> Slot {
-        Slot { bucket, thumb: true }
+        Slot {
+            bucket,
+            thumb: true,
+        }
     }
 
     /// `studio`、`studio/thumbs`、`favorites/<id>/thumbs` ……
@@ -163,7 +181,9 @@ fn hash_of_name(name: &str) -> Option<String> {
 
 pub(crate) fn read_head(path: &Path) -> Vec<u8> {
     let mut head = vec![0u8; 16];
-    let n = std::fs::File::open(path).and_then(|mut f| f.read(&mut head)).unwrap_or(0);
+    let n = std::fs::File::open(path)
+        .and_then(|mut f| f.read(&mut head))
+        .unwrap_or(0);
     head.truncate(n);
     head
 }
@@ -195,7 +215,10 @@ impl BlobStore {
     }
 
     pub fn set_thumb_provider(&self, provider: ThumbProvider) {
-        *self.thumb_provider.write().unwrap_or_else(|e| e.into_inner()) = Some(provider);
+        *self
+            .thumb_provider
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = Some(provider);
     }
 
     pub fn thumb(&self, data: &[u8]) -> Option<Vec<u8>> {
@@ -254,13 +277,22 @@ impl BlobStore {
     pub fn put_in(&self, slot: &Slot, data: &[u8]) -> Res<String> {
         let digest = sha256_bytes(data);
         if !self.has(slot, &digest) {
-            write_atomic(&self.slot_dir(slot), &format!("{digest}.{}", file_ext(data)), data)?;
+            write_atomic(
+                &self.slot_dir(slot),
+                &format!("{digest}.{}", file_ext(data)),
+                data,
+            )?;
         }
         Ok(digest)
     }
 
     /// 原图 + 缩略图一起写入同一个桶；`thumb` 为 None 时自己生成（解码失败就没有缩略图，返回空串）。
-    pub fn put_image(&self, bucket: &Bucket, data: &[u8], thumb: Option<&[u8]>) -> Res<(String, String)> {
+    pub fn put_image(
+        &self,
+        bucket: &Bucket,
+        data: &[u8],
+        thumb: Option<&[u8]>,
+    ) -> Res<(String, String)> {
         let digest = self.put(bucket, data)?;
         let thumb_hash = match thumb.filter(|t| !t.is_empty()) {
             Some(t) => self.put_thumb(bucket, t)?,
@@ -277,9 +309,15 @@ impl BlobStore {
         if self.has(slot, hash) {
             return Ok(true);
         }
-        let Some(src) = self.find(hash) else { return Ok(false) };
+        let Some(src) = self.find(hash) else {
+            return Ok(false);
+        };
         let data = std::fs::read(&src)?;
-        write_atomic(&self.slot_dir(slot), &format!("{}.{}", hash.to_lowercase(), file_ext(&data)), &data)?;
+        write_atomic(
+            &self.slot_dir(slot),
+            &format!("{}.{}", hash.to_lowercase(), file_ext(&data)),
+            &data,
+        )?;
         Ok(true)
     }
 
@@ -300,10 +338,18 @@ impl BlobStore {
         }
         let dir = self.slot_dir(slot);
         std::fs::create_dir_all(&dir)?;
-        let dest = dir.join(format!("{}.{}", hash.to_lowercase(), file_ext(&read_head(&src))));
+        let dest = dir.join(format!(
+            "{}.{}",
+            hash.to_lowercase(),
+            file_ext(&read_head(&src))
+        ));
         if std::fs::rename(&src, &dest).is_err() {
             let data = std::fs::read(&src)?;
-            write_atomic(&dir, &dest.file_name().unwrap_or_default().to_string_lossy(), &data)?;
+            write_atomic(
+                &dir,
+                &dest.file_name().unwrap_or_default().to_string_lossy(),
+                &data,
+            )?;
             let _ = std::fs::remove_file(&src);
         }
         self.forget(hash);
@@ -339,7 +385,10 @@ impl BlobStore {
     }
 
     fn forget(&self, hash: &str) {
-        self.located.lock().unwrap_or_else(|e| e.into_inner()).remove(&hash.to_lowercase());
+        self.located
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&hash.to_lowercase());
     }
 
     /// 按 studio、lottery、inputs、各收藏夹、旧目录的顺序找这张图（原图和缩略图都算）。
@@ -348,7 +397,13 @@ impl BlobStore {
         if !is_hash64(&hash) {
             return None;
         }
-        if let Some(p) = self.located.lock().unwrap_or_else(|e| e.into_inner()).get(&hash).cloned() {
+        if let Some(p) = self
+            .located
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&hash)
+            .cloned()
+        {
             if p.is_file() {
                 return Some(p);
             }
@@ -386,8 +441,13 @@ impl BlobStore {
     }
 
     fn album_dirs(&self) -> Vec<PathBuf> {
-        let Ok(rd) = std::fs::read_dir(self.root.join("favorites")) else { return vec![] };
-        rd.flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect()
+        let Ok(rd) = std::fs::read_dir(self.root.join("favorites")) else {
+            return vec![];
+        };
+        rd.flatten()
+            .map(|e| e.path())
+            .filter(|p| p.is_dir())
+            .collect()
     }
 
     pub fn get(&self, hash: &str) -> Option<Vec<u8>> {
@@ -419,7 +479,11 @@ impl BlobStore {
             return Ok(false);
         }
         if !self.has(slot, &hash) {
-            write_atomic(&self.slot_dir(slot), &format!("{hash}.{}", file_ext(data)), data)?;
+            write_atomic(
+                &self.slot_dir(slot),
+                &format!("{hash}.{}", file_ext(data)),
+                data,
+            )?;
         }
         Ok(true)
     }
@@ -459,12 +523,21 @@ impl BlobStore {
         }
         for bucket in buckets {
             for slot in [Slot::image(bucket.clone()), Slot::thumb(bucket)] {
-                let Ok(rd) = std::fs::read_dir(self.slot_dir(&slot)) else { continue };
+                let Ok(rd) = std::fs::read_dir(self.slot_dir(&slot)) else {
+                    continue;
+                };
                 for e in rd.flatten() {
-                    let Some(hash) = hash_of_name(&e.file_name().to_string_lossy()) else { continue };
+                    let Some(hash) = hash_of_name(&e.file_name().to_string_lossy()) else {
+                        continue;
+                    };
                     let Ok(meta) = e.metadata() else { continue };
                     if meta.is_file() {
-                        out.push(BlobFile { slot: Some(slot.clone()), hash, path: e.path(), size: meta.len() });
+                        out.push(BlobFile {
+                            slot: Some(slot.clone()),
+                            hash,
+                            path: e.path(),
+                            size: meta.len(),
+                        });
                     }
                 }
             }
@@ -475,9 +548,13 @@ impl BlobStore {
     /// 旧扁平目录里的全部文件。
     pub fn legacy_files(&self) -> Vec<BlobFile> {
         let mut out = Vec::new();
-        let Ok(top) = std::fs::read_dir(&self.legacy) else { return out };
+        let Ok(top) = std::fs::read_dir(&self.legacy) else {
+            return out;
+        };
         for dir in top.flatten() {
-            let Ok(rd) = std::fs::read_dir(dir.path()) else { continue };
+            let Ok(rd) = std::fs::read_dir(dir.path()) else {
+                continue;
+            };
             for e in rd.flatten() {
                 let name = e.file_name().to_string_lossy().to_string();
                 if !is_hash64(&name) {
@@ -485,7 +562,12 @@ impl BlobStore {
                 }
                 let Ok(meta) = e.metadata() else { continue };
                 if meta.is_file() {
-                    out.push(BlobFile { slot: None, hash: name, path: e.path(), size: meta.len() });
+                    out.push(BlobFile {
+                        slot: None,
+                        hash: name,
+                        path: e.path(),
+                        size: meta.len(),
+                    });
                 }
             }
         }
@@ -508,7 +590,9 @@ impl BlobStore {
 }
 
 fn probe(dir: &Path, hash: &str) -> Option<PathBuf> {
-    EXTS.iter().map(|ext| dir.join(format!("{hash}.{ext}"))).find(|p| p.is_file())
+    EXTS.iter()
+        .map(|ext| dir.join(format!("{hash}.{ext}")))
+        .find(|p| p.is_file())
 }
 
 /// 先写临时文件再改名，避免崩溃时留下半截文件（哈希对不上）。
@@ -578,10 +662,14 @@ pub fn make_thumb(data: &[u8], max_size: u32, quality: u32) -> Option<Vec<u8>> {
     let q = quality as f32;
     let out = if img.color().has_alpha() {
         let rgba = img.to_rgba8();
-        webp::Encoder::from_rgba(rgba.as_raw(), tw, th).encode(q).to_vec()
+        webp::Encoder::from_rgba(rgba.as_raw(), tw, th)
+            .encode(q)
+            .to_vec()
     } else {
         let rgb = img.to_rgb8();
-        webp::Encoder::from_rgb(rgb.as_raw(), tw, th).encode(q).to_vec()
+        webp::Encoder::from_rgb(rgb.as_raw(), tw, th)
+            .encode(q)
+            .to_vec()
     };
     Some(out)
 }
@@ -600,7 +688,12 @@ mod tests {
             Slot::thumb(Bucket::Favorites("testset-1".into())),
             Slot::image(Bucket::Favorites("thumbs".into())),
         ] {
-            assert_eq!(Slot::parse(&slot.label()), Some(slot.clone()), "{}", slot.label());
+            assert_eq!(
+                Slot::parse(&slot.label()),
+                Some(slot.clone()),
+                "{}",
+                slot.label()
+            );
         }
         assert_eq!(Slot::parse("favorites/../x"), None);
         assert_eq!(Slot::parse("favorites/"), None);
@@ -610,9 +703,18 @@ mod tests {
     #[test]
     fn job_bucket_follows_source() {
         let client = serde_json::json!({"testSetId": "testset-a", "targetAlbumId": "single"});
-        assert_eq!(Bucket::for_job("gallery", &client), Bucket::Favorites("testset-a".into()));
-        assert_eq!(Bucket::for_job("gallery", &serde_json::json!({"targetAlbumId": "single"})), Bucket::Favorites("single".into()));
-        assert_eq!(Bucket::for_job("gallery", &serde_json::json!({})), Bucket::Studio);
+        assert_eq!(
+            Bucket::for_job("gallery", &client),
+            Bucket::Favorites("testset-a".into())
+        );
+        assert_eq!(
+            Bucket::for_job("gallery", &serde_json::json!({"targetAlbumId": "single"})),
+            Bucket::Favorites("single".into())
+        );
+        assert_eq!(
+            Bucket::for_job("gallery", &serde_json::json!({})),
+            Bucket::Studio
+        );
         assert_eq!(Bucket::for_job("lottery", &client), Bucket::Lottery);
         assert_eq!(Bucket::for_job("studio", &client), Bucket::Studio);
     }
@@ -642,7 +744,9 @@ mod tests {
         std::fs::create_dir_all(legacy.parent().unwrap()).unwrap();
         std::fs::write(&legacy, &old).unwrap();
         assert_eq!(store.get(&old_hash).unwrap(), old);
-        assert!(store.move_legacy(&Slot::image(Bucket::Lottery), &old_hash).unwrap());
+        assert!(store
+            .move_legacy(&Slot::image(Bucket::Lottery), &old_hash)
+            .unwrap());
         assert!(!legacy.exists());
         assert!(store.has(&Slot::image(Bucket::Lottery), &old_hash));
         store.prune_dirs();

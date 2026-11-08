@@ -1,4 +1,5 @@
 //! 生图任务执行：tokio 任务池，实际并发数由设置 `generation.concurrency` 动态限制。
+//! 同一串队列里，从第二张起在拿到名额之后、请求 NovelAI 之前随机等一会儿。
 
 use super::application::GenerationService;
 use super::domain::GenerationJob;
@@ -9,9 +10,9 @@ use crate::kernel::clock::now_ms;
 use crate::util::{get, py_str, to_int, truthy};
 use serde_json::{json, Value};
 use std::future::Future;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{mpsc::UnboundedReceiver, Notify};
 
 pub const MAX_WORKERS: usize = 3;
@@ -47,7 +48,9 @@ pub fn progress_text(sample: i64, step: &Value, steps: i64, n_samples: i64) -> S
 }
 
 async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> RunRes<T> {
-    tokio::task::spawn_blocking(f).await.map_err(|e| RunErr::Other(format!("任务异常：{e}")))
+    tokio::task::spawn_blocking(f)
+        .await
+        .map_err(|e| RunErr::Other(format!("任务异常：{e}")))
 }
 
 /// 局部重绘的接口结果是整张新图，蒙版外面要贴回原图，和官网一样。
@@ -57,22 +60,36 @@ async fn infill_png(svc: &Arc<GenerationService>, body: &Value, png: Vec<u8>) ->
     }
     let hash = |key: &str| {
         let v = get(body, key);
-        if truthy(v) { py_str(v) } else { String::new() }
+        if truthy(v) {
+            py_str(v)
+        } else {
+            String::new()
+        }
     };
     let original = svc.k.blobs.get(&hash("imageHash"));
     let mask = svc.k.blobs.get(&hash("maskHash"));
-    let (Some(original), Some(mask)) = (original.filter(|d| !d.is_empty()), mask.filter(|d| !d.is_empty())) else {
+    let (Some(original), Some(mask)) = (
+        original.filter(|d| !d.is_empty()),
+        mask.filter(|d| !d.is_empty()),
+    ) else {
         return Ok(png);
     };
     Ok(blocking(move || composite_infill(&original, &png, &mask)).await??)
 }
 
 async fn fetch_sub(svc: &Arc<GenerationService>) -> Value {
-    svc.gateway.fetch_subscription(None).await.unwrap_or(Value::Null)
+    svc.gateway
+        .fetch_subscription(None)
+        .await
+        .unwrap_or(Value::Null)
 }
 
 fn text_of(v: &Value) -> String {
-    if truthy(v) { py_str(v) } else { String::new() }
+    if truthy(v) {
+        py_str(v)
+    } else {
+        String::new()
+    }
 }
 
 /// 专用放大：不经过扩散模型，直接调 /ai/upscale。
@@ -95,8 +112,15 @@ async fn run_upscale(
     }
     let factor = upscale_factor(body);
     svc.emit(json!({"type": "preview", "id": job_id, "text": "放大中", "sample": 0}));
-    let inherit = if get(body, "inherit").is_object() { get(body, "inherit").clone() } else { json!({}) };
-    let out = svc.gateway.upscale_image(&png, get(&inherit, "model")).await?;
+    let inherit = if get(body, "inherit").is_object() {
+        get(body, "inherit").clone()
+    } else {
+        json!({})
+    };
+    let out = svc
+        .gateway
+        .upscale_image(&png, get(&inherit, "model"))
+        .await?;
     if svc.cancelled(job_id) {
         return Err(RunErr::Interrupted);
     }
@@ -110,9 +134,16 @@ async fn run_upscale(
     meta.insert("height".into(), get(&rec, "height").clone());
     let meta = Value::Object(meta);
     let items = vec![rec];
-    svc.bind_test_set_items(&job.source, &Value::Object(job.client.clone()), &items, &meta);
+    svc.bind_test_set_items(
+        &job.source,
+        &Value::Object(job.client.clone()),
+        &items,
+        &meta,
+    );
     let sub = fetch_sub(svc).await;
-    svc.mutate_job(job_id, |j| j.complete(Value::Array(items), meta, sub, now_ms()));
+    svc.mutate_job(job_id, |j| {
+        j.complete(Value::Array(items), meta, sub, now_ms())
+    });
     Ok(())
 }
 
@@ -126,7 +157,11 @@ async fn post_upscale(
 ) -> RunRes<Vec<Value>> {
     let factor = {
         let v = get(meta, "postUpscale");
-        if truthy(v) { to_int(v).unwrap_or(0) } else { 0 }
+        if truthy(v) {
+            to_int(v).unwrap_or(0)
+        } else {
+            0
+        }
     };
     if factor == 0 {
         return Ok(items);
@@ -167,8 +202,15 @@ async fn finish(
 ) -> RunRes<()> {
     let items = post_upscale(svc, job_id, items, &mut meta, bucket).await?;
     let sub = fetch_sub(svc).await;
-    svc.bind_test_set_items(&job.source, &Value::Object(job.client.clone()), &items, &meta);
-    svc.mutate_job(job_id, |j| j.complete(Value::Array(items), meta, sub, now_ms()));
+    svc.bind_test_set_items(
+        &job.source,
+        &Value::Object(job.client.clone()),
+        &items,
+        &meta,
+    );
+    svc.mutate_job(job_id, |j| {
+        j.complete(Value::Array(items), meta, sub, now_ms())
+    });
     Ok(())
 }
 
@@ -181,7 +223,11 @@ async fn run_inner(
     n_samples: i64,
     bucket: &Bucket,
 ) -> RunRes<()> {
-    let kind = if truthy(get(body, "kind")) { py_str(get(body, "kind")) } else { "generate".into() };
+    let kind = if truthy(get(body, "kind")) {
+        py_str(get(body, "kind"))
+    } else {
+        "generate".into()
+    };
     if kind == "upscale" {
         return run_upscale(svc, job_id, job, body, bucket).await;
     }
@@ -240,10 +286,17 @@ async fn run_inner(
             let et = text_of(get(&chunk, "event_type"));
             let sample = {
                 let v = get(&chunk, "samp_ix");
-                if truthy(v) { to_int(v).unwrap_or(0) } else { 0 }
+                if truthy(v) {
+                    to_int(v).unwrap_or(0)
+                } else {
+                    0
+                }
             };
             let image = get(&chunk, "image").as_str().unwrap_or("").to_string();
-            if et == "intermediate" && !image.is_empty() && truthy(&svc.cfg("generation", "streamPreview", json!(true))) {
+            if et == "intermediate"
+                && !image.is_empty()
+                && truthy(&svc.cfg("generation", "streamPreview", json!(true)))
+            {
                 let step = get(&chunk, "step_ix").clone();
                 let text = progress_text(sample, &step, steps, n_samples);
                 let raw = decode_image_b64(&image)?;
@@ -287,7 +340,11 @@ pub async fn run_job(svc: Arc<GenerationService>, job_id: String) {
     let progress = Value::Object(job.progress.clone());
     let int_of = |key: &str, default: i64| {
         let v = get(&progress, key);
-        if truthy(v) { to_int(v).unwrap_or(default) } else { default }
+        if truthy(v) {
+            to_int(v).unwrap_or(default)
+        } else {
+            default
+        }
     };
     let steps = int_of("steps", 28);
     let n_samples = int_of("nSamples", 1);
@@ -310,7 +367,11 @@ pub async fn run_job(svc: Arc<GenerationService>, job_id: String) {
             if svc.cancelled(&job_id) {
                 svc.mutate_job(&job_id, |j| j.cancel(now_ms()));
             } else {
-                let msg = if msg.is_empty() { "生图失败".to_string() } else { msg };
+                let msg = if msg.is_empty() {
+                    "生图失败".to_string()
+                } else {
+                    msg
+                };
                 svc.mutate_job(&job_id, |j| j.fail(&msg, now_ms()));
             }
         }
@@ -320,9 +381,16 @@ pub async fn run_job(svc: Arc<GenerationService>, job_id: String) {
     svc.clear_previews(&job_id);
 }
 
+/// 还没有抽过间隔。真正的等待最长 180 秒，用不到这个值。
+const NO_LAST_MS: u64 = u64::MAX;
+/// 队列全部结束后再过这么久，下一张手动生成不再额外等待。
+const QUEUE_IDLE: Duration = Duration::from_secs(2);
+
 struct Gate {
-    running: AtomicUsize,
+    running: Arc<AtomicUsize>,
     notify: Notify,
+    /// 并发名额回到 0 时调用。参数是同一份计数，空闲计时到期后再读一次。
+    on_zero: Arc<dyn Fn(Arc<AtomicUsize>) + Send + Sync>,
 }
 
 /// 占着的并发名额。任务正常结束或 panic 都要还回去，否则后面的任务再也排不上。
@@ -330,13 +398,126 @@ struct Permit(Arc<Gate>);
 
 impl Drop for Permit {
     fn drop(&mut self) {
-        self.0.running.fetch_sub(1, Ordering::SeqCst);
+        let prev = self.0.running.fetch_sub(1, Ordering::SeqCst);
         self.0.notify.notify_one();
+        if prev == 1 {
+            (self.0.on_zero)(Arc::clone(&self.0.running));
+        }
     }
 }
 
+/// 这一串队列的间隔状态。只记住上一次等了多少毫秒，用来避开重复，不记住下一次该等多久。
+struct Pace {
+    burst: AtomicBool,
+    gen: AtomicU64,
+    last_ms: AtomicU64,
+    rng: AtomicU64,
+}
+
+impl Pace {
+    fn new() -> Self {
+        Self {
+            burst: AtomicBool::new(false),
+            gen: AtomicU64::new(0),
+            last_ms: AtomicU64::new(NO_LAST_MS),
+            rng: AtomicU64::new(0),
+        }
+    }
+
+    /// 在当前上下限里当场抽一个毫秒数。关闭时返回 `None`。
+    fn draw(&self, min_sec: i64, max_sec: i64) -> Option<u64> {
+        let (lo, hi) = delay_bounds(min_sec, max_sec)?;
+        let last_raw = self.last_ms.load(Ordering::Relaxed);
+        let last = if last_raw == NO_LAST_MS {
+            None
+        } else {
+            Some(last_raw)
+        };
+        let ms = different_delay(lo, hi, last, || self.next_u64());
+        self.last_ms.store(ms, Ordering::Relaxed);
+        Some(ms)
+    }
+
+    fn next_u64(&self) -> u64 {
+        let mut state = self.rng.load(Ordering::Relaxed);
+        loop {
+            if state == 0 {
+                state = seed_rng();
+            }
+            let mut next = state;
+            next ^= next >> 12;
+            next ^= next << 25;
+            next ^= next >> 27;
+            if next == 0 {
+                next = 0x9E37_79B9_7F4A_7C15;
+            }
+            match self
+                .rng
+                .compare_exchange_weak(state, next, Ordering::Relaxed, Ordering::Relaxed)
+            {
+                Ok(_) => return next.wrapping_mul(0x2545_F491_4F6C_DD1D),
+                Err(cur) => state = cur,
+            }
+        }
+    }
+}
+
+fn seed_rng() -> u64 {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0xA076_1D64_78BD_642F);
+    let mixed = nanos ^ 0x9E37_79B9_7F4A_7C15;
+    if mixed == 0 {
+        0xA076_1D64_78BD_642F
+    } else {
+        mixed
+    }
+}
+
+/// 上下限都是 0 时关闭。下限大于上限则对调。返回闭区间的毫秒数。
+fn delay_bounds(min_sec: i64, max_sec: i64) -> Option<(u64, u64)> {
+    let mut lo = min_sec.clamp(0, 120);
+    let mut hi = max_sec.clamp(0, 180);
+    if lo > hi {
+        std::mem::swap(&mut lo, &mut hi);
+    }
+    if lo == 0 && hi == 0 {
+        return None;
+    }
+    Some((lo as u64 * 1000, hi as u64 * 1000))
+}
+
+/// 在闭区间里均匀抽一个毫秒数。区间里还有别的长度时，不能和上一次相同。
+fn different_delay(lo: u64, hi: u64, last: Option<u64>, mut roll: impl FnMut() -> u64) -> u64 {
+    if lo >= hi {
+        return lo;
+    }
+    let span = hi - lo + 1;
+    for _ in 0..8 {
+        let ms = lo + roll() % span;
+        if Some(ms) != last {
+            return ms;
+        }
+    }
+    let prev = last.unwrap_or(lo);
+    if prev >= hi {
+        lo
+    } else {
+        prev + 1
+    }
+}
+
+/// 空闲计时到期时，只有代数没变并且没有任务占着名额，才结束这一串。
+fn should_end_burst(gen_now: u64, gen_at_schedule: u64, running: usize) -> bool {
+    gen_now == gen_at_schedule && running == 0
+}
+
 fn concurrency_limit(svc: &GenerationService) -> usize {
-    let n = svc.settings.value_i64("generation", "concurrency", 1).max(1) as usize;
+    let n = svc
+        .settings
+        .value_i64("generation", "concurrency", 1)
+        .max(1) as usize;
     n.clamp(1, MAX_WORKERS)
 }
 
@@ -346,25 +527,83 @@ async fn acquire_slot(gate: &Gate, limit: &impl Fn() -> usize) {
         let notified = std::pin::pin!(gate.notify.notified());
         let max = limit().clamp(1, MAX_WORKERS);
         let cur = gate.running.load(Ordering::SeqCst);
-        if cur < max && gate.running.compare_exchange(cur, cur + 1, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
+        if cur < max
+            && gate
+                .running
+                .compare_exchange(cur, cur + 1, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+        {
             return;
         }
         let _ = tokio::time::timeout(Duration::from_secs(1), notified).await;
     }
 }
 
+/// 每 200ms 看一次取消。返回 `false` 表示等待被取消，调用方不要再请求 NovelAI。
+async fn sleep_unless_cancelled(svc: &GenerationService, job_id: &str, total: Duration) -> bool {
+    let step = Duration::from_millis(200);
+    let start = tokio::time::Instant::now();
+    loop {
+        if svc.cancelled(job_id) {
+            return false;
+        }
+        let left = total.saturating_sub(start.elapsed());
+        if left.is_zero() {
+            return !svc.cancelled(job_id);
+        }
+        tokio::time::sleep(left.min(step)).await;
+    }
+}
+
+/// 这一串里已经发过请求时，当场抽一个新间隔再等。第一张，以及空闲约 2 秒后的下一张，直接过。
+async fn wait_turn(svc: &GenerationService, pace: &Pace, job_id: &str) -> bool {
+    if svc.cancelled(job_id) {
+        return false;
+    }
+    if pace.burst.load(Ordering::SeqCst) {
+        let min_sec = svc.settings.value_i64("generation", "queueDelayMinSec", 8);
+        let max_sec = svc.settings.value_i64("generation", "queueDelayMaxSec", 30);
+        if let Some(ms) = pace.draw(min_sec, max_sec) {
+            if ms > 0 {
+                svc.emit(json!({"type": "preview", "id": job_id, "text": "等待中"}));
+                if !sleep_unless_cancelled(svc, job_id, Duration::from_millis(ms)).await {
+                    return false;
+                }
+            }
+        }
+    }
+    pace.burst.store(true, Ordering::SeqCst);
+    true
+}
+
 /// 只有这一个消费者按入队顺序取任务：拿到名额才开始下一条。
 /// 以前每个空闲 worker 都会先把任务抽走再抢名额，并发为 1 时后抽到的任务可能先跑，先抽到的一直停在「排队中」。
-async fn dispatch_queue<L, F, Fut>(mut rx: UnboundedReceiver<String>, limit: L, run: F)
-where
+/// `before` 在占着名额时执行，返回 `false` 就放弃这一张、不再调用 `run`。
+async fn dispatch_queue<L, B, BFut, F, Fut>(
+    mut rx: UnboundedReceiver<String>,
+    limit: L,
+    mut before: B,
+    run: F,
+    on_zero: Arc<dyn Fn(Arc<AtomicUsize>) + Send + Sync>,
+) where
     L: Fn() -> usize + Send,
+    B: FnMut(String) -> BFut + Send,
+    BFut: Future<Output = bool> + Send,
     F: Fn(String) -> Fut + Send,
     Fut: Future<Output = ()> + Send + 'static,
 {
-    let gate = Arc::new(Gate { running: AtomicUsize::new(0), notify: Notify::new() });
+    let gate = Arc::new(Gate {
+        running: Arc::new(AtomicUsize::new(0)),
+        notify: Notify::new(),
+        on_zero,
+    });
     while let Some(job_id) = rx.recv().await {
         acquire_slot(&gate, &limit).await;
         let permit = Permit(gate.clone());
+        if !before(job_id.clone()).await {
+            drop(permit);
+            continue;
+        }
         let task = run(job_id);
         tokio::spawn(async move {
             let _permit = permit;
@@ -374,18 +613,49 @@ where
 }
 
 /// 实际并发数由设置 `generation.concurrency` 动态限制（默认 1，最多 MAX_WORKERS）。
+/// 队列间隔由 `generation.queueDelayMinSec` / `queueDelayMaxSec` 决定，每次当场重抽。
 pub fn start_workers(svc: Arc<GenerationService>) {
-    let Some(rx) = svc.take_receiver() else { return };
+    let Some(rx) = svc.take_receiver() else {
+        return;
+    };
     if let Err(e) = svc.resume_pending() {
         eprintln!("[generation] 恢复排队任务失败：{}", e.message);
     }
     let svc_limit = svc.clone();
     let svc_run = svc.clone();
+    let svc_wait = svc.clone();
+    let pace = Arc::new(Pace::new());
+    let pace_wait = pace.clone();
+    let pace_idle = pace.clone();
+    let on_zero: Arc<dyn Fn(Arc<AtomicUsize>) + Send + Sync> = Arc::new(move |running| {
+        let gen = pace_idle.gen.fetch_add(1, Ordering::SeqCst) + 1;
+        let pace = pace_idle.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(QUEUE_IDLE).await;
+            if should_end_burst(
+                pace.gen.load(Ordering::SeqCst),
+                gen,
+                running.load(Ordering::SeqCst),
+            ) {
+                pace.burst.store(false, Ordering::SeqCst);
+            }
+        });
+    });
     tauri::async_runtime::spawn(async move {
-        dispatch_queue(rx, move || concurrency_limit(&svc_limit), move |job_id| {
-            let svc_run = svc_run.clone();
-            async move { run_job(svc_run, job_id).await }
-        })
+        dispatch_queue(
+            rx,
+            move || concurrency_limit(&svc_limit),
+            move |job_id| {
+                let svc_wait = svc_wait.clone();
+                let pace_wait = pace_wait.clone();
+                async move { wait_turn(&svc_wait, &pace_wait, &job_id).await }
+            },
+            move |job_id| {
+                let svc_run = svc_run.clone();
+                async move { run_job(svc_run, job_id).await }
+            },
+            on_zero,
+        )
         .await;
     });
 }
@@ -395,6 +665,10 @@ mod tests {
     use super::*;
     use std::sync::Mutex as StdMutex;
     use tokio::sync::{mpsc, Mutex as AsyncMutex};
+
+    fn noop_zero() -> Arc<dyn Fn(Arc<AtomicUsize>) + Send + Sync> {
+        Arc::new(|_| {})
+    }
 
     async fn wait_until(mut pred: impl FnMut() -> bool) {
         for _ in 0..100 {
@@ -413,19 +687,29 @@ mod tests {
         let guard = hold.lock().await;
         let started2 = started.clone();
         let hold2 = hold.clone();
-        let dispatch = tokio::spawn(dispatch_queue(rx, move || limit, move |id| {
-            started2.lock().unwrap().push(id);
-            let hold2 = hold2.clone();
-            async move {
-                let _guard = hold2.lock().await;
-            }
-        }));
+        let dispatch = tokio::spawn(dispatch_queue(
+            rx,
+            move || limit,
+            |_| async { true },
+            move |id| {
+                started2.lock().unwrap().push(id);
+                let hold2 = hold2.clone();
+                async move {
+                    let _guard = hold2.lock().await;
+                }
+            },
+            noop_zero(),
+        ));
         for n in ["2", "3", "4", "5", "6", "7"] {
             tx.send(n.to_string()).unwrap();
         }
         wait_until(|| started.lock().unwrap().len() == limit).await;
         tokio::time::sleep(Duration::from_millis(80)).await;
-        assert_eq!(started.lock().unwrap().len(), limit, "没拿到名额的任务不应先开始");
+        assert_eq!(
+            started.lock().unwrap().len(),
+            limit,
+            "没拿到名额的任务不应先开始"
+        );
         drop(guard);
         wait_until(|| started.lock().unwrap().len() == 6).await;
         let order = started.lock().unwrap().clone();
@@ -442,5 +726,112 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn concurrency_three_does_not_start_past_the_limit() {
         assert_eq!(recorded_order(3).await, ["2", "3", "4", "5", "6", "7"]);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn before_hook_holds_the_slot_until_it_returns() {
+        let (tx, rx) = mpsc::unbounded_channel();
+        let started = Arc::new(StdMutex::new(Vec::new()));
+        let calls = Arc::new(AtomicUsize::new(0));
+        let hold = Arc::new(AsyncMutex::new(()));
+        let guard = hold.lock().await;
+        let started2 = started.clone();
+        let calls2 = calls.clone();
+        let hold2 = hold.clone();
+        let dispatch = tokio::spawn(dispatch_queue(
+            rx,
+            || 2,
+            move |_| {
+                let calls2 = calls2.clone();
+                let hold2 = hold2.clone();
+                async move {
+                    let i = calls2.fetch_add(1, Ordering::SeqCst);
+                    if i == 1 {
+                        let _g = hold2.lock().await;
+                    }
+                    true
+                }
+            },
+            move |id| {
+                let started2 = started2.clone();
+                async move {
+                    started2.lock().unwrap().push(id);
+                }
+            },
+            noop_zero(),
+        ));
+        for n in ["a", "b", "c"] {
+            tx.send(n.to_string()).unwrap();
+        }
+        wait_until(|| started.lock().unwrap().len() == 1 && calls.load(Ordering::SeqCst) == 2)
+            .await;
+        tokio::time::sleep(Duration::from_millis(40)).await;
+        assert_eq!(
+            started.lock().unwrap().as_slice(),
+            ["a"],
+            "第二张还在等待时，第三张不能先开始"
+        );
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            2,
+            "调度循环要停在第二张的等待里"
+        );
+        drop(guard);
+        wait_until(|| started.lock().unwrap().len() == 3).await;
+        let order = started.lock().unwrap().clone();
+        assert_eq!(order[0], "a");
+        let mut rest = order[1..].to_vec();
+        rest.sort();
+        assert_eq!(rest, ["b", "c"]);
+        drop(tx);
+        let _ = tokio::time::timeout(Duration::from_secs(2), dispatch).await;
+    }
+
+    #[test]
+    fn zero_bounds_disable_the_delay() {
+        assert_eq!(delay_bounds(0, 0), None);
+    }
+
+    #[test]
+    fn inverted_bounds_are_swapped_into_milliseconds() {
+        assert_eq!(delay_bounds(30, 8), Some((8_000, 30_000)));
+        assert_eq!(delay_bounds(-4, 200), Some((0, 180_000)));
+    }
+
+    #[test]
+    fn redraws_when_the_roll_matches_the_previous_wait() {
+        let ms = different_delay(1_000, 3_000, Some(1_000), || 0);
+        assert_ne!(ms, 1_000);
+        assert!((1_000..=3_000).contains(&ms));
+    }
+
+    #[test]
+    fn same_bounds_stay_fixed_even_if_it_matches_the_last_wait() {
+        assert_eq!(different_delay(8_000, 8_000, Some(8_000), || 123), 8_000);
+    }
+
+    #[test]
+    fn consecutive_draws_never_repeat_the_previous_wait() {
+        let pace = Pace::new();
+        pace.rng.store(0x1234_5678_9ABC_DEF0, Ordering::Relaxed);
+        let mut prev = None;
+        for _ in 0..32 {
+            let ms = pace.draw(8, 30).expect("默认区间应当开启等待");
+            if let Some(p) = prev {
+                assert_ne!(ms, p, "连续两次间隔不能相同");
+            }
+            assert!((8_000..=30_000).contains(&ms));
+            prev = Some(ms);
+        }
+    }
+
+    #[test]
+    fn idle_timer_ends_the_burst_only_when_nothing_replaced_it() {
+        assert!(should_end_burst(5, 5, 0));
+        assert!(
+            !should_end_burst(6, 5, 0),
+            "后面又有任务结束过，这一次计时作废"
+        );
+        assert!(!should_end_burst(5, 5, 1), "还有任务占着名额");
     }
 }

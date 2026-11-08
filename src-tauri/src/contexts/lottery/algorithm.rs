@@ -14,7 +14,8 @@ static ARTIST_PREFIX: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)^artist\s*:\s*
 static WS_UNDERSCORE: Lazy<Regex> = Lazy::new(|| Regex::new(r"[_\s]+").unwrap());
 static TRAIL: Lazy<Regex> = Lazy::new(|| Regex::new(r"[:：\s]+$").unwrap());
 static LEAD: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[:：\s]+").unwrap());
-static BLOCK: Lazy<Regex> = Lazy::new(|| Regex::new(r"(-?\d*\.?\d+)\s*::\s*([\s\S]*?)\s*::").unwrap());
+static BLOCK: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(-?\d*\.?\d+)\s*::\s*([\s\S]*?)\s*::").unwrap());
 static SPLIT: Lazy<Regex> = Lazy::new(|| Regex::new(r"[,，\n\r]+").unwrap());
 static OPEN_BLOCK: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(-?\d*\.?\d+)\s*::\s*(.+)$").unwrap());
 static ENDS_DIGIT: Lazy<Regex> = Lazy::new(|| Regex::new(r"\d$").unwrap());
@@ -37,16 +38,27 @@ pub fn strip_artist(tag: &str) -> String {
 }
 
 pub fn tag_key(tag: &str) -> String {
-    WS_UNDERSCORE.replace_all(&strip_artist(tag).to_lowercase(), " ").trim().to_string()
+    WS_UNDERSCORE
+        .replace_all(&strip_artist(tag).to_lowercase(), " ")
+        .trim()
+        .to_string()
 }
 
 pub fn format_tags(tags: &[String]) -> String {
     let prefixed = tags.iter().any(|t| ARTIST_PREFIX.is_match(t));
-    let bare: Vec<String> = tags.iter().map(|t| strip_artist(t)).filter(|t| !t.is_empty()).collect();
+    let bare: Vec<String> = tags
+        .iter()
+        .map(|t| strip_artist(t))
+        .filter(|t| !t.is_empty())
+        .collect();
     if bare.is_empty() {
         return String::new();
     }
-    format!("{}{}", if prefixed { "artist:" } else { "" }, bare.join(", "))
+    format!(
+        "{}{}",
+        if prefixed { "artist:" } else { "" },
+        bare.join(", ")
+    )
 }
 
 pub fn pad_numeric_closers(text: &str) -> String {
@@ -62,7 +74,11 @@ pub fn pad_numeric_closers(text: &str) -> String {
 }
 
 fn split_tags(chunk: &str) -> Vec<String> {
-    SPLIT.split(chunk).map(clean_tag).filter(|s| !s.is_empty()).collect()
+    SPLIT
+        .split(chunk)
+        .map(clean_tag)
+        .filter(|s| !s.is_empty())
+        .collect()
 }
 
 pub struct Entry {
@@ -78,13 +94,19 @@ pub fn parse_entries(text: &str) -> Vec<Entry> {
             if let Some(m) = OPEN_BLOCK.captures(piece.trim()) {
                 let tag = clean_tag(&m[2]);
                 if !tag.is_empty() {
-                    entries.push(Entry { weight: m[1].parse().unwrap_or(1.0), tags: vec![tag] });
+                    entries.push(Entry {
+                        weight: m[1].parse().unwrap_or(1.0),
+                        tags: vec![tag],
+                    });
                 }
                 continue;
             }
             let tag = clean_tag(piece);
             if !tag.is_empty() {
-                entries.push(Entry { weight: 1.0, tags: vec![tag] });
+                entries.push(Entry {
+                    weight: 1.0,
+                    tags: vec![tag],
+                });
             }
         }
     }
@@ -95,7 +117,10 @@ pub fn parse_entries(text: &str) -> Vec<Entry> {
         push_loose(&text[cursor..whole.start()], &mut entries);
         let tags = split_tags(&m[2]);
         if !tags.is_empty() {
-            entries.push(Entry { weight: m[1].parse().unwrap_or(1.0), tags });
+            entries.push(Entry {
+                weight: m[1].parse().unwrap_or(1.0),
+                tags,
+            });
         }
         cursor = whole.end();
     }
@@ -156,7 +181,10 @@ pub fn allocate(
         cap = floor.max(-((-target_cents).div_euclid(billed_units)));
     }
     if n == 0 {
-        return Allocation { cents: vec![], ideal: vec![] };
+        return Allocation {
+            cents: vec![],
+            ideal: vec![],
+        };
     }
 
     let mut caps: Vec<i64> = Vec::with_capacity(n);
@@ -170,11 +198,15 @@ pub fn allocate(
             Some(hard) => caps.push(0.max(hard.min(cap))),
         }
     }
-    let floors: Vec<i64> = (0..n).map(|i| if active[i] { floor.min(caps[i]) } else { 0 }).collect();
+    let floors: Vec<i64> = (0..n)
+        .map(|i| if active[i] { floor.min(caps[i]) } else { 0 })
+        .collect();
 
     let max_possible: i64 = (0..n).map(|i| caps[i] * units[i]).sum();
     if max_possible < target_cents {
-        let free: Vec<usize> = (0..n).filter(|&i| active[i] && personal_cap(per_max, i).is_none()).collect();
+        let free: Vec<usize> = (0..n)
+            .filter(|&i| active[i] && personal_cap(per_max, i).is_none())
+            .collect();
         let mut need = target_cents - max_possible;
         let mut guard_raise = 0;
         while need > 0 && !free.is_empty() && guard_raise < 100000 {
@@ -197,14 +229,30 @@ pub fn allocate(
         }
     }
 
-    let total: f64 = effectives.iter().enumerate().map(|(i, w)| w * units[i] as f64).sum();
+    let total: f64 = effectives
+        .iter()
+        .enumerate()
+        .map(|(i, w)| w * units[i] as f64)
+        .sum();
     if total <= 0.0 {
-        return Allocation { cents: vec![0; n], ideal: vec![0.0; n] };
+        return Allocation {
+            cents: vec![0; n],
+            ideal: vec![0.0; n],
+        };
     }
 
-    let ideal: Vec<f64> = effectives.iter().map(|w| (target_cents as f64 * w) / total).collect();
+    let ideal: Vec<f64> = effectives
+        .iter()
+        .map(|w| (target_cents as f64 * w) / total)
+        .collect();
     let mut cents: Vec<i64> = (0..n)
-        .map(|i| if active[i] { caps[i].min(floors[i].max((ideal[i] + 1e-9) as i64)) } else { 0 })
+        .map(|i| {
+            if active[i] {
+                caps[i].min(floors[i].max((ideal[i] + 1e-9) as i64))
+            } else {
+                0
+            }
+        })
         .collect();
 
     let used = |cents: &Vec<i64>| -> i64 { (0..n).map(|i| cents[i] * units[i]).sum() };
@@ -283,7 +331,11 @@ fn assemble(
             })
         })
         .collect();
-    let new_cents: i64 = entries.iter().enumerate().map(|(i, _)| cents[i] * units[i]).sum();
+    let new_cents: i64 = entries
+        .iter()
+        .enumerate()
+        .map(|(i, _)| cents[i] * units[i])
+        .sum();
     let target_cents = round_half_even(target * SCALE as f64) as i64;
     let artist_count: usize = entries.iter().map(|e| e.tags.len()).sum();
     let joined = entries
@@ -312,7 +364,12 @@ pub fn shuffle<T: Clone>(rng: &mut PyRandom, arr: &[T]) -> Vec<T> {
     a
 }
 
-pub fn fit_weight_bounds(n: usize, target: f64, min_weight: Option<f64>, max_weight: Option<f64>) -> (f64, f64) {
+pub fn fit_weight_bounds(
+    n: usize,
+    target: f64,
+    min_weight: Option<f64>,
+    max_weight: Option<f64>,
+) -> (f64, f64) {
     let t = target;
     let mut lo = min_weight.unwrap_or(0.01);
     let mut hi = max_weight.unwrap_or(t);
@@ -339,7 +396,11 @@ pub fn fit_weight_bounds(n: usize, target: f64, min_weight: Option<f64>, max_wei
 }
 
 fn tag_or_name(p: &Value) -> String {
-    let v = if truthy(get(p, "tag")) { get(p, "tag") } else { get(p, "name") };
+    let v = if truthy(get(p, "tag")) {
+        get(p, "tag")
+    } else {
+        get(p, "name")
+    };
     if truthy(v) {
         crate::util::py_str(v)
     } else {
@@ -355,7 +416,11 @@ fn key_of(p: &Value) -> String {
     } else {
         get(p, "key")
     };
-    tag_key(&if truthy(v) { crate::util::py_str(v) } else { String::new() })
+    tag_key(&if truthy(v) {
+        crate::util::py_str(v)
+    } else {
+        String::new()
+    })
 }
 
 pub struct DrawParams {
@@ -404,7 +469,9 @@ pub fn draw_from_pool(pool: &[Value], params: &DrawParams, rng: &mut PyRandom) -
     let draws = (if c_rounded == 0 { 1 } else { c_rounded }).max(1).min(50);
     let jit = params.jitter.max(0.0).min(1.0);
     let b = params.boost.max(0.0);
-    let Some(t) = params.target else { return vec![] };
+    let Some(t) = params.target else {
+        return vec![];
+    };
     if t.is_nan() || t <= 0.0 {
         return vec![];
     }
@@ -424,7 +491,9 @@ pub fn draw_from_pool(pool: &[Value], params: &DrawParams, rng: &mut PyRandom) -
         let entries: Vec<DrawEntry> = picked
             .iter()
             .map(|p| {
-                let w = to_float(get(p, "weight")).filter(|w| *w > 0.0).unwrap_or(0.0);
+                let w = to_float(get(p, "weight"))
+                    .filter(|w| *w > 0.0)
+                    .unwrap_or(0.0);
                 DrawEntry {
                     weight: if w > 0.0 { w } else { 1.0 },
                     tags: vec![format!("artist:{}", strip_artist(&tag_or_name(p)))],
@@ -453,8 +522,19 @@ pub fn draw_from_pool(pool: &[Value], params: &DrawParams, rng: &mut PyRandom) -
                 }
             })
             .collect();
-        let mut assembled = assemble(&entries, &rolled, &units, t, Some(min_cents), Some(max_cents), &per_max);
-        assembled["artists"] = json!(picked.iter().map(|p| strip_artist(&tag_or_name(p))).collect::<Vec<_>>());
+        let mut assembled = assemble(
+            &entries,
+            &rolled,
+            &units,
+            t,
+            Some(min_cents),
+            Some(max_cents),
+            &per_max,
+        );
+        assembled["artists"] = json!(picked
+            .iter()
+            .map(|p| strip_artist(&tag_or_name(p)))
+            .collect::<Vec<_>>());
         out.push(assembled);
     }
     out
@@ -493,6 +573,9 @@ mod tests {
 
     #[test]
     fn pad_closers_adds_space_after_digit() {
-        assert_eq!(pad_numeric_closers("0.50::artist:x1::"), "0.50::artist:x1 ::");
+        assert_eq!(
+            pad_numeric_closers("0.50::artist:x1::"),
+            "0.50::artist:x1 ::"
+        );
     }
 }

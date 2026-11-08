@@ -104,7 +104,9 @@ pub fn round4(x: f64) -> f64 {
 }
 
 pub fn num_f(x: f64) -> Value {
-    serde_json::Number::from_f64(x).map(Value::Number).unwrap_or(Value::Null)
+    serde_json::Number::from_f64(x)
+        .map(Value::Number)
+        .unwrap_or(Value::Null)
 }
 
 pub fn obj() -> Map<String, Value> {

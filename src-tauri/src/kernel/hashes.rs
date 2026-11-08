@@ -30,5 +30,7 @@ pub fn hex_lower(bytes: &[u8]) -> String {
 
 /// 64 位小写十六进制。
 pub fn is_hash64(s: &str) -> bool {
-    s.len() == 64 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    s.len() == 64
+        && s.bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }

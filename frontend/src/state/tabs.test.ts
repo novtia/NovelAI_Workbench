@@ -58,4 +58,46 @@ describe("tabs", () => {
     expect(loadTabs("not json").tabs).toHaveLength(1);
     expect(loadTabs(JSON.stringify({ tabs: [{ id: "x", view: "gallery" }], activeId: "zzz" })).activeId).toBe("x");
   });
+
+  it("opens one album detail tab and focuses it again", () => {
+    const a = useTabs.getState().openAlbumTab("album-a");
+    expect(useTabs.getState().activeId).toBe(a);
+    expect(useTabs.getState().tabs.find((t) => t.id === a)).toEqual({ id: a, view: "album", albumId: "album-a" });
+    useTabs.getState().activateTab("main");
+    const again = useTabs.getState().openAlbumTab("album-a");
+    expect(again).toBe(a);
+    expect(useTabs.getState().tabs.filter((t) => t.view === "album")).toHaveLength(1);
+    expect(useTabs.getState().activeId).toBe(a);
+    const b = useTabs.getState().openAlbumTab("album-b");
+    expect(b).not.toBe(a);
+    expect(useTabs.getState().tabs.map((t) => t.id)).toEqual(["main", a, b]);
+  });
+
+  it("keeps an album tab's id and drops one without it", () => {
+    const ok = loadTabs(
+      JSON.stringify({
+        tabs: [
+          { id: "a", view: "album", albumId: "fold" },
+          { id: "b", view: "album" },
+          { id: "c", view: "studio", albumId: "ignored" },
+        ],
+        activeId: "a",
+      }),
+    );
+    expect(ok).toEqual({
+      tabs: [
+        { id: "a", view: "album", albumId: "fold" },
+        { id: "c", view: "studio" },
+      ],
+      activeId: "a",
+    });
+    expect(loadTabs(JSON.stringify({ tabs: [{ id: "b", view: "album" }], activeId: "b" })).tabs).toEqual([
+      { id: "main", view: "gallery" },
+    ]);
+  });
+
+  it("does not turn a tab into an album view without an album", () => {
+    useTabs.getState().setTabView("main", "album");
+    expect(useTabs.getState().tabs[0].view).toBe("gallery");
+  });
 });

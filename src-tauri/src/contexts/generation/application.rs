@@ -1,18 +1,18 @@
 use super::domain::{GenerationJob, ParamSet};
 use super::nai_client::{NaiGateway, TokenVault};
-use super::nai_images::{image_to_png};
+use super::nai_images::image_to_png;
 use super::nai_payload::*;
 use crate::assets;
 use crate::contexts::gallery::application::{GalleryService, ImportOptions};
 use crate::contexts::gallery::rules::extract_artists;
 use crate::contexts::identity::Credential;
+use crate::contexts::lottery::domain::lottery_client_draw_id;
 use crate::contexts::settings::application::SettingsService;
 use crate::kernel::blobs::{png_size, Bucket, Slot};
 use crate::kernel::bus::Kernel;
 use crate::kernel::clock::{new_hex, new_id, now_ms};
 use crate::kernel::purge::{plan_job_items, Purge};
 use crate::kernel::{DomainError, Res};
-use crate::contexts::lottery::domain::lottery_client_draw_id;
 use crate::util::{get, py_str, to_int, truthy};
 use rusqlite::types::Value as S;
 use rusqlite::{params_from_iter, Row};
@@ -43,7 +43,9 @@ pub struct GenerationService {
 }
 
 fn text_json(raw: Option<String>, fallback: &str) -> Value {
-    let text = raw.filter(|s| !s.is_empty()).unwrap_or_else(|| fallback.to_string());
+    let text = raw
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| fallback.to_string());
     serde_json::from_str(&text).unwrap_or_else(|_| serde_json::from_str(fallback).unwrap())
 }
 
@@ -76,24 +78,36 @@ impl GenerationService {
     }
 
     pub fn emit(&self, payload: Value) {
-        let e = self.emitter.read().unwrap_or_else(|x| x.into_inner()).clone();
+        let e = self
+            .emitter
+            .read()
+            .unwrap_or_else(|x| x.into_inner())
+            .clone();
         if let Some(e) = e {
             e(payload);
         }
     }
 
     pub fn take_receiver(&self) -> Option<UnboundedReceiver<String>> {
-        self.queue_rx.lock().unwrap_or_else(|e| e.into_inner()).take()
+        self.queue_rx
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
     }
 
     /// 读取设置项；缺失时回落到默认值。
     pub fn cfg(&self, section: &str, key: &str, default: Value) -> Value {
         let v = self.settings.value(section, key);
-        if v.is_null() { default } else { v }
+        if v.is_null() {
+            default
+        } else {
+            v
+        }
     }
 
     pub async fn token_status(&self) -> Value {
-        let ttl = crate::util::to_float(&self.cfg("account", "statusTtlSec", json!(45))).unwrap_or(45.0);
+        let ttl =
+            crate::util::to_float(&self.cfg("account", "statusTtlSec", json!(45))).unwrap_or(45.0);
         {
             let cache = self.status_cache.lock().unwrap_or_else(|e| e.into_inner());
             if let Some((at, v)) = cache.as_ref() {
@@ -118,7 +132,8 @@ impl GenerationService {
                 }
             }
         }
-        *self.status_cache.lock().unwrap_or_else(|e| e.into_inner()) = Some((Instant::now(), out.clone()));
+        *self.status_cache.lock().unwrap_or_else(|e| e.into_inner()) =
+            Some((Instant::now(), out.clone()));
         out
     }
 
@@ -132,7 +147,13 @@ impl GenerationService {
     }
 
     fn previews_dir(&self) -> PathBuf {
-        let dir = self.k.blobs.root.parent().map(|p| p.join("previews")).unwrap_or_else(|| PathBuf::from("previews"));
+        let dir = self
+            .k
+            .blobs
+            .root
+            .parent()
+            .map(|p| p.join("previews"))
+            .unwrap_or_else(|| PathBuf::from("previews"));
         let _ = std::fs::create_dir_all(&dir);
         dir
     }
@@ -148,7 +169,9 @@ impl GenerationService {
 
     pub fn clear_previews(&self, job_id: &str) {
         let dir = self.k.blobs.root.parent().map(|p| p.join("previews"));
-        let Some(dir) = dir.filter(|d| d.is_dir()) else { return };
+        let Some(dir) = dir.filter(|d| d.is_dir()) else {
+            return;
+        };
         let prefix = format!("{job_id}-");
         if let Ok(rd) = std::fs::read_dir(dir) {
             for e in rd.flatten() {
@@ -166,10 +189,13 @@ impl GenerationService {
         if token.is_empty() {
             return Err(DomainError::bad("Token 不能为空"));
         }
-        self.vault.save(token).map_err(|m| DomainError::new(m, 500))?;
+        self.vault
+            .save(token)
+            .map_err(|m| DomainError::new(m, 500))?;
         let mut cred: Credential = self.k.load("nai")?;
         cred.set_hint(&token_hint(token));
-        self.k.commit(&mut cred, Some(&format!("identity.set:{}", now_ms())))?;
+        self.k
+            .commit(&mut cred, Some(&format!("identity.set:{}", now_ms())))?;
         Ok(self.local_status())
     }
 
@@ -197,7 +223,9 @@ impl GenerationService {
 
     pub fn list_param_sets(&self) -> Res<Vec<Value>> {
         let conn = self.k.store.connect()?;
-        let mut stmt = conn.prepare("SELECT * FROM projections_param_sets WHERE deleted=0 ORDER BY updated_at DESC")?;
+        let mut stmt = conn.prepare(
+            "SELECT * FROM projections_param_sets WHERE deleted=0 ORDER BY updated_at DESC",
+        )?;
         let rows = stmt.query_map([], param_row)?;
         let mut out = Vec::new();
         for r in rows {
@@ -212,14 +240,16 @@ impl GenerationService {
         let mut agg: ParamSet = self.k.load(&sid)?;
         agg.save(name, form, created)?;
         self.k.commit(&mut agg, None)?;
-        self.get_param_set(&sid)?.ok_or_else(|| DomainError::internal("保存失败"))
+        self.get_param_set(&sid)?
+            .ok_or_else(|| DomainError::internal("保存失败"))
     }
 
     pub fn update_param_set(&self, sid: &str, form: &Value) -> Res<Value> {
         let mut agg: ParamSet = self.k.load(sid)?;
         agg.update(form, now_ms())?;
         self.k.commit(&mut agg, None)?;
-        self.get_param_set(sid)?.ok_or_else(|| DomainError::not_found("预设不存在"))
+        self.get_param_set(sid)?
+            .ok_or_else(|| DomainError::not_found("预设不存在"))
     }
 
     pub fn delete_param_set(&self, sid: &str) -> Res<()> {
@@ -234,7 +264,8 @@ impl GenerationService {
 
     pub fn get_param_set(&self, sid: &str) -> Res<Option<Value>> {
         let conn = self.k.store.connect()?;
-        let mut stmt = conn.prepare("SELECT * FROM projections_param_sets WHERE id=?1 AND deleted=0")?;
+        let mut stmt =
+            conn.prepare("SELECT * FROM projections_param_sets WHERE id=?1 AND deleted=0")?;
         let mut rows = stmt.query_map([sid], param_row)?;
         match rows.next() {
             Some(r) => Ok(Some(r?)),
@@ -246,15 +277,30 @@ impl GenerationService {
 
     pub fn enqueue(&self, body: &Value) -> Res<Value> {
         if self.vault.load().is_empty() {
-            return Err(DomainError::new("还没有配置 NovelAI Persistent API Token", 401));
+            return Err(DomainError::new(
+                "还没有配置 NovelAI Persistent API Token",
+                401,
+            ));
         }
         let mut data: Map<String, Value> = body.as_object().cloned().unwrap_or_default();
         let source = {
             let raw = data.remove("source").unwrap_or(Value::Null);
-            let s = if truthy(&raw) { py_str(&raw) } else { "studio".into() };
+            let s = if truthy(&raw) {
+                py_str(&raw)
+            } else {
+                "studio".into()
+            };
             let s = s.trim().to_string();
-            let s = if s.is_empty() { "studio".to_string() } else { s };
-            if JOB_SOURCES.contains(&s.as_str()) { s } else { "studio".to_string() }
+            let s = if s.is_empty() {
+                "studio".to_string()
+            } else {
+                s
+            };
+            if JOB_SOURCES.contains(&s.as_str()) {
+                s
+            } else {
+                "studio".to_string()
+            }
         };
         let client = match data.remove("client") {
             Some(v) if v.is_object() && truthy(&v) => v,
@@ -265,7 +311,11 @@ impl GenerationService {
         }
         let kind = {
             let v = data.get("kind").cloned().unwrap_or(Value::Null);
-            if truthy(&v) { py_str(&v) } else { "generate".into() }
+            if truthy(&v) {
+                py_str(&v)
+            } else {
+                "generate".into()
+            }
         };
         if !JOB_KINDS.contains(&kind.as_str()) {
             return Err(DomainError::bad("不支持的任务类型"));
@@ -315,7 +365,8 @@ impl GenerationService {
             "progress": progress,
             "createdAt": created,
         }))?;
-        self.k.commit(&mut job, Some(&format!("job.queue:{job_id}")))?;
+        self.k
+            .commit(&mut job, Some(&format!("job.queue:{job_id}")))?;
         let public = self.get_job(&job_id)?;
         self.emit(json!({"type": "job", "job": public}));
         let _ = self.queue_tx.send(job_id);
@@ -335,7 +386,8 @@ impl GenerationService {
                  WHERE status IN ('queued', 'running')
                  ORDER BY created_at ASC, rowid ASC",
             )?;
-            let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+            let rows =
+                stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
             let mut out = Vec::new();
             for row in rows {
                 out.push(row?);
@@ -352,7 +404,11 @@ impl GenerationService {
     }
 
     fn blob_size(&self, digest: &str) -> Res<(i64, i64)> {
-        let data = self.k.blobs.get(digest).ok_or_else(|| DomainError::new("底图不存在，请重新选择", 404))?;
+        let data = self
+            .k
+            .blobs
+            .get(digest)
+            .ok_or_else(|| DomainError::new("底图不存在，请重新选择", 404))?;
         if let Some((w, h)) = png_size(&data) {
             return Ok((w as i64, h as i64));
         }
@@ -364,7 +420,9 @@ impl GenerationService {
     fn validate_image_job(&self, kind: &str, data: &mut Value) -> Res<(i64, i64)> {
         let image_hash = {
             let v = get(data, "imageHash");
-            (if truthy(v) { py_str(v) } else { String::new() }).trim().to_lowercase()
+            (if truthy(v) { py_str(v) } else { String::new() })
+                .trim()
+                .to_lowercase()
         };
         if image_hash.is_empty() {
             return Err(DomainError::bad("缺少底图"));
@@ -374,7 +432,9 @@ impl GenerationService {
         if kind == "infill" {
             let mask_hash = {
                 let v = get(data, "maskHash");
-                (if truthy(v) { py_str(v) } else { String::new() }).trim().to_lowercase()
+                (if truthy(v) { py_str(v) } else { String::new() })
+                    .trim()
+                    .to_lowercase()
             };
             if mask_hash.is_empty() || !self.k.blobs.exists(&mask_hash) {
                 return Err(DomainError::bad("局部重绘需要蒙版"));
@@ -390,11 +450,19 @@ impl GenerationService {
     fn own_inputs(&self, data: &Value) -> Res<()> {
         for key in ["imageHash", "maskHash"] {
             let v = get(data, key);
-            let hash = if truthy(v) { py_str(v).trim().to_lowercase() } else { String::new() };
+            let hash = if truthy(v) {
+                py_str(v).trim().to_lowercase()
+            } else {
+                String::new()
+            };
             if hash.is_empty() {
                 continue;
             }
-            if !self.k.blobs.copy_into(&Slot::image(Bucket::Inputs), &hash)? {
+            if !self
+                .k
+                .blobs
+                .copy_into(&Slot::image(Bucket::Inputs), &hash)?
+            {
                 return Err(DomainError::new("底图不存在，请重新选择", 404));
             }
         }
@@ -402,13 +470,19 @@ impl GenerationService {
     }
 
     fn prune_superseded(&self, job_id: &str) -> Res<()> {
-        let Some(job) = self.get_job(job_id)? else { return Ok(()) };
+        let Some(job) = self.get_job(job_id)? else {
+            return Ok(());
+        };
         if job["source"].as_str() != Some("lottery") || job["status"].as_str() != Some("done") {
             return Ok(());
         }
         let batch = {
             let v = get(&job["client"], "batchId");
-            if truthy(v) { py_str(v).trim().to_string() } else { String::new() }
+            if truthy(v) {
+                py_str(v).trim().to_string()
+            } else {
+                String::new()
+            }
         };
         let draw = lottery_client_draw_id(&batch, &job["client"]);
         if batch.is_empty() || draw.is_empty() {
@@ -430,10 +504,16 @@ impl GenerationService {
         let mut group: Vec<(String, String, i64, i64)> = Vec::new();
         for row in rows {
             let (id, status, client_json, finished, created) = row?;
-            let client = client_json.and_then(|s| serde_json::from_str::<Value>(&s).ok()).unwrap_or(Value::Null);
+            let client = client_json
+                .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+                .unwrap_or(Value::Null);
             let row_batch = {
                 let v = get(&client, "batchId");
-                if truthy(v) { py_str(v).trim().to_string() } else { String::new() }
+                if truthy(v) {
+                    py_str(v).trim().to_string()
+                } else {
+                    String::new()
+                }
             };
             if row_batch == batch && lottery_client_draw_id(&batch, &client) == draw {
                 group.push((id, status, finished.unwrap_or(0), created));
@@ -462,7 +542,9 @@ impl GenerationService {
     }
 
     fn prune_failed(&self) -> Res<usize> {
-        let keep = to_int(&self.cfg("generation", "jobsKeep", json!(80))).unwrap_or(80).max(0);
+        let keep = to_int(&self.cfg("generation", "jobsKeep", json!(80)))
+            .unwrap_or(80)
+            .max(0);
         let conn = self.k.store.connect()?;
         let ids: Vec<String> = conn
             .prepare(
@@ -489,14 +571,22 @@ impl GenerationService {
     pub fn prepare_request(&self, body: &Value) -> NaiRes<(Value, Value)> {
         let kind = {
             let v = get(body, "kind");
-            if truthy(v) { py_str(v) } else { "generate".into() }
+            if truthy(v) {
+                py_str(v)
+            } else {
+                "generate".into()
+            }
         };
         if kind == "generate" {
             return build_payload(body);
         }
         let hash_of = |key: &str| {
             let v = get(body, key);
-            if truthy(v) { py_str(v) } else { String::new() }
+            if truthy(v) {
+                py_str(v)
+            } else {
+                String::new()
+            }
         };
         let image = self
             .k
@@ -541,7 +631,8 @@ impl GenerationService {
     }
 
     pub fn list_jobs(&self) -> Res<Vec<Value>> {
-        let keep = crate::util::to_int(&self.cfg("generation", "jobsKeep", json!(80))).unwrap_or(80);
+        let keep =
+            crate::util::to_int(&self.cfg("generation", "jobsKeep", json!(80))).unwrap_or(80);
         let conn = self.k.store.connect()?;
         let mut stmt = conn.prepare(
             "SELECT * FROM projections_jobs
@@ -560,12 +651,20 @@ impl GenerationService {
     /// 生图室已完成的全部任务，按创建时间倒序分页。不受 jobsKeep 截断。
     pub fn list_history(&self, before: Option<i64>, before_id: &str, limit: i64) -> Res<Value> {
         let size = limit.clamp(1, 200);
-        let mut clauses = vec!["source='studio'", "status='done'", "json_array_length(items_json) > 0"];
+        let mut clauses = vec![
+            "source='studio'",
+            "status='done'",
+            "json_array_length(items_json) > 0",
+        ];
         let mut args: Vec<S> = Vec::new();
         if let Some(cursor) = before {
             if !before_id.is_empty() {
                 clauses.push("(created_at < ? OR (created_at = ? AND id < ?))");
-                args.extend([S::Integer(cursor), S::Integer(cursor), S::Text(before_id.to_string())]);
+                args.extend([
+                    S::Integer(cursor),
+                    S::Integer(cursor),
+                    S::Text(before_id.to_string()),
+                ]);
             } else {
                 clauses.push("created_at < ?");
                 args.push(S::Integer(cursor));
@@ -603,11 +702,15 @@ impl GenerationService {
             }
             let job_id = {
                 let v = get(&r, "jobId");
-                (if truthy(v) { py_str(v) } else { String::new() }).trim().to_string()
+                (if truthy(v) { py_str(v) } else { String::new() })
+                    .trim()
+                    .to_string()
             };
             let item_id = {
                 let v = get(&r, "itemId");
-                (if truthy(v) { py_str(v) } else { String::new() }).trim().to_string()
+                (if truthy(v) { py_str(v) } else { String::new() })
+                    .trim()
+                    .to_string()
             };
             if !job_id.is_empty() && !item_id.is_empty() {
                 if !by_job.contains_key(&job_id) {
@@ -656,7 +759,10 @@ impl GenerationService {
     }
 
     pub fn cancel(&self, job_id: &str) -> Res<Value> {
-        self.cancel.lock().unwrap_or_else(|e| e.into_inner()).insert(job_id.to_string());
+        self.cancel
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(job_id.to_string());
         let mut job: GenerationJob = self.k.load(job_id)?;
         if job.version() == 0 {
             return Err(DomainError::not_found("任务不存在"));
@@ -669,7 +775,10 @@ impl GenerationService {
     }
 
     pub fn cancelled(&self, job_id: &str) -> bool {
-        self.cancel.lock().unwrap_or_else(|e| e.into_inner()).contains(job_id)
+        self.cancel
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .contains(job_id)
     }
 
     pub fn cancelled_set(&self) -> Arc<Mutex<HashSet<String>>> {
@@ -685,7 +794,11 @@ impl GenerationService {
         Ok(n > 0)
     }
 
-    pub fn mutate_job(&self, job_id: &str, mutator: impl FnOnce(&mut GenerationJob)) -> Option<Value> {
+    pub fn mutate_job(
+        &self,
+        job_id: &str,
+        mutator: impl FnOnce(&mut GenerationJob),
+    ) -> Option<Value> {
         if self.cancelled(job_id) {
             let mut job: GenerationJob = self.k.load(job_id).ok()?;
             if job.version() == 0 {
@@ -729,12 +842,19 @@ impl GenerationService {
 
     /// 记下这次任务写出的文件，结束时把没被完成事件引用的删掉。
     pub fn stage(&self, job_id: &str, item: &Value) {
-        let bucket = get(item, "bucket").as_str().and_then(Bucket::parse).unwrap_or(Bucket::Studio);
+        let bucket = get(item, "bucket")
+            .as_str()
+            .and_then(Bucket::parse)
+            .unwrap_or(Bucket::Studio);
         let mut staged = self.staged.lock().unwrap_or_else(|e| e.into_inner());
         let list = staged.entry(job_id.to_string()).or_default();
         let hash = |key: &str| {
             let v = get(item, key);
-            if truthy(v) { py_str(v).trim().to_lowercase() } else { String::new() }
+            if truthy(v) {
+                py_str(v).trim().to_lowercase()
+            } else {
+                String::new()
+            }
         };
         let blob = hash("blobHash");
         if !blob.is_empty() {
@@ -747,7 +867,12 @@ impl GenerationService {
     }
 
     pub fn release_staged(&self, job_id: &str) {
-        let files = self.staged.lock().unwrap_or_else(|e| e.into_inner()).remove(job_id).unwrap_or_default();
+        let files = self
+            .staged
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(job_id)
+            .unwrap_or_default();
         let _ = self.k.release_files(&files);
     }
 
@@ -773,7 +898,11 @@ impl GenerationService {
         }
         if artists.is_empty() {
             // 生图台里画师直接写在 prompt 里，没有单独的画师列表：从 prompt 里识别，否则图库会显示「未识别画师」
-            let prompt = if truthy(get(meta, "prompt")) { py_str(get(meta, "prompt")) } else { String::new() };
+            let prompt = if truthy(get(meta, "prompt")) {
+                py_str(get(meta, "prompt"))
+            } else {
+                String::new()
+            };
             let (a, chain) = extract_artists(&prompt);
             artists = a;
             if !truthy(&artist_line) {
@@ -783,14 +912,26 @@ impl GenerationService {
         let line_text = if truthy(&artist_line) {
             py_str(&artist_line)
         } else if !artists.is_empty() {
-            artists.iter().map(|n| format!("artist:{n}")).collect::<Vec<_>>().join(", ")
+            artists
+                .iter()
+                .map(|n| format!("artist:{n}"))
+                .collect::<Vec<_>>()
+                .join(", ")
         } else {
             String::new()
         };
         for digest in blob_hashes {
-            let data = self.k.blobs.get(digest).ok_or_else(|| DomainError::not_found("预览文件不存在"))?;
+            let data = self
+                .k
+                .blobs
+                .get(digest)
+                .ok_or_else(|| DomainError::not_found("预览文件不存在"))?;
             let mut params_v = meta.as_object().cloned().unwrap_or_default();
-            let source = if truthy(get(meta, "source")) { get(meta, "source").clone() } else { json!("nai-v5") };
+            let source = if truthy(get(meta, "source")) {
+                get(meta, "source").clone()
+            } else {
+                json!("nai-v5")
+            };
             params_v.insert("source".into(), source);
             let payload_meta = json!({
                 "name": if truthy(get(meta, "name")) { get(meta, "name").clone() } else { json!("nai.png") },
@@ -804,7 +945,11 @@ impl GenerationService {
                 album_id,
                 &data,
                 &payload_meta,
-                ImportOptions { thumb: None, command_id: None, item_id: None },
+                ImportOptions {
+                    thumb: None,
+                    command_id: None,
+                    item_id: None,
+                },
             ) {
                 Ok(item) => items.push(item),
                 Err(e) if e.status == 409 => {}
@@ -821,16 +966,36 @@ impl GenerationService {
     ///
     /// gen_meta 是这次生图实际发给 NovelAI 的参数（含 v4Prompt / v4Negative / 角色 / 真实 seed），
     /// 写进图片元数据后，图片详情里才有角色信息。
-    pub fn bind_test_set_items(&self, source: &str, client: &Value, items: &[Value], gen_meta: &Value) -> Vec<Value> {
-        let client = if client.is_object() { client } else { &Value::Null };
+    pub fn bind_test_set_items(
+        &self,
+        source: &str,
+        client: &Value,
+        items: &[Value],
+        gen_meta: &Value,
+    ) -> Vec<Value> {
+        let client = if client.is_object() {
+            client
+        } else {
+            &Value::Null
+        };
         // testSetId：测试集里的批量生图；targetAlbumId：悬停给缺图画师补一张，直接存进「单画师」收藏夹。
         let pick = |key: &str| {
             let v = get(client, key);
-            if truthy(v) { py_str(v) } else { String::new() }
+            if truthy(v) {
+                py_str(v)
+            } else {
+                String::new()
+            }
         };
         let set_id = {
             let a = pick("testSetId");
-            (if a.is_empty() { pick("targetAlbumId") } else { a }).trim().to_string()
+            (if a.is_empty() {
+                pick("targetAlbumId")
+            } else {
+                a
+            })
+            .trim()
+            .to_string()
         };
         if source != "gallery" || set_id.is_empty() || items.is_empty() {
             return vec![];
@@ -843,7 +1008,11 @@ impl GenerationService {
         if hashes.is_empty() {
             return vec![];
         }
-        let form = if get(client, "form").is_object() { get(client, "form").clone() } else { json!({}) };
+        let form = if get(client, "form").is_object() {
+            get(client, "form").clone()
+        } else {
+            json!({})
+        };
         let artists: Vec<Value> = match get(client, "artists") {
             Value::Array(a) => a.iter().map(|x| json!(py_str(x))).collect(),
             _ => vec![],
@@ -851,7 +1020,9 @@ impl GenerationService {
         let artist_line = pick("artistLine");
         let base_prompt = {
             let v = get(&form, "prompt");
-            (if truthy(v) { py_str(v) } else { String::new() }).trim().to_string()
+            (if truthy(v) { py_str(v) } else { String::new() })
+                .trim()
+                .to_string()
         };
         let prompt = if !artist_line.is_empty() && !base_prompt.is_empty() {
             format!("{artist_line}, {base_prompt}")
@@ -875,7 +1046,9 @@ impl GenerationService {
         if truthy(get(client, "testSetId")) {
             meta.insert("testSetId".into(), json!(set_id));
         }
-        let saved = self.promote(&set_id, &hashes, &Value::Object(meta)).unwrap_or_default();
+        let saved = self
+            .promote(&set_id, &hashes, &Value::Object(meta))
+            .unwrap_or_default();
         // 重绘：新图已经落库，再删掉被替换的旧图（新图没存成功就保留旧图）。
         let replace_id = pick("replaceItemId");
         if !saved.is_empty() && !replace_id.is_empty() && truthy(get(client, "testSetId")) {
@@ -916,7 +1089,10 @@ pub fn job_row(row: &Row) -> rusqlite::Result<Value> {
     }
     let preview_url = match preview.filter(|p| !p.is_empty()) {
         Some(p) => json!(assets::blob_path(&p)),
-        None => items.get(0).map(|i| get(i, "url").clone()).unwrap_or(Value::Null),
+        None => items
+            .get(0)
+            .map(|i| get(i, "url").clone())
+            .unwrap_or(Value::Null),
     };
     let subscription: Option<String> = row.get("subscription_json")?;
     Ok(json!({

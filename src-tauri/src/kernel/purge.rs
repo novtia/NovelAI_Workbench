@@ -63,7 +63,13 @@ fn lower(start: &mut Option<i64>, seq: i64) {
 }
 
 fn aggregate_of(tx: &Connection, seq: i64) -> Res<Option<String>> {
-    Ok(tx.query_row("SELECT aggregate_id FROM events WHERE global_seq=?1", [seq], |r| r.get(0)).optional()?)
+    Ok(tx
+        .query_row(
+            "SELECT aggregate_id FROM events WHERE global_seq=?1",
+            [seq],
+            |r| r.get(0),
+        )
+        .optional()?)
 }
 
 /// 只动 `events` 表：删除、改写、重排版本号、重算哈希链。返回部分改动的聚合和统计。
@@ -85,17 +91,22 @@ pub(crate) fn rewrite_events(tx: &Connection, plan: &Purge) -> Res<(BTreeSet<Str
     }
 
     {
-        let mut first = tx.prepare("SELECT MIN(global_seq), MAX(aggregate_type) FROM events WHERE aggregate_id=?1")?;
+        let mut first = tx.prepare(
+            "SELECT MIN(global_seq), MAX(aggregate_type) FROM events WHERE aggregate_id=?1",
+        )?;
         let mut del = tx.prepare("DELETE FROM events WHERE aggregate_id=?1")?;
         let mut snap = tx.prepare("DELETE FROM snapshots WHERE aggregate_id=?1")?;
         for id in &plan.aggregates {
-            let (min, kind): (Option<i64>, Option<String>) = first.query_row([id], |r| Ok((r.get(0)?, r.get(1)?)))?;
+            let (min, kind): (Option<i64>, Option<String>) =
+                first.query_row([id], |r| Ok((r.get(0)?, r.get(1)?)))?;
             if let Some(m) = min {
                 lower(&mut start, m);
             }
             stats.events += del.execute([id])?;
             snap.execute([id])?;
-            stats.aggregates.push((id.clone(), kind.unwrap_or_default()));
+            stats
+                .aggregates
+                .push((id.clone(), kind.unwrap_or_default()));
         }
     }
     {
@@ -177,7 +188,11 @@ fn spliced_body(row: &Row) -> Res<String> {
         "version": row.get::<_, i64>("version")?,
     });
     // 前面几个字段的字符串里出现的引号都被转义了，第一个 `"payload":null` 一定是键本身。
-    let payload = if payload.is_empty() { "{}" } else { payload.as_str() };
+    let payload = if payload.is_empty() {
+        "{}"
+    } else {
+        payload.as_str()
+    };
     Ok(canonical_json(&head).replacen("\"payload\":null", &format!("\"payload\":{payload}"), 1))
 }
 
@@ -187,14 +202,17 @@ fn spliced_body(row: &Row) -> Res<String> {
 /// 对不上（刚改写过、版本号改了、或旧链本来就有问题）就解析载荷重新序列化。
 pub(crate) fn rehash_from(tx: &Connection, start: i64) -> Res<usize> {
     let mut prev: String = tx
-        .query_row("SELECT event_hash FROM events WHERE global_seq < ?1 ORDER BY global_seq DESC LIMIT 1", [start], |r| {
-            r.get(0)
-        })
+        .query_row(
+            "SELECT event_hash FROM events WHERE global_seq < ?1 ORDER BY global_seq DESC LIMIT 1",
+            [start],
+            |r| r.get(0),
+        )
         .optional()?
         .unwrap_or_else(|| GENESIS_HASH.to_string());
     let mut updates: Vec<(i64, String, String)> = Vec::new();
     {
-        let mut stmt = tx.prepare("SELECT * FROM events WHERE global_seq >= ?1 ORDER BY global_seq")?;
+        let mut stmt =
+            tx.prepare("SELECT * FROM events WHERE global_seq >= ?1 ORDER BY global_seq")?;
         let mut rows = stmt.query([start])?;
         while let Some(row) = rows.next()? {
             let seq: i64 = row.get("global_seq")?;
@@ -267,7 +285,11 @@ impl Kernel {
     }
 
     /// `fixup` 在投影重放之后、提交之前调用，用来补跨聚合的投影（例如抽奖批次上挂的预览图）。
-    pub fn purge_with(&self, plan: &Purge, fixup: &mut dyn FnMut(&Connection) -> Res<()>) -> Res<PurgeStats> {
+    pub fn purge_with(
+        &self,
+        plan: &Purge,
+        fixup: &mut dyn FnMut(&Connection) -> Res<()>,
+    ) -> Res<PurgeStats> {
         self.purge_inner(plan, fixup, true)
     }
 
@@ -280,34 +302,41 @@ impl Kernel {
         if plan.is_empty() {
             return Ok(PurgeStats::default());
         }
-        let (mut stats, released) = self.store.with_write_lock(|| -> Res<(PurgeStats, Vec<(String, Slot)>)> {
-            let mut conn = self.store.connect()?;
-            let tx = conn.transaction()?;
-            let mut owners: BTreeSet<String> = plan.aggregates.clone();
-            for seq in plan.events.iter().chain(plan.rewrites.keys()) {
-                if let Some(a) = aggregate_of(&tx, *seq)? {
-                    owners.insert(a);
-                }
-            }
-            let before = refs::files_of(&tx, &owners)?;
-            let (partial, stats) = rewrite_events(&tx, plan)?;
-            reproject(&tx, &self.projectors, &plan.aggregates, &partial)?;
-            fixup(&tx)?;
-            let mut released = Vec::new();
-            for (hash, slot) in before {
-                if !refs::is_referenced(&tx, &hash, &slot)? {
-                    released.push((hash, slot));
-                }
-            }
-            tx.commit()?;
-            Ok((stats, released))
-        })?;
+        let (mut stats, released) =
+            self.store
+                .with_write_lock(|| -> Res<(PurgeStats, Vec<(String, Slot)>)> {
+                    let mut conn = self.store.connect()?;
+                    let tx = conn.transaction()?;
+                    let mut owners: BTreeSet<String> = plan.aggregates.clone();
+                    for seq in plan.events.iter().chain(plan.rewrites.keys()) {
+                        if let Some(a) = aggregate_of(&tx, *seq)? {
+                            owners.insert(a);
+                        }
+                    }
+                    let before = refs::files_of(&tx, &owners)?;
+                    let (partial, stats) = rewrite_events(&tx, plan)?;
+                    reproject(&tx, &self.projectors, &plan.aggregates, &partial)?;
+                    fixup(&tx)?;
+                    let mut released = Vec::new();
+                    for (hash, slot) in before {
+                        if !refs::is_referenced(&tx, &hash, &slot)? {
+                            released.push((hash, slot));
+                        }
+                    }
+                    tx.commit()?;
+                    Ok((stats, released))
+                })?;
         if release {
             let (files, bytes) = self.release_files(&released)?;
             stats.files = files;
             stats.bytes = bytes;
         }
-        for hook in self.purge_hooks.read().unwrap_or_else(|e| e.into_inner()).iter() {
+        for hook in self
+            .purge_hooks
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+        {
             hook(&stats);
         }
         Ok(stats)
@@ -351,7 +380,10 @@ impl Kernel {
     }
 
     pub fn on_purge(&self, hook: PurgeHook) {
-        self.purge_hooks.write().unwrap_or_else(|e| e.into_inner()).push(hook);
+        self.purge_hooks
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(hook);
     }
 }
 
@@ -367,19 +399,37 @@ pub fn stream_events(conn: &Connection, aggregate_id: &str) -> Res<Vec<StreamEve
         "SELECT global_seq, event_type, payload_json FROM events WHERE aggregate_id=?1 ORDER BY version",
     )?;
     let rows = stmt.query_map(params![aggregate_id], |r| {
-        Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?))
+        Ok((
+            r.get::<_, i64>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+        ))
     })?;
     let mut out = Vec::new();
     for row in rows {
         let (seq, event_type, payload_json) = row?;
-        let payload = serde_json::from_str(if payload_json.is_empty() { "{}" } else { &payload_json }).unwrap_or(Value::Null);
-        out.push(StreamEvent { seq, event_type, payload });
+        let payload = serde_json::from_str(if payload_json.is_empty() {
+            "{}"
+        } else {
+            &payload_json
+        })
+        .unwrap_or(Value::Null);
+        out.push(StreamEvent {
+            seq,
+            event_type,
+            payload,
+        });
     }
     Ok(out)
 }
 
 /// 把任务结果改成 `keep`。空列表表示整个任务清除；否则改写完成事件，并删掉「从历史移除」事件。
-pub fn plan_job_items(conn: &Connection, job_id: &str, keep: &[Value], plan: &mut Purge) -> Res<()> {
+pub fn plan_job_items(
+    conn: &Connection,
+    job_id: &str,
+    keep: &[Value],
+    plan: &mut Purge,
+) -> Res<()> {
     if keep.is_empty() {
         plan.drop_aggregate(job_id);
         return Ok(());

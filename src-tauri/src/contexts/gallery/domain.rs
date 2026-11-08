@@ -16,7 +16,13 @@ pub struct Album {
 }
 
 impl Album {
-    pub fn register(&mut self, name: &str, created_at: i64, sort_order: i64, command_id: Option<&str>) -> Res<()> {
+    pub fn register(
+        &mut self,
+        name: &str,
+        created_at: i64,
+        sort_order: i64,
+        command_id: Option<&str>,
+    ) -> Res<()> {
         if self.core.version > 0 && !self.deleted {
             return Err(DomainError::conflict("收藏夹已存在"));
         }
@@ -74,7 +80,13 @@ impl Album {
 impl Aggregate for Album {
     const TYPE: &'static str = "Album";
     fn create(id: &str) -> Self {
-        Album { core: Core::new(id), name: String::new(), created_at: 0, sort_order: 0, deleted: false }
+        Album {
+            core: Core::new(id),
+            name: String::new(),
+            created_at: 0,
+            sort_order: 0,
+            deleted: false,
+        }
     }
     fn core(&self) -> &Core {
         &self.core
@@ -216,17 +228,36 @@ impl Aggregate for Artwork {
             "ArtworkImported" => {
                 self.album_id = py_str(get(p, "albumId"));
                 self.added_at = to_int(get(p, "addedAt")).unwrap_or(0);
-                self.name = if truthy(get(p, "name")) { py_str(get(p, "name")) } else { "image".into() };
-                self.mime =
-                    if truthy(get(p, "mime")) { py_str(get(p, "mime")) } else { "application/octet-stream".into() };
+                self.name = if truthy(get(p, "name")) {
+                    py_str(get(p, "name"))
+                } else {
+                    "image".into()
+                };
+                self.mime = if truthy(get(p, "mime")) {
+                    py_str(get(p, "mime"))
+                } else {
+                    "application/octet-stream".into()
+                };
                 self.size = to_int(get(p, "size")).unwrap_or(0);
                 self.hash = py_str(get(p, "blobHash"));
-                self.thumb_hash = if truthy(get(p, "thumbHash")) { py_str(get(p, "thumbHash")) } else { String::new() };
+                self.thumb_hash = if truthy(get(p, "thumbHash")) {
+                    py_str(get(p, "thumbHash"))
+                } else {
+                    String::new()
+                };
                 self.width = get(p, "width").clone();
                 self.height = get(p, "height").clone();
                 self.artists = get(p, "artists").as_array().cloned().unwrap_or_default();
-                self.artist_line = if truthy(get(p, "artistLine")) { py_str(get(p, "artistLine")) } else { String::new() };
-                self.params = if get(p, "params").is_object() { get(p, "params").clone() } else { json!({}) };
+                self.artist_line = if truthy(get(p, "artistLine")) {
+                    py_str(get(p, "artistLine"))
+                } else {
+                    String::new()
+                };
+                self.params = if get(p, "params").is_object() {
+                    get(p, "params").clone()
+                } else {
+                    json!({})
+                };
                 self.deleted = false;
             }
             "ArtworkMoved" => self.album_id = py_str(get(p, "albumId")),
@@ -264,7 +295,12 @@ impl GalleryView {
 impl Aggregate for GalleryView {
     const TYPE: &'static str = "GalleryView";
     fn create(id: &str) -> Self {
-        GalleryView { core: Core::new(id), album_id: String::new(), test_set_id: String::new(), preset_id: String::new() }
+        GalleryView {
+            core: Core::new(id),
+            album_id: String::new(),
+            test_set_id: String::new(),
+            preset_id: String::new(),
+        }
     }
     fn core(&self) -> &Core {
         &self.core
@@ -274,7 +310,13 @@ impl Aggregate for GalleryView {
     }
     fn on(&mut self, t: &str, p: &Value) {
         if t == "GalleryViewSelected" {
-            let s = |k: &str| if truthy(get(p, k)) { py_str(get(p, k)) } else { String::new() };
+            let s = |k: &str| {
+                if truthy(get(p, k)) {
+                    py_str(get(p, k))
+                } else {
+                    String::new()
+                }
+            };
             self.album_id = s("albumId");
             self.test_set_id = s("testSetId");
             self.preset_id = s("presetId");
@@ -293,7 +335,11 @@ impl ArtistBasket {
         let mut fresh: Vec<Value> = Vec::new();
         let mut seen = self.keys.clone();
         for raw in names {
-            let text = if truthy(raw) { py_str(raw) } else { String::new() };
+            let text = if truthy(raw) {
+                py_str(raw)
+            } else {
+                String::new()
+            };
             let name = take_chars(&strip_artist(&text), 120);
             let key = tag_key(&name);
             if key.is_empty() || seen.contains(&key) {
@@ -303,7 +349,10 @@ impl ArtistBasket {
             fresh.push(json!({"key": key, "name": name}));
         }
         if !fresh.is_empty() {
-            self.record("ArtistBasketAdded", json!({"items": fresh, "addedAt": added_at}));
+            self.record(
+                "ArtistBasketAdded",
+                json!({"items": fresh, "addedAt": added_at}),
+            );
         }
     }
 
@@ -324,7 +373,10 @@ impl ArtistBasket {
 impl Aggregate for ArtistBasket {
     const TYPE: &'static str = "ArtistBasket";
     fn create(id: &str) -> Self {
-        ArtistBasket { core: Core::new(id), keys: BTreeSet::new() }
+        ArtistBasket {
+            core: Core::new(id),
+            keys: BTreeSet::new(),
+        }
     }
     fn core(&self) -> &Core {
         &self.core
@@ -337,13 +389,21 @@ impl Aggregate for ArtistBasket {
             "ArtistBasketAdded" => {
                 if let Some(items) = get(p, "items").as_array() {
                     for item in items {
-                        let k = if truthy(get(item, "key")) { py_str(get(item, "key")) } else { String::new() };
+                        let k = if truthy(get(item, "key")) {
+                            py_str(get(item, "key"))
+                        } else {
+                            String::new()
+                        };
                         self.keys.insert(k);
                     }
                 }
             }
             "ArtistBasketRemoved" => {
-                let k = if truthy(get(p, "key")) { py_str(get(p, "key")) } else { String::new() };
+                let k = if truthy(get(p, "key")) {
+                    py_str(get(p, "key"))
+                } else {
+                    String::new()
+                };
                 self.keys.remove(&k);
             }
             "ArtistBasketCleared" => self.keys.clear(),

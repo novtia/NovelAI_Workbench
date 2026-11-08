@@ -99,7 +99,11 @@ pub fn migrate_legacy(service: &GalleryService, legacy_data: &Path) -> Res<Value
             continue;
         };
         let thumb_path = thumbs.join(&row.id);
-        let thumb = if thumb_path.is_file() { std::fs::read(&thumb_path).ok() } else { None };
+        let thumb = if thumb_path.is_file() {
+            std::fs::read(&thumb_path).ok()
+        } else {
+            None
+        };
         let parse = |s: &Option<String>, fallback: Value| -> Value {
             s.as_deref()
                 .filter(|x| !x.is_empty())
@@ -120,7 +124,11 @@ pub fn migrate_legacy(service: &GalleryService, legacy_data: &Path) -> Res<Value
             &row.album_id,
             &data,
             &meta,
-            ImportOptions { thumb: thumb.as_deref(), command_id: Some(&command_id), item_id: Some(&row.id) },
+            ImportOptions {
+                thumb: thumb.as_deref(),
+                command_id: Some(&command_id),
+                item_id: Some(&row.id),
+            },
         );
         match res {
             Ok(_) => item_n += 1,

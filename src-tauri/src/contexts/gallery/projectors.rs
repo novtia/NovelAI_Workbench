@@ -106,7 +106,11 @@ impl Projector for GalleryProjector {
             }
             "ArtistBasketAdded" => {
                 if let Some(items) = get(p, "items").as_array() {
-                    let added = if crate::util::truthy(get(p, "addedAt")) { sql(get(p, "addedAt")) } else { S::Integer(0) };
+                    let added = if crate::util::truthy(get(p, "addedAt")) {
+                        sql(get(p, "addedAt"))
+                    } else {
+                        S::Integer(0)
+                    };
                     for item in items {
                         conn.execute(
                             "INSERT OR IGNORE INTO projections_artist_basket (key, name, added_at, sort_order)
@@ -170,16 +174,24 @@ pub fn album_row(row: &Row, count: Option<i64>) -> rusqlite::Result<Value> {
 }
 
 fn parse_json_col(raw: Option<String>, fallback: &str) -> Value {
-    let text = raw.filter(|s| !s.is_empty()).unwrap_or_else(|| fallback.to_string());
+    let text = raw
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| fallback.to_string());
     serde_json::from_str(&text).unwrap_or_else(|_| serde_json::from_str(fallback).unwrap())
 }
 
 pub fn artwork_row(row: &Row) -> rusqlite::Result<Value> {
-    let thumb: String = row.get::<_, Option<String>>("thumb_hash")?.unwrap_or_default();
+    let thumb: String = row
+        .get::<_, Option<String>>("thumb_hash")?
+        .unwrap_or_default();
     let digest: String = row.get("hash")?;
     let artists = parse_json_col(row.get("artists")?, "[]");
     let params = parse_json_col(row.get("params")?, "{}");
-    let thumb_src = if thumb.is_empty() { digest.clone() } else { thumb.clone() };
+    let thumb_src = if thumb.is_empty() {
+        digest.clone()
+    } else {
+        thumb.clone()
+    };
     Ok(json!({
         "id": row.get::<_, String>("id")?,
         "albumId": row.get::<_, String>("album_id")?,
