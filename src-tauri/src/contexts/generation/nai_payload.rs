@@ -622,6 +622,49 @@ pub fn generate_cost(body: &Value, steps: i64) -> i64 {
     per * samples.max(0)
 }
 
+/// 选账号用：这次生图会不会动用 Opus 免费额度（返回 true），以及剩下要花多少点数（Anlas）。
+/// 只看实际发给 NovelAI 的 `parameters`；图生图的强度折扣不算，所以点数是偏保守的上限。
+pub fn account_need(payload: &Value, opus: bool, bump: bool) -> (bool, i64) {
+    let mut p = payload.clone();
+    if bump {
+        bump_out_of_free(&mut p);
+    }
+    let params = get(&p, "parameters");
+    let width = to_int(get(params, "width")).unwrap_or(832).max(1);
+    let height = to_int(get(params, "height")).unwrap_or(1216).max(1);
+    let steps = to_int(get(params, "steps")).unwrap_or(28).max(1);
+    let samples = to_int(get(params, "n_samples")).unwrap_or(1).clamp(1, 4);
+    let free = opus && width * height <= OPUS_FREE_PIXELS && steps <= OPUS_FREE_STEPS;
+    let paid = samples - i64::from(free);
+    (free, base_cost(width, height, steps) * paid.max(0))
+}
+
+/// 只想花点数、又不想动用免费额度时：把请求推出免费范围，NovelAI 就会按点数计费。
+/// 普通模型提到 29 步；蒸馏的 medium 模型不看步数（实测 29 步仍算免费），只能把画幅放大到超过 1024×1024。
+pub fn bump_out_of_free(payload: &mut Value) {
+    let params = get(payload, "parameters");
+    let mut w = to_int(get(params, "width")).unwrap_or(832).max(64);
+    let mut h = to_int(get(params, "height")).unwrap_or(1216).max(64);
+    let steps = to_int(get(params, "steps")).unwrap_or(28);
+    if get(payload, "model").as_str() == Some(MEDIUM_MODEL) {
+        while w * h <= OPUS_FREE_PIXELS {
+            if h >= w {
+                h += 64;
+            } else {
+                w += 64;
+            }
+        }
+        payload["parameters"]["width"] = json!(w);
+        payload["parameters"]["height"] = json!(h);
+    } else if steps <= OPUS_FREE_STEPS {
+        payload["parameters"]["steps"] = json!(OPUS_FREE_STEPS + 1);
+    }
+}
+/// 放大不吃免费额度，只收点数。
+pub fn upscale_need(width: i64, height: i64) -> (bool, i64) {
+    (false, upscale_cost(width.max(1), height.max(1)))
+}
+
 fn fit_from(v: &Value, fallback: i64) -> i64 {
     fit64(if truthy(v) {
         to_float(v).unwrap_or(fallback as f64)

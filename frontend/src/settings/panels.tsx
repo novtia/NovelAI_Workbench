@@ -5,55 +5,11 @@ import { boardPayload } from "@/data/lottery";
 import { queryKeys } from "@/data/queryKeys";
 import { useLotteryStore } from "@/state/lotteryStore";
 import { formatBytes, type SystemInfo } from "@/data/settings";
-import { extraUsageText, formatTokenStatus, tokenDotClass } from "@/data/studio";
 import { LS_DRAFT, LS_IMPORT_OPTS, LS_SELECTED_SET } from "@/data/studio";
 import { confirmDialog } from "@/state/confirm";
 import { pushToast } from "@/state/toast";
-import { useNaiStatusQuery } from "@/state/queries";
-import { useStudioActions } from "@/state/studio";
-import { useStudioStore } from "@/state/studioStore";
 import { getSettings, useSettingsStore } from "@/state/settingsStore";
 import { Card } from "./controls";
-
-export function TokenPanel() {
-  const tokenInput = useStudioStore((s) => s.tokenInput);
-  const setTokenInput = useStudioStore((s) => s.setTokenInput);
-  const { saveToken, clearToken } = useStudioActions();
-  const status = useNaiStatusQuery().data || null;
-  const sub = status?.subscription;
-  const detail = sub
-    ? [`固定 ${sub.anlasFixed ?? 0}`, `购买 ${sub.anlasPurchased ?? 0}`, sub.usagePercent != null ? `Opus ${sub.usagePercent}%` : "", extraUsageText(sub)].filter(Boolean).join(" · ")
-    : status?.error || "";
-  return (
-    <div className="s-token">
-      <div className="s-token-line">
-        <span className={`dot ${tokenDotClass(status)}`} />
-        <span>{formatTokenStatus(status)}</span>
-      </div>
-      {detail ? <div className="s-row-hint">{detail}</div> : null}
-      <div className="s-row-hint">
-        在 NovelAI 账号设置里复制 Persistent API Token。明文只保存在本机文件，不会进入事件库和备份。
-        {status?.tokenFile ? <> 当前文件：{status.tokenFile}</> : null}
-      </div>
-      <div className="s-token-form">
-        <input
-          type="password"
-          className="s-input"
-          placeholder="pst-…"
-          autoComplete="off"
-          value={tokenInput}
-          onChange={(e) => setTokenInput(e.target.value)}
-        />
-        <button type="button" className="btn btn-primary" onClick={() => void saveToken()}>
-          保存
-        </button>
-        <button type="button" className="btn" onClick={() => void clearToken()}>
-          清除
-        </button>
-      </div>
-    </div>
-  );
-}
 
 /** 把当前「抽奖」默认参数写入已有的抽奖台（保留排除/置顶/权重上限与预设）。 */
 export function LotteryApplyPanel() {

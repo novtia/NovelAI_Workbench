@@ -198,6 +198,30 @@ export type TokenStatus = {
   error?: string;
 };
 
+export type NaiChannel = "official" | "gateway";
+
+/** 一个 NovelAI 账号（不含明文 Token）。顺序即优先级。 */
+export type NaiAccount = {
+  id: string;
+  name: string;
+  channel: NaiChannel;
+  gatewayUrl: string;
+  /** 总开关：关闭后完全不参与生图 */
+  enabled: boolean;
+  /** 允许消耗 Opus 免费额度 */
+  useFree: boolean;
+  /** 允许消耗点数（Anlas） */
+  usePoints: boolean;
+  configured: boolean;
+  hint: string;
+  subscription?: TokenStatus["subscription"];
+  error?: string;
+};
+
+export type NaiAccountPatch = Partial<Pick<NaiAccount, "name" | "channel" | "gatewayUrl" | "enabled" | "useFree" | "usePoints">> & { token?: string };
+
+export type NaiAccountsData = { accounts: NaiAccount[]; file?: string };
+
 export type StudioShot = {
   id: string;
   url: string;

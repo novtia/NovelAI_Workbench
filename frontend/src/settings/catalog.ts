@@ -27,7 +27,7 @@ export type SettingItem = {
   note?: string;
 };
 
-export type SettingGroup = { title: string; items: SettingItem[]; custom?: "token" | "lotteryApply" };
+export type SettingGroup = { title: string; items: SettingItem[]; custom?: "accounts" | "lotteryApply" };
 
 export type SectionMeta = {
   id: SectionId;
@@ -689,21 +689,12 @@ export const SECTIONS: SectionMeta[] = [
   {
     id: "account",
     title: "账号与额度",
-    desc: "NovelAI Token 与额度显示。",
+    desc: "多账号多渠道：每个账号独立选择用免费额度还是点数；以及额度显示。",
     groups: [
       {
-        title: "NovelAI Token",
-        items: [
-          {
-            section: "account",
-            key: "gatewayUrl",
-            label: "网关地址",
-            hint: "留空使用官方 https://image.novelai.net；走自己的网关就填 https://moyan.ink，Token 处填网关发的 sk- Key。保存后下一次请求生效。",
-            keywords: "gateway 网关 地址 代理 base url 公益",
-            control: { kind: "text", placeholder: "https://image.novelai.net", rows: 1 },
-          },
-        ],
-        custom: "token",
+        title: "NovelAI 账号",
+        items: [],
+        custom: "accounts",
       },
       {
         title: "额度",

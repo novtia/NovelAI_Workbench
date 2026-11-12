@@ -7,6 +7,7 @@ export const queryKeys = {
   jobs: ["jobs"] as const,
   history: ["history"] as const,
   naiStatus: ["nai-status"] as const,
+  naiAccounts: ["nai-accounts"] as const,
   paramSets: ["param-sets"] as const,
   lotteryBatches: ["lottery-batches"] as const,
   lotteryBoard: ["lottery-board"] as const,

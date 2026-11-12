@@ -1,3 +1,4 @@
+pub mod accounts;
 pub mod application;
 pub mod domain;
 pub mod nai_client;

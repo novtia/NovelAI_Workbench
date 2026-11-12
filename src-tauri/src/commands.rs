@@ -485,6 +485,29 @@ pub async fn nai_save_token(s: S<'_>, token: Option<String>) -> R {
 }
 
 #[tauri::command]
+pub async fn nai_accounts(s: S<'_>) -> R {
+    out(s.generation.accounts_status().await)
+}
+
+#[tauri::command(async)]
+pub fn nai_account_save(s: S<'_>, id: Option<String>, patch: Option<Value>) -> R {
+    let patch = patch.filter(truthy).unwrap_or_else(|| json!({}));
+    out(json!({"account": s.generation.save_account(id.as_deref().unwrap_or(""), &patch)?}))
+}
+
+#[tauri::command(async)]
+pub fn nai_account_delete(s: S<'_>, id: String) -> R {
+    s.generation.delete_account(&id)?;
+    Ok(Value::Null)
+}
+
+#[tauri::command(async)]
+pub fn nai_accounts_reorder(s: S<'_>, ids: Vec<String>) -> R {
+    s.generation.reorder_accounts(&ids)?;
+    Ok(Value::Null)
+}
+
+#[tauri::command]
 pub async fn nai_clear_token(s: S<'_>) -> R {
     out(s.generation.clear_token().await?)
 }

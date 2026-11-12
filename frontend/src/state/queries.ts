@@ -55,6 +55,16 @@ export function useNaiStatusQuery() {
   });
 }
 
+/** 账号设置页：全部账号 + 各自额度，按额度刷新间隔自动更新。 */
+export function useNaiAccountsQuery() {
+  const refreshSec = useSettings((s) => s.account.quotaRefreshSec);
+  return useQuery({
+    queryKey: queryKeys.naiAccounts,
+    queryFn: generationApi.listAccounts,
+    refetchInterval: refreshSec * 1000,
+  });
+}
+
 /** 画布工具栏的 Anlas 估算；参数变了才重新请求，估算本身几乎不变。 */
 export function useEstimateQuery(body: Record<string, unknown>) {
   return useQuery({

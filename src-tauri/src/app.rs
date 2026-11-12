@@ -6,6 +6,7 @@ use crate::contexts::gallery::application::{
 use crate::contexts::gallery::migrate::migrate_legacy;
 use crate::contexts::gallery::projectors::GalleryProjector;
 use crate::contexts::generation::application::GenerationService;
+use crate::contexts::generation::accounts::AccountStore;
 use crate::contexts::generation::nai_client::{NaiGateway, NetConfig, TokenVault};
 use crate::contexts::generation::projectors::GenerationProjector;
 use crate::contexts::identity::IdentityProjector;
@@ -50,6 +51,10 @@ pub fn build(data_dir: &Path) -> Res<Services> {
     let blobs = BlobStore::open(data_dir)?;
     let kernel = Arc::new(Kernel::new(store, blobs, projectors()));
     let vault = Arc::new(TokenVault::new(data_dir.join("secrets").join("nai.token")));
+    let accounts = Arc::new(AccountStore::new(
+        data_dir.join("secrets").join("accounts.json"),
+        vault.clone(),
+    ));
     let gallery = Arc::new(GalleryService::new(kernel.clone()));
     let lottery = Arc::new(LotteryService::new(kernel.clone(), gallery.clone()));
     let settings = Arc::new(SettingsService::new(kernel.clone()));
@@ -97,11 +102,21 @@ pub fn build(data_dir: &Path) -> Res<Services> {
             connect_timeout: s.value_f64("network", "connectTimeoutSec", 10.0),
         }));
     }
+    {
+        let s = settings.clone();
+        accounts.set_legacy_gateway(Arc::new(move || {
+            s.value("account", "gatewayUrl")
+                .as_str()
+                .unwrap_or("")
+                .to_string()
+        }));
+    }
     let generation = Arc::new(GenerationService::new(
         kernel.clone(),
         gallery.clone(),
         gateway,
         vault,
+        accounts,
         settings.clone(),
     ));
     {

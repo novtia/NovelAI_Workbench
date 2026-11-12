@@ -262,7 +262,7 @@ function applyStudioJob(job: Job) {
   } else if (job.status === "error") {
     dropPending(job.id);
     pushToast(job.error || "生图失败", "warn");
-    if (/Token|401|未配置/.test(job.error || "")) openTokenPop();
+    if (/Token|401|未配置|没有可用的 NovelAI 账号/.test(job.error || "")) openTokenPop();
   } else if (job.status === "cancelled") {
     dropPending(job.id);
     pushToast("已取消后台生图");
@@ -652,7 +652,7 @@ export function useStudioActions() {
       runInTab(tabId, endBusy);
       const msg = err instanceof Error ? err.message : "生图失败";
       pushToast(msg, "warn");
-      if (/Token|401|未配置/.test(msg) && tabId === activeTab()) openTokenPop();
+      if (/Token|401|未配置|没有可用的 NovelAI 账号/.test(msg) && tabId === activeTab()) openTokenPop();
       return null;
     }
   }

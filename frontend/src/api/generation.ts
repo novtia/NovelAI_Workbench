@@ -1,5 +1,5 @@
 import { call, callRaw } from "./client";
-import type { AnlasEstimate, Job, ParamSet, StudioForm, TokenStatus } from "@/data/types";
+import type { AnlasEstimate, Job, NaiAccount, NaiAccountPatch, NaiAccountsData, ParamSet, StudioForm, TokenStatus } from "@/data/types";
 
 export async function tokenStatus() {
   return call<TokenStatus>("nai_status");
@@ -11,6 +11,24 @@ export async function saveToken(token: string) {
 
 export async function clearToken() {
   return call<TokenStatus>("nai_clear_token");
+}
+
+export async function listAccounts() {
+  return call<NaiAccountsData>("nai_accounts");
+}
+
+/** id 为空是新增；patch 里的 token 为空串表示保持原样。 */
+export async function saveAccount(id: string | null, patch: NaiAccountPatch) {
+  const data = await call<{ account: NaiAccount }>("nai_account_save", { id, patch });
+  return data.account;
+}
+
+export async function deleteAccount(id: string) {
+  await call("nai_account_delete", { id });
+}
+
+export async function reorderAccounts(ids: string[]) {
+  await call("nai_accounts_reorder", { ids });
 }
 
 export async function listParamSets() {

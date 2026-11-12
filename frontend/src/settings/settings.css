@@ -100,8 +100,59 @@
 .s-input { flex: 1; height: 34px; border: 0; border-bottom: 1.5px solid var(--ink); background: transparent; font-family: var(--mono); outline: none; padding: 0 4px; }
 .s-input:focus { border-bottom-color: var(--zhu); }
 
+/* ---------- 账号与渠道 ---------- */
+.s-acct-intro { padding: 12px 0 4px; font-size: 12px; line-height: 1.8; color: var(--ink-3); }
+.s-acct-list { display: flex; flex-direction: column; gap: 14px; padding: 12px 0 6px; }
+.s-acct { border: 1px solid var(--line-2); background: var(--paper-2); padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 12px; transition: border-color .2s, opacity .2s; }
+.s-acct:hover { border-color: var(--ink-4); }
+.s-acct.off { opacity: .72; }
+.s-acct-new { margin: 12px 0 2px; border-color: var(--zhu); }
+.s-acct-new-title { font-size: 13px; font-weight: 700; letter-spacing: .12em; color: var(--ink-2); }
+.s-acct-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.s-acct-rank { flex: none; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 12px; color: var(--ink-3); box-shadow: inset 0 0 0 1px var(--line-2); }
+.s-acct-title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.s-acct-title b { font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+.s-acct-token { font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+.s-acct-tools { flex: none; display: flex; align-items: center; gap: 4px; }
+.s-acct-tools .s-switch { margin-left: 10px; }
+.s-icon-btn { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; color: var(--ink-3); border: 1px solid transparent; }
+.s-icon-btn:hover:not(:disabled) { color: var(--ink); border-color: var(--line-2); }
+.s-icon-btn.on { color: var(--zhu); border-color: var(--zhu); }
+.s-icon-btn.danger:hover:not(:disabled) { color: var(--zhu); border-color: var(--zhu); }
+.s-icon-btn:disabled { opacity: .3; cursor: default; }
+
+.s-chip { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--line-2); white-space: nowrap; }
+.s-chip.strong { color: var(--paper-3); background: var(--ink); box-shadow: none; }
+.s-chip.dim { color: var(--ink-3); }
+.s-chip.bad { color: var(--zhu); box-shadow: inset 0 0 0 1px var(--zhu); }
+.s-chip.channel { font-family: inherit; font-size: 11px; letter-spacing: .08em; }
+.s-chip.channel.gateway { color: var(--ochre); box-shadow: inset 0 0 0 1px var(--ochre); }
+.s-acct-quota { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.s-acct-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.s-mode { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; background: var(--paper-3); box-shadow: inset 0 0 0 1px var(--line); transition: box-shadow .2s; }
+.s-mode.on { box-shadow: inset 0 0 0 1px var(--zhu), inset 3px 0 0 var(--zhu); }
+.s-mode.disabled { opacity: .5; }
+.s-mode-text { min-width: 0; }
+.s-mode-title { font-size: 13px; font-weight: 700; letter-spacing: .06em; }
+.s-mode-desc { margin-top: 3px; font-size: 11px; line-height: 1.6; color: var(--ink-3); }
+.s-acct-note { font-size: 11.5px; color: var(--ink-3); }
+.s-acct-note.warn { color: var(--ochre); }
+.s-acct-note.off { color: var(--ink-4); }
+
+.s-acct-edit { display: flex; flex-direction: column; gap: 12px; padding-top: 12px; border-top: 1px dashed var(--line-2); }
+.s-field { display: flex; flex-direction: column; gap: 6px; }
+.s-field-label { font-size: 12px; letter-spacing: .12em; color: var(--ink-2); }
+.s-field .s-input { flex: none; width: 100%; box-sizing: border-box; }
+.s-field .s-row-hint { margin-top: 0; }
+.s-acct-edit-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.s-acct-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 26px 0; color: var(--ink-3); font-size: 13px; }
+.s-acct-empty p { margin: 0; }
+.s-acct-file { padding: 4px 0 8px; word-break: break-all; font-family: var(--mono); }
+
 @media (max-width: 900px) {
   .s-side { width: 180px; }
   .s-row { flex-direction: column; align-items: flex-start; gap: 10px; }
   .s-slider input[type=range] { width: 160px; }
+  .s-acct-modes { grid-template-columns: 1fr; }
 }

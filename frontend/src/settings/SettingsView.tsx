@@ -7,7 +7,8 @@ import { pushToast } from "@/state/toast";
 import { NAV_ICONS } from "@/ui/navIcons";
 import { SECTIONS, allItems, findSection, matchesQuery } from "./catalog";
 import { Card, SettingRow } from "./controls";
-import { LotteryApplyPanel, SystemPanel, TokenPanel } from "./panels";
+import { AccountsPanel } from "./AccountsPanel";
+import { LotteryApplyPanel, SystemPanel } from "./panels";
 
 /** 设置分区 → 导航图标 */
 const SECTION_ICONS: Record<SectionId, LucideIcon> = {
@@ -133,15 +134,18 @@ export function SettingsView() {
               </button>
             </header>
             <div className="s-scroll" key={section.id}>
-              {section.groups.map((g) => (
+              {section.groups.map((g) =>
+                g.custom === "accounts" ? (
+                  <AccountsPanel key={g.title} />
+                ) : (
                 <Card key={g.title} title={g.title}>
-                  {g.custom === "token" ? <TokenPanel /> : null}
                   {g.items.map((item) => (
                     <SettingRow key={`${item.section}.${item.key}`} item={item} />
                   ))}
                   {g.custom === "lotteryApply" ? <LotteryApplyPanel /> : null}
                 </Card>
-              ))}
+                ),
+              )}
               {section.extra === "system" ? <SystemPanel /> : null}
             </div>
           </>

@@ -1,6 +1,7 @@
 //! 生图任务执行：tokio 任务池，实际并发数由设置 `generation.concurrency` 动态限制。
 //! 同一串队列里，从第二张起在拿到名额之后、请求 NovelAI 之前随机等一会儿。
 
+use super::accounts::Account;
 use super::application::GenerationService;
 use super::domain::GenerationJob;
 use super::nai_images::{composite_infill, decode_image_b64, image_to_png};
@@ -77,11 +78,8 @@ async fn infill_png(svc: &Arc<GenerationService>, body: &Value, png: Vec<u8>) ->
     Ok(blocking(move || composite_infill(&original, &png, &mask)).await??)
 }
 
-async fn fetch_sub(svc: &Arc<GenerationService>) -> Value {
-    svc.gateway
-        .fetch_subscription(None)
-        .await
-        .unwrap_or(Value::Null)
+async fn fetch_sub(svc: &Arc<GenerationService>, acct: &Account) -> Value {
+    svc.subscription_after(acct).await
 }
 
 fn text_of(v: &Value) -> String {
@@ -107,9 +105,12 @@ async fn run_upscale(
         .filter(|d| !d.is_empty())
         .ok_or_else(|| NaiError::new(404, "底图已不存在"))?;
     let png = blocking(move || image_to_png(&src)).await??;
-    if png_size(&png).is_none() {
+    let Some((src_w, src_h)) = png_size(&png) else {
         return Err(NaiError::new(400, "无法读取底图").into());
-    }
+    };
+    let (acct, _) = svc
+        .pick_account(|_, _| upscale_need(src_w as i64, src_h as i64))
+        .await?;
     let factor = upscale_factor(body);
     svc.emit(json!({"type": "preview", "id": job_id, "text": "放大中", "sample": 0}));
     let inherit = if get(body, "inherit").is_object() {
@@ -119,7 +120,7 @@ async fn run_upscale(
     };
     let out = svc
         .gateway
-        .upscale_image(&png, get(&inherit, "model"))
+        .upscale_image(&acct, &png, get(&inherit, "model"))
         .await?;
     if svc.cancelled(job_id) {
         return Err(RunErr::Interrupted);
@@ -140,7 +141,7 @@ async fn run_upscale(
         &items,
         &meta,
     );
-    let sub = fetch_sub(svc).await;
+    let sub = fetch_sub(svc, &acct).await;
     svc.mutate_job(job_id, |j| {
         j.complete(Value::Array(items), meta, sub, now_ms())
     });
@@ -150,6 +151,7 @@ async fn run_upscale(
 /// Enhance 的 Max 档：原尺寸 img2img 之后再接一次 2x 放大。
 async fn post_upscale(
     svc: &Arc<GenerationService>,
+    acct: &Account,
     job_id: &str,
     items: Vec<Value>,
     meta: &mut Value,
@@ -178,7 +180,7 @@ async fn post_upscale(
             out.push(rec);
             continue;
         };
-        let upscaled = svc.gateway.upscale_image(&raw, get(meta, "model")).await?;
+        let upscaled = svc.gateway.upscale_image(acct, &raw, get(meta, "model")).await?;
         let rec = svc.store_image(bucket, &upscaled)?;
         svc.stage(job_id, &rec);
         out.push(rec);
@@ -194,14 +196,15 @@ async fn post_upscale(
 
 async fn finish(
     svc: &Arc<GenerationService>,
+    acct: &Account,
     job_id: &str,
     job: &GenerationJob,
     items: Vec<Value>,
     mut meta: Value,
     bucket: &Bucket,
 ) -> RunRes<()> {
-    let items = post_upscale(svc, job_id, items, &mut meta, bucket).await?;
-    let sub = fetch_sub(svc).await;
+    let items = post_upscale(svc, acct, job_id, items, &mut meta, bucket).await?;
+    let sub = fetch_sub(svc, acct).await;
     svc.bind_test_set_items(
         &job.source,
         &Value::Object(job.client.clone()),
@@ -231,18 +234,26 @@ async fn run_inner(
     if kind == "upscale" {
         return run_upscale(svc, job_id, job, body, bucket).await;
     }
-    let (payload, meta) = {
+    let (mut payload, meta) = {
         let svc2 = svc.clone();
         let body2 = body.clone();
         blocking(move || svc2.prepare_request(&body2)).await??
     };
-    let mut resp = match svc.gateway.open_stream(&payload).await {
+    svc.emit(json!({"type": "preview", "id": job_id, "text": "选择账号中", "sample": 0}));
+    let (acct, bump) = svc
+        .pick_account(|opus, bump| account_need(&payload, opus, bump))
+        .await?;
+    if bump {
+        bump_out_of_free(&mut payload);
+    }
+    svc.emit(json!({"type": "preview", "id": job_id, "text": "连接 NovelAI 中", "sample": 0}));
+    let mut resp = match svc.gateway.open_stream(&acct, &payload).await {
         Ok(r) => r,
         Err(e) => {
             if matches!(e.status, 400 | 401 | 403) {
                 return Err(e.into());
             }
-            let images = svc.gateway.generate_images(&payload).await?;
+            let images = svc.gateway.generate_images(&acct, &payload).await?;
             let mut items = Vec::new();
             for png in images {
                 let png = infill_png(svc, body, png).await?;
@@ -250,7 +261,7 @@ async fn run_inner(
                 svc.stage(job_id, &rec);
                 items.push(rec);
             }
-            return finish(svc, job_id, job, items, meta, bucket).await;
+            return finish(svc, &acct, job_id, job, items, meta, bucket).await;
         }
     };
 
@@ -320,7 +331,7 @@ async fn run_inner(
     if items.is_empty() {
         return Err(NaiError::new(502, "生图没有返回图片").into());
     }
-    finish(svc, job_id, job, items, meta, bucket).await
+    finish(svc, &acct, job_id, job, items, meta, bucket).await
 }
 
 pub async fn run_job(svc: Arc<GenerationService>, job_id: String) {
@@ -376,7 +387,12 @@ pub async fn run_job(svc: Arc<GenerationService>, job_id: String) {
             }
         }
     }
-    svc.settle(&job_id);
+    // 整理旧任务可能很慢（要重写事件库），放到后台做，不能占着并发名额拖住后面的排队。
+    {
+        let svc2 = svc.clone();
+        let id = job_id.clone();
+        tokio::task::spawn_blocking(move || svc2.settle(&id));
+    }
     svc.release_staged(&job_id);
     svc.clear_previews(&job_id);
 }

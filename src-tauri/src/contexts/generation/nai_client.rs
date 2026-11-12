@@ -1,5 +1,6 @@
 //! NovelAI 网络层：Token 存取、订阅查询、生图（流式 / 非流式）、放大。
 
+use super::accounts::Account;
 use super::nai_images::{unwrap_image, unzip_images};
 use super::nai_payload::*;
 use crate::util::{get, num_f, py_str, to_float, to_int, truthy};
@@ -305,13 +306,24 @@ impl NaiGateway {
             Some(t) if !t.is_empty() => t.to_string(),
             _ => self.token()?,
         };
+        let base = self.image_api();
+        self.fetch_subscription_at(&base, &token).await
+    }
+
+    /// 指定账号查订阅与额度：用账号自己的渠道地址和 Token。
+    pub async fn fetch_subscription_for(&self, acct: &Account) -> NaiRes<Value> {
+        self.fetch_subscription_at(&acct.base_url(), acct.token.trim())
+            .await
+    }
+
+    async fn fetch_subscription_at(&self, base: &str, token: &str) -> NaiRes<Value> {
         let client = self
             .apply_net(reqwest::Client::builder().timeout(Duration::from_secs(20)))?
             .build()
             .map_err(net_err)?;
         let resp = client
-            .get(format!("{}/user/subscription", self.image_api()))
-            .headers(Self::headers(&token, "*/*"))
+            .get(format!("{base}/user/subscription"))
+            .headers(Self::headers(token, "*/*"))
             .send()
             .await
             .map_err(net_err)?;
@@ -406,12 +418,17 @@ impl NaiGateway {
     }
 
     /// 专用放大（不受 prompt 影响）。现在的 image.novelai.net/ai/upscale 只收 image + model，固定放大 2 倍。
-    pub async fn upscale_image(&self, png: &[u8], model: &Value) -> NaiRes<Vec<u8>> {
-        let token = self.token()?;
+    pub async fn upscale_image(
+        &self,
+        acct: &Account,
+        png: &[u8],
+        model: &Value,
+    ) -> NaiRes<Vec<u8>> {
+        let token = acct.token.trim().to_string();
         let body = json!({"image": STANDARD.encode(png), "model": upscale_model(model)});
         let resp = self
             .gen_client()?
-            .post(format!("{}/ai/upscale", self.image_api()))
+            .post(format!("{}/ai/upscale", acct.base_url()))
             .headers(Self::headers(&token, "*/*"))
             .body(serde_json::to_vec(&body).unwrap_or_default())
             .send()
@@ -425,11 +442,11 @@ impl NaiGateway {
         unwrap_image(bytes.to_vec())
     }
 
-    pub async fn generate_images(&self, payload: &Value) -> NaiRes<Vec<Vec<u8>>> {
-        let token = self.token()?;
+    pub async fn generate_images(&self, acct: &Account, payload: &Value) -> NaiRes<Vec<Vec<u8>>> {
+        let token = acct.token.trim().to_string();
         let resp = self
             .gen_client()?
-            .post(format!("{}/ai/generate-image", self.image_api()))
+            .post(format!("{}/ai/generate-image", acct.base_url()))
             .headers(Self::headers(&token, "*/*"))
             .body(serde_json::to_vec(payload).unwrap_or_default())
             .send()
@@ -444,13 +461,13 @@ impl NaiGateway {
     }
 
     /// 打开 SSE 流；4xx/5xx 在这里就转成 `NaiError`。
-    pub async fn open_stream(&self, payload: &Value) -> NaiRes<reqwest::Response> {
-        let token = self.token()?;
+    pub async fn open_stream(&self, acct: &Account, payload: &Value) -> NaiRes<reqwest::Response> {
+        let token = acct.token.trim().to_string();
         let mut payload = payload.clone();
         payload["parameters"]["stream"] = json!("sse");
         let resp = self
             .gen_client()?
-            .post(format!("{}/ai/generate-image-stream", self.image_api()))
+            .post(format!("{}/ai/generate-image-stream", acct.base_url()))
             .headers(Self::headers(&token, "text/event-stream"))
             .body(serde_json::to_vec(&payload).unwrap_or_default())
             .send()

@@ -1,4 +1,5 @@
 use super::domain::{GenerationJob, ParamSet};
+use super::accounts::{Account, AccountStore};
 use super::nai_client::{NaiGateway, TokenVault};
 use super::nai_images::image_to_png;
 use super::nai_payload::*;
@@ -32,6 +33,7 @@ pub struct GenerationService {
     pub gallery: Arc<GalleryService>,
     pub gateway: Arc<NaiGateway>,
     pub vault: Arc<TokenVault>,
+    pub accounts: Arc<AccountStore>,
     pub settings: Arc<SettingsService>,
     emitter: RwLock<Option<Emitter>>,
     queue_tx: UnboundedSender<String>,
@@ -39,7 +41,8 @@ pub struct GenerationService {
     cancel: Arc<Mutex<HashSet<String>>>,
     /// 这次任务写过、但完成事件未必引用的文件。任务结束时删掉没人用的。
     staged: Mutex<HashMap<String, Vec<(String, Slot)>>>,
-    status_cache: Mutex<Option<(Instant, Value)>>,
+    /// 每个账号最近一次查到的订阅/额度，按设置里的缓存时间复用。
+    status_cache: Mutex<HashMap<String, (Instant, Value)>>,
 }
 
 fn text_json(raw: Option<String>, fallback: &str) -> Value {
@@ -55,6 +58,7 @@ impl GenerationService {
         gallery: Arc<GalleryService>,
         gateway: Arc<NaiGateway>,
         vault: Arc<TokenVault>,
+        accounts: Arc<AccountStore>,
         settings: Arc<SettingsService>,
     ) -> Self {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
@@ -63,13 +67,14 @@ impl GenerationService {
             gallery,
             gateway,
             vault,
+            accounts,
             settings,
             emitter: RwLock::new(None),
             queue_tx: tx,
             queue_rx: Mutex::new(Some(rx)),
             cancel: Arc::new(Mutex::new(HashSet::new())),
             staged: Mutex::new(HashMap::new()),
-            status_cache: Mutex::new(None),
+            status_cache: Mutex::new(HashMap::new()),
         }
     }
 
@@ -105,26 +110,25 @@ impl GenerationService {
         }
     }
 
-    pub async fn token_status(&self) -> Value {
-        let ttl =
-            crate::util::to_float(&self.cfg("account", "statusTtlSec", json!(45))).unwrap_or(45.0);
+    fn status_ttl(&self) -> f64 {
+        crate::util::to_float(&self.cfg("account", "statusTtlSec", json!(45))).unwrap_or(45.0)
+    }
+
+    /// 一个账号的订阅/额度：先看缓存，过期了才访问网络。`subscription` 为空表示查不到
+    /// （自建网关没有这个接口，或者 Token 失效），原因在 `error`。
+    async fn account_live(&self, acct: &Account) -> Value {
+        let ttl = self.status_ttl();
         {
             let cache = self.status_cache.lock().unwrap_or_else(|e| e.into_inner());
-            if let Some((at, v)) = cache.as_ref() {
+            if let Some((at, v)) = cache.get(&acct.id) {
                 if at.elapsed().as_secs_f64() < ttl {
                     return v.clone();
                 }
             }
         }
-        let token = self.vault.load();
-        let mut out = json!({
-            "configured": !token.is_empty(),
-            "hint": if token.is_empty() { String::new() } else { token_hint(&token) },
-            "subscription": Value::Null,
-            "tokenFile": self.vault.path().display().to_string(),
-        });
-        if !token.is_empty() {
-            match self.gateway.fetch_subscription(Some(&token)).await {
+        let mut out = json!({"subscription": Value::Null});
+        if acct.usable() {
+            match self.gateway.fetch_subscription_for(acct).await {
                 Ok(sub) => out["subscription"] = sub,
                 Err(e) => {
                     out["error"] = json!(e.message);
@@ -132,15 +136,124 @@ impl GenerationService {
                 }
             }
         }
-        *self.status_cache.lock().unwrap_or_else(|e| e.into_inner()) =
-            Some((Instant::now(), out.clone()));
+        self.status_cache
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(acct.id.clone(), (Instant::now(), out.clone()));
+        out
+    }
+
+    fn account_view(acct: &Account, live: &Value) -> Value {
+        let mut v = acct.public();
+        v["subscription"] = get(live, "subscription").clone();
+        if let Some(e) = live.get("error") {
+            v["error"] = e.clone();
+            v["errorStatus"] = get(live, "errorStatus").clone();
+        }
+        v
+    }
+
+    /// 账号设置页：所有账号 + 各自的实时额度，并行查询。
+    pub async fn accounts_status(&self) -> Value {
+        let list = self.accounts.list();
+        let lives = futures_util::future::join_all(list.iter().map(|a| self.account_live(a))).await;
+        let accounts: Vec<Value> = list
+            .iter()
+            .zip(lives.iter())
+            .map(|(a, l)| Self::account_view(a, l))
+            .collect();
+        json!({"accounts": accounts, "file": self.accounts.path().display().to_string()})
+    }
+
+    /// 侧栏电池、生图室工具栏用的单账号状态：取排在最前面、能用的那个账号（都不能用就取第一个）。
+    pub async fn token_status(&self) -> Value {
+        let list = self.accounts.list();
+        let Some(acct) = list.iter().find(|a| a.usable()).or_else(|| list.first()) else {
+            return self.local_status();
+        };
+        let live = self.account_live(acct).await;
+        let mut out = Self::account_view(acct, &live);
+        out["tokenFile"] = json!(self.accounts.path().display().to_string());
         out
     }
 
     pub fn invalidate_status(&self) {
-        *self.status_cache.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        self.status_cache
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
     }
 
+    /// 按顺序挑第一个能干这件事的账号：开着、开关允许、点数够。
+    /// `need(opus, bump)` 返回 (会不会动用免费额度, 要花多少点数)；`bump` 表示把请求推出免费范围。
+    /// 账号关了免费额度、开着点数，而这次本来会走免费时，返回的第二项为 true，调用方要把请求推出免费范围。
+    pub async fn pick_account(
+        &self,
+        need: impl Fn(bool, bool) -> (bool, i64),
+    ) -> Result<(Account, bool), NaiError> {
+        let list = self.accounts.list();
+        if !list.iter().any(Account::usable) {
+            return Err(NaiError::new(
+                401,
+                "没有可用的 NovelAI 账号：请先在「账号与额度」里添加账号并保持启用",
+            ));
+        }
+        let mut why: Vec<String> = Vec::new();
+        for acct in list.iter().filter(|a| a.usable()) {
+            // 额度查询最多等 8 秒：查不到就当「额度未知」继续，不能让生图卡在选账号上。
+            let live = match tokio::time::timeout(
+                std::time::Duration::from_secs(8),
+                self.account_live(acct),
+            )
+            .await
+            {
+                Ok(v) => v,
+                Err(_) => json!({"subscription": Value::Null, "error": "额度查询超时"}),
+            };
+            let sub = get(&live, "subscription");
+            if !sub.is_object() {
+                // 查不到额度（自建网关等）：只能信开关，真不够会由服务端报错。
+                if acct.use_free || acct.use_points {
+                    return Ok((acct.clone(), false));
+                }
+                why.push(format!("「{}」免费额度和点数都已关闭", acct.name));
+                continue;
+            }
+            let opus = truthy(get(sub, "opus"));
+            let anlas = to_int(get(sub, "anlas")).unwrap_or(0);
+            let (mut free, mut points) = need(opus, false);
+            let mut bump = false;
+            if free && !acct.use_free {
+                if !acct.use_points {
+                    why.push(format!("「{}」已关闭免费额度，而这次生图会用到", acct.name));
+                    continue;
+                }
+                // 只用点数：把请求推出免费范围，让它按点数计费
+                bump = true;
+                (free, points) = need(opus, true);
+            }
+            if free && !acct.use_free {
+                why.push(format!("「{}」已关闭免费额度，而这次生图会用到", acct.name));
+            } else if points > 0 && !acct.use_points {
+                why.push(format!("「{}」已关闭点数，而这次生图要 {points} 点", acct.name));
+            } else if points > anlas {
+                why.push(format!("「{}」点数不足（剩 {anlas}，需要 {points}）", acct.name));
+            } else {
+                return Ok((acct.clone(), bump));
+            }
+        }
+        Err(NaiError::new(
+            402,
+            format!("没有账号能承担这次生图：{}", why.join("；")),
+        ))
+    }
+
+    /// 生图后额度有变化：让所有账号的缓存失效，并查一遍指定账号作为任务结果里的额度快照。
+    pub async fn subscription_after(&self, acct: &Account) -> Value {
+        self.invalidate_status();
+        let live = self.account_live(acct).await;
+        get(&live, "subscription").clone()
+    }
     /// 画布工具栏的 Anlas 估算；只是估算，以订阅余额的实际变化为准。
     pub fn estimate(&self, body: &Value) -> Value {
         estimate_costs(if body.is_object() { body } else { &Value::Null })
@@ -183,14 +296,17 @@ impl GenerationService {
         }
     }
 
+    /// 生图室弹窗的老入口：写到排在最前面的账号；还没有账号就新建一个。
     pub async fn set_token(&self, token: &str) -> Res<Value> {
         self.invalidate_status();
         let token = token.trim();
         if token.is_empty() {
             return Err(DomainError::bad("Token 不能为空"));
         }
-        self.vault
-            .save(token)
+        let list = self.accounts.list();
+        let id = list.first().map(|a| a.id.clone()).unwrap_or_default();
+        self.accounts
+            .upsert(&id, &json!({"token": token, "enabled": true}))
             .map_err(|m| DomainError::new(m, 500))?;
         let mut cred: Credential = self.k.load("nai")?;
         cred.set_hint(&token_hint(token));
@@ -199,26 +315,55 @@ impl GenerationService {
         Ok(self.local_status())
     }
 
+    /// 清除排在最前面的账号（等于删掉它）。
     pub async fn clear_token(&self) -> Res<Value> {
         self.invalidate_status();
-        self.vault.save("").map_err(|m| DomainError::new(m, 500))?;
+        if let Some(first) = self.accounts.list().first() {
+            self.accounts
+                .remove(&first.id)
+                .map_err(|m| DomainError::new(m, 500))?;
+        }
         let mut cred: Credential = self.k.load("nai")?;
         cred.clear();
         self.k.commit(&mut cred, None)?;
         Ok(self.local_status())
     }
 
-    /// 只看本地：不访问网络，保存/清除后立刻返回；额度由前端随后后台刷新。
-    pub fn local_status(&self) -> Value {
-        let token = self.vault.load();
-        json!({
-            "configured": !token.is_empty(),
-            "hint": if token.is_empty() { String::new() } else { token_hint(&token) },
-            "subscription": Value::Null,
-            "tokenFile": self.vault.path().display().to_string(),
-        })
+    /// 保存/新增一个账号（`id` 为空是新增）。只写本地，额度由前端随后刷新。
+    pub fn save_account(&self, id: &str, patch: &Value) -> Res<Value> {
+        self.invalidate_status();
+        let acct = self
+            .accounts
+            .upsert(id, patch)
+            .map_err(|m| DomainError::new(m, 400))?;
+        Ok(acct.public())
     }
 
+    pub fn delete_account(&self, id: &str) -> Res<()> {
+        self.invalidate_status();
+        self.accounts
+            .remove(id)
+            .map_err(|m| DomainError::new(m, 404))
+    }
+
+    pub fn reorder_accounts(&self, ids: &[String]) -> Res<()> {
+        self.accounts
+            .reorder(ids)
+            .map_err(|m| DomainError::new(m, 500))
+    }
+
+    /// 只看本地：不访问网络，保存/清除后立刻返回；额度由前端随后后台刷新。
+    pub fn local_status(&self) -> Value {
+        let list = self.accounts.list();
+        let first = list.iter().find(|a| a.usable()).or_else(|| list.first());
+        let mut out = match first {
+            Some(a) => a.public(),
+            None => json!({"configured": false, "hint": ""}),
+        };
+        out["subscription"] = Value::Null;
+        out["tokenFile"] = json!(self.accounts.path().display().to_string());
+        out
+    }
     // ---------- 参数预设 ----------
 
     pub fn list_param_sets(&self) -> Res<Vec<Value>> {
@@ -276,9 +421,9 @@ impl GenerationService {
     // ---------- 任务 ----------
 
     pub fn enqueue(&self, body: &Value) -> Res<Value> {
-        if self.vault.load().is_empty() {
+        if !self.accounts.has_usable() {
             return Err(DomainError::new(
-                "还没有配置 NovelAI Persistent API Token",
+                "没有可用的 NovelAI 账号：请先在「账号与额度」里添加账号并保持启用",
                 401,
             ));
         }
