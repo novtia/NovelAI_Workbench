@@ -2,12 +2,25 @@ import { create } from "zustand";
 import { removeTabDraft } from "@/data/studio";
 import { disposeTab, MAIN_TAB_ID, setActiveTab } from "./scoped";
 
-export type ViewId = "gallery" | "lottery" | "studio" | "history" | "settings" | "album";
+export type ViewId = "gallery" | "lottery" | "studio" | "media" | "history" | "settings" | "album" | "web";
 
-export type Tab = { id: string; view: ViewId; albumId?: string };
+export type Tab = {
+  id: string;
+  view: ViewId;
+  albumId?: string;
+  webSiteId?: string;
+  webUrl?: string;
+  webTitle?: string;
+};
+
+export type WebTabTarget = {
+  id?: string;
+  name: string;
+  baseUrl: string;
+};
 
 export const TABS_KEY = "wb.tabs";
-const VIEW_IDS: ViewId[] = ["gallery", "lottery", "studio", "history", "settings", "album"];
+const VIEW_IDS: ViewId[] = ["gallery", "lottery", "studio", "media", "history", "settings", "album", "web"];
 
 export function isViewId(v: unknown): v is ViewId {
   return typeof v === "string" && (VIEW_IDS as string[]).includes(v);
@@ -27,6 +40,8 @@ type TabsState = {
   setTabView: (id: string, view: ViewId) => void;
   /** 打开某个收藏夹的详细页。已经开着就切过去，不重复开。 */
   openAlbumTab: (albumId: string) => string;
+  /** 在工作台内置标签栏中打开自定义网页（相同站点或网址已打开时直接切过去）。 */
+  openWebTab: (site: WebTabTarget) => string;
 };
 
 function newTabId() {
@@ -36,8 +51,8 @@ function newTabId() {
 function hashView(): ViewId {
   if (typeof location === "undefined") return "gallery";
   const raw = location.hash.replace("#", "");
-  // 详细页必须带着收藏夹 id，空存储不能靠 #album 凭空造一个。
-  if (isViewId(raw) && raw !== "album") return raw;
+  // 详细页必须带着收藏夹 id，网页标签必须带网址，空存储不能靠 #album / #web 凭空造一个。
+  if (isViewId(raw) && raw !== "album" && raw !== "web") return raw;
   return "gallery";
 }
 
@@ -49,6 +64,14 @@ function asTab(raw: unknown, seen: Set<string>): Tab | null {
     if (typeof t.albumId !== "string" || !t.albumId) return null;
     seen.add(t.id);
     return { id: t.id, view: "album", albumId: t.albumId };
+  }
+  if (t.view === "web") {
+    if (typeof t.webUrl !== "string" || !t.webUrl.trim()) return null;
+    seen.add(t.id);
+    const out: Tab = { id: t.id, view: "web", webUrl: t.webUrl.trim() };
+    if (typeof t.webSiteId === "string" && t.webSiteId.trim()) out.webSiteId = t.webSiteId.trim();
+    if (typeof t.webTitle === "string" && t.webTitle.trim()) out.webTitle = t.webTitle.trim();
+    return out;
   }
   seen.add(t.id);
   return { id: t.id, view: t.view };
@@ -91,10 +114,10 @@ function persist(s: Pick<TabsState, "tabs" | "activeId">) {
 
 const initial = loadTabs(readStored(), hashView());
 // 地址栏带了明确的 #页面（比如书签）时，让激活标签先去那一页。
-// #album 只表示当前停在详细页，收藏夹 id 在标签上；不要把别的标签改成没有收藏夹的详细页。
+// #album / #web 需要各自参数；不要把别的标签改成没有收藏夹或没有网址的空页。
 if (typeof location !== "undefined") {
   const raw = location.hash.replace("#", "");
-  if (raw !== "album" && isViewId(raw)) {
+  if (raw !== "album" && raw !== "web" && isViewId(raw)) {
     initial.tabs = initial.tabs.map((t) => (t.id === initial.activeId ? { ...t, view: raw } : t));
   }
 }
@@ -111,8 +134,8 @@ export const useTabs = create<TabsState>((set, get) => {
     tabs: initial.tabs,
     activeId: initial.activeId,
     openTab: (view = "gallery") => {
-      // 详细页必须带收藏夹 id，普通开标签不能走进去。
-      const useView = view === "album" ? "gallery" : view;
+      // 详细页必须带收藏夹 id，网页必须带网址，普通开标签不能走进去。
+      const useView = view === "album" || view === "web" ? "gallery" : view;
       const id = newTabId();
       const { tabs } = get();
       const at = tabs.findIndex((t) => t.id === get().activeId);
@@ -153,11 +176,16 @@ export const useTabs = create<TabsState>((set, get) => {
       commit({ tabs: next, activeId });
     },
     setTabView: (id, view) => {
-      // 详细页只能由 openAlbumTab 打开，这样标签上一定有收藏夹 id。
-      if (view === "album") return;
+      // 详细页只能由 openAlbumTab 打开，网页只能由 openWebTab 打开。
+      if (view === "album" || view === "web") return;
       const { tabs, activeId } = get();
       if (!tabs.some((t) => t.id === id && t.view !== view)) return;
-      commit({ tabs: tabs.map((t) => (t.id === id ? { ...t, view } : t)), activeId });
+      commit({
+        tabs: tabs.map((t) =>
+          t.id === id ? { id: t.id, view } : t,
+        ),
+        activeId,
+      });
     },
     openAlbumTab: (albumId) => {
       const { tabs, activeId } = get();
@@ -170,6 +198,34 @@ export const useTabs = create<TabsState>((set, get) => {
       const at = tabs.findIndex((t) => t.id === activeId);
       const next = [...tabs];
       next.splice(at < 0 ? next.length : at + 1, 0, { id, view: "album", albumId });
+      commit({ tabs: next, activeId: id });
+      return id;
+    },
+    openWebTab: (site) => {
+      const rawUrl = (site.baseUrl || "").trim();
+      if (!rawUrl) return get().activeId;
+      const webUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
+      const webTitle = (site.name || "").trim() || webUrl;
+      const webSiteId = (site.id || "").trim() || undefined;
+      const { tabs, activeId } = get();
+      const existing = tabs.find(
+        (t) =>
+          t.view === "web" &&
+          ((webSiteId && t.webSiteId === webSiteId) || t.webUrl === webUrl),
+      );
+      if (existing) {
+        const updatedTabs = tabs.map((t) =>
+          t.id === existing.id ? { ...t, webUrl, webTitle, ...(webSiteId ? { webSiteId } : {}) } : t,
+        );
+        commit({ tabs: updatedTabs, activeId: existing.id });
+        return existing.id;
+      }
+      const id = newTabId();
+      const at = tabs.findIndex((t) => t.id === activeId);
+      const next = [...tabs];
+      const newTab: Tab = { id, view: "web", webUrl, webTitle };
+      if (webSiteId) newTab.webSiteId = webSiteId;
+      next.splice(at < 0 ? next.length : at + 1, 0, newTab);
       commit({ tabs: next, activeId: id });
       return id;
     },

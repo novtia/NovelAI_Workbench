@@ -3,9 +3,37 @@ export type { ViewId, AlbumDialogState } from "./session";
 export { useUiStore } from "./uiStore";
 export type { OverlayCopy, ImportProgress } from "./uiStore";
 export { useTabs } from "./tabs";
-export type { Tab } from "./tabs";
+export type { Tab, WebTabTarget } from "./tabs";
 export { currentTabId, runInTab, bindToTab, activeTab } from "./scoped";
-export { useAlbumsQuery, useTestSetsQuery, useItemsQuery, useJobsQuery, useHistoryQuery, useNaiStatusQuery, useEstimateQuery, useParamSetsQuery, useLotteryBatchesQuery, useLotteryBoardQuery } from "./queries";
+export {
+  useAlbumsQuery,
+  useTestSetsQuery,
+  useItemsQuery,
+  useJobsQuery,
+  useHistoryQuery,
+  useNaiStatusQuery,
+  useEstimateQuery,
+  useParamSetsQuery,
+  useLotteryBatchesQuery,
+  useLotteryBoardQuery,
+  useMediaSitesQuery,
+  useMediaFeedQuery,
+  useMediaPostDetailQuery,
+  useMediaTagSuggestQuery,
+  useMediaArtistsQuery,
+  useMediaArtistPreviewQuery,
+  useMediaArtistPostsQuery,
+} from "./queries";
+export { useMediaStore } from "./mediaStore";
+export type {
+  MediaMode,
+  MediaSort,
+  MediaRating,
+  MediaAiTypeFilter,
+  MediaArtistOrder,
+  MediaDialogState,
+  MediaState,
+} from "./mediaStore";
 export { useCollection } from "./collection";
 export { useBasket, useBasketActions, useBasketHas, useBasketQuery } from "./basket";
 export { useCommands } from "./commands";

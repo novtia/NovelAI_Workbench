@@ -100,4 +100,61 @@ describe("tabs", () => {
     useTabs.getState().setTabView("main", "album");
     expect(useTabs.getState().tabs[0].view).toBe("gallery");
   });
+
+  it("opens a built-in web tab and reuses it for the same site or URL", () => {
+    const a = useTabs.getState().openWebTab({
+      id: "web_pixiv",
+      name: "Pixiv",
+      baseUrl: "https://www.pixiv.net",
+    });
+    expect(useTabs.getState().activeId).toBe(a);
+    expect(useTabs.getState().tabs.find((t) => t.id === a)).toEqual({
+      id: a,
+      view: "web",
+      webSiteId: "web_pixiv",
+      webUrl: "https://www.pixiv.net",
+      webTitle: "Pixiv",
+    });
+
+    useTabs.getState().activateTab("main");
+    const sameSite = useTabs.getState().openWebTab({
+      id: "web_pixiv",
+      name: "Pixiv 插画",
+      baseUrl: "https://www.pixiv.net",
+    });
+    expect(sameSite).toBe(a);
+    expect(useTabs.getState().activeId).toBe(a);
+    expect(useTabs.getState().tabs.filter((t) => t.view === "web")).toHaveLength(1);
+    expect(useTabs.getState().tabs.find((t) => t.id === a)?.webTitle).toBe("Pixiv 插画");
+
+    const b = useTabs.getState().openWebTab({
+      id: "web_civitai",
+      name: "Civitai",
+      baseUrl: "civitai.com",
+    });
+    expect(b).not.toBe(a);
+    expect(useTabs.getState().tabs.find((t) => t.id === b)?.webUrl).toBe("https://civitai.com");
+  });
+
+  it("restores valid web tabs and drops web tabs without webUrl", () => {
+    const restored = loadTabs(
+      JSON.stringify({
+        tabs: [
+          { id: "w1", view: "web", webSiteId: "web_1", webUrl: "https://example.com", webTitle: "Example" },
+          { id: "w2", view: "web" },
+          { id: "m1", view: "media" },
+        ],
+        activeId: "w1",
+      }),
+    );
+    expect(restored).toEqual({
+      tabs: [
+        { id: "w1", view: "web", webSiteId: "web_1", webUrl: "https://example.com", webTitle: "Example" },
+        { id: "m1", view: "media" },
+      ],
+      activeId: "w1",
+    });
+    useTabs.getState().setTabView("main", "web");
+    expect(useTabs.getState().tabs[0].view).toBe("gallery");
+  });
 });

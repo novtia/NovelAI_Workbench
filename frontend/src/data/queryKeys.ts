@@ -11,4 +11,29 @@ export const queryKeys = {
   paramSets: ["param-sets"] as const,
   lotteryBatches: ["lottery-batches"] as const,
   lotteryBoard: ["lottery-board"] as const,
+  mediaSites: ["media-sites"] as const,
+  mediaFeed: (
+    siteId: string,
+    query: string,
+    promptQuery: string,
+    page: number,
+    sort: string,
+    rating: string,
+    aiType: string,
+    showR18: boolean,
+  ) => ["media-feed", siteId, query, promptQuery, page, sort, rating, aiType, showR18] as const,
+  mediaPost: (siteId: string, postId: string) => ["media-post", siteId, postId] as const,
+  mediaSuggest: (siteId: string, query: string, category: string) =>
+    ["media-suggest", siteId, query, category] as const,
+  mediaArtists: (
+    siteId: string,
+    name: string,
+    url: string,
+    order: string,
+    hasTag: string,
+    isDeleted: string,
+    page: number,
+  ) => ["media-artists", siteId, name, url, order, hasTag, isDeleted, page] as const,
+  mediaArtistPreview: (siteId: string, artistName: string) =>
+    ["media-artist-preview", siteId, artistName] as const,
 };

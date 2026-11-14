@@ -12,6 +12,7 @@ use crate::contexts::generation::projectors::GenerationProjector;
 use crate::contexts::identity::IdentityProjector;
 use crate::contexts::lottery::application::LotteryService;
 use crate::contexts::lottery::projectors::LotteryProjector;
+use crate::contexts::media::service::MediaService;
 use crate::contexts::settings::application::SettingsService;
 use crate::contexts::settings::projectors::SettingsProjector;
 use crate::contexts::storage;
@@ -45,6 +46,7 @@ pub struct Services {
     pub lottery: Arc<LotteryService>,
     pub settings: Arc<SettingsService>,
     pub generation: Arc<GenerationService>,
+    pub media: Arc<MediaService>,
 }
 
 pub fn build(data_dir: &Path) -> Res<Services> {
@@ -60,6 +62,10 @@ pub fn build(data_dir: &Path) -> Res<Services> {
     let gallery = Arc::new(GalleryService::new(kernel.clone()));
     let lottery = Arc::new(LotteryService::new(kernel.clone(), gallery.clone()));
     let settings = Arc::new(SettingsService::new(kernel.clone()));
+    let media = Arc::new(MediaService::new(
+        data_dir.join("secrets").join("media_sites.json"),
+        settings.clone(),
+    ));
     let logger = AppLogger::new(settings.value_bool("system", "debugMode", false));
 
     {
@@ -150,6 +156,7 @@ pub fn build(data_dir: &Path) -> Res<Services> {
         lottery,
         settings,
         generation,
+        media,
     })
 }
 

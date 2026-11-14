@@ -167,6 +167,19 @@ pub fn run() {
             commands::nai_history,
             commands::nai_history_delete,
             commands::nai_promote,
+            commands::media_list_sites,
+            commands::media_save_site,
+            commands::media_delete_site,
+            commands::media_reorder_sites,
+            commands::media_search_posts,
+            commands::media_suggest_tags,
+            commands::media_search_artists,
+            commands::media_get_artist_preview,
+            commands::media_get_post,
+            commands::media_open_cf_verify,
+            commands::media_check_cf_status,
+            commands::media_import_to_album,
+            commands::open_external_url,
         ])
         .run(tauri::generate_context!())
         .expect("启动画师串工作台失败");

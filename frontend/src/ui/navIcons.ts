@@ -1,5 +1,6 @@
 import {
   Brush,
+  Compass,
   Cpu,
   Database,
   FlaskConical,
@@ -25,6 +26,8 @@ export const NAV_ICONS = {
   lottery: Ticket,
   /** 生图 */
   studio: Brush,
+  /** 媒体导航 */
+  media: Compass,
   /** 历史记录 */
   history: History,
   /** 画师串 */

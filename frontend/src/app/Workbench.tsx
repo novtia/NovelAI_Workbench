@@ -15,6 +15,8 @@ const GalleryView = lazy(() => import("../gallery").then((m) => ({ default: m.Ga
 const AlbumDetailView = lazy(() => import("../gallery/detail/AlbumDetailView").then((m) => ({ default: m.AlbumDetailView })));
 const LotteryView = lazy(() => import("../lottery").then((m) => ({ default: m.LotteryView })));
 const StudioView = lazy(() => import("../generation/StudioView").then((m) => ({ default: m.StudioView })));
+const MediaView = lazy(() => import("../media/MediaView").then((m) => ({ default: m.MediaView })));
+const WebPageView = lazy(() => import("../media/WebPageView").then((m) => ({ default: m.WebPageView })));
 const SettingsView = lazy(() => import("../settings/SettingsView").then((m) => ({ default: m.SettingsView })));
 const HistoryView = lazy(() => import("../history").then((m) => ({ default: m.HistoryView })));
 
@@ -22,6 +24,7 @@ const VIEWS = [
   { id: "gallery" as const, label: "图库", title: "图库", Icon: NAV_ICONS.gallery },
   { id: "lottery" as const, label: "抽奖", title: "抽奖台", Icon: NAV_ICONS.lottery },
   { id: "studio" as const, label: "生图", title: "生图室", Icon: NAV_ICONS.studio },
+  { id: "media" as const, label: "媒体", title: "媒体导航", Icon: NAV_ICONS.media },
 ];
 
 export function Workbench() {
@@ -178,6 +181,8 @@ export function Workbench() {
                 {view === "album" ? <AlbumDetailView /> : null}
                 {view === "lottery" ? <LotteryView /> : null}
                 {view === "studio" ? <StudioView /> : null}
+                {view === "media" ? <MediaView /> : null}
+                {view === "web" ? <WebPageView /> : null}
                 {view === "history" ? <HistoryView /> : null}
                 {view === "settings" ? <SettingsView /> : null}
               </Suspense>

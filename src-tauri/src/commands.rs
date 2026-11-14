@@ -696,3 +696,198 @@ pub fn nai_promote(s: S<'_>, body: Value) -> R {
     };
     out(json!({"items": s.generation.promote(&album_id, &resolved, &meta)?, "saved": true}))
 }
+
+// ---------- 媒体导航 & CF 自动过盾 ----------
+
+#[tauri::command(async)]
+pub fn media_list_sites(s: S<'_>) -> R {
+    Ok(json!({ "sites": s.media.list_sites() }))
+}
+
+#[tauri::command(async)]
+pub fn media_save_site(s: S<'_>, id: Option<String>, patch: Option<Value>) -> R {
+    let patch = patch.filter(truthy).unwrap_or_else(|| json!({}));
+    let site = s.media.save_site(id.as_deref().unwrap_or(""), &patch)?;
+    Ok(json!({ "site": site, "sites": s.media.list_sites() }))
+}
+
+#[tauri::command(async)]
+pub fn media_delete_site(s: S<'_>, id: String) -> R {
+    s.media.delete_site(&id)?;
+    Ok(json!({ "sites": s.media.list_sites() }))
+}
+
+#[tauri::command(async)]
+pub fn media_reorder_sites(s: S<'_>, ids: Vec<String>) -> R {
+    let sites = s.media.reorder_sites(&ids)?;
+    Ok(json!({ "sites": sites }))
+}
+
+#[tauri::command]
+pub async fn media_search_posts(
+    app: tauri::AppHandle,
+    s: S<'_>,
+    site_id: String,
+    query: Option<String>,
+    prompt_query: Option<String>,
+    page: Option<i64>,
+    limit: Option<i64>,
+    sort: Option<String>,
+    rating: Option<String>,
+    ai_type: Option<String>,
+    show_r18: Option<bool>,
+) -> R {
+    s.media
+        .search_posts_with_app(
+            Some(&app),
+            &site_id,
+            query.as_deref().unwrap_or(""),
+            prompt_query.as_deref().unwrap_or(""),
+            page.unwrap_or(1),
+            limit.unwrap_or(40),
+            sort.as_deref().unwrap_or("new"),
+            rating.as_deref().unwrap_or("all"),
+            ai_type.as_deref().unwrap_or("all"),
+            show_r18.unwrap_or(false),
+        )
+        .await
+}
+
+#[tauri::command]
+pub async fn media_suggest_tags(
+    app: tauri::AppHandle,
+    s: S<'_>,
+    site_id: String,
+    query: String,
+    category: Option<String>,
+) -> R {
+    s.media
+        .suggest_tags_with_app(
+            Some(&app),
+            &site_id,
+            &query,
+            category.as_deref().unwrap_or("all"),
+        )
+        .await
+}
+
+#[tauri::command]
+pub async fn media_search_artists(
+    app: tauri::AppHandle,
+    s: S<'_>,
+    site_id: Option<String>,
+    name: Option<String>,
+    url: Option<String>,
+    order: Option<String>,
+    has_tag: Option<String>,
+    is_deleted: Option<String>,
+    page: Option<i64>,
+    limit: Option<i64>,
+) -> R {
+    s.media
+        .search_artists_with_app(
+            Some(&app),
+            site_id.as_deref().unwrap_or("danbooru"),
+            name.as_deref().unwrap_or(""),
+            url.as_deref().unwrap_or(""),
+            order.as_deref().unwrap_or("created_at"),
+            has_tag.as_deref().unwrap_or(""),
+            is_deleted.as_deref().unwrap_or(""),
+            page.unwrap_or(1),
+            limit.unwrap_or(20),
+        )
+        .await
+}
+
+#[tauri::command]
+pub async fn media_get_artist_preview(
+    app: tauri::AppHandle,
+    s: S<'_>,
+    site_id: Option<String>,
+    artist_name: String,
+) -> R {
+    s.media
+        .get_artist_preview_with_app(
+            Some(&app),
+            site_id.as_deref().unwrap_or("danbooru"),
+            &artist_name,
+        )
+        .await
+}
+
+#[tauri::command]
+pub async fn media_get_post(
+    app: tauri::AppHandle,
+    s: S<'_>,
+    site_id: String,
+    post_id: String,
+) -> R {
+    s.media
+        .get_post_with_app(Some(&app), &site_id, &post_id)
+        .await
+}
+
+#[tauri::command(async)]
+pub fn media_open_cf_verify(app: tauri::AppHandle, s: S<'_>, site_id: String) -> R {
+    s.media.open_cf_verify(&app, &site_id)
+}
+
+#[tauri::command]
+pub async fn media_check_cf_status(app: tauri::AppHandle, s: S<'_>, site_id: String) -> R {
+    s.media.check_cf_status(&app, &site_id).await
+}
+
+#[tauri::command]
+pub async fn media_import_to_album(
+    app: tauri::AppHandle,
+    s: S<'_>,
+    album_id: String,
+    site_id: String,
+    image_url: String,
+    meta: Option<Value>,
+) -> R {
+    let (bytes, _content_type) = s
+        .media
+        .fetch_remote_bytes(Some(&app), &site_id, &image_url)
+        .await?;
+    let svc = s.inner().clone();
+    let meta = meta.filter(truthy).unwrap_or_else(|| json!({}));
+    let item = tauri::async_runtime::spawn_blocking(move || {
+        svc.gallery.import_bytes(
+            &album_id,
+            &bytes,
+            &meta,
+            ImportOptions {
+                thumb: None,
+                command_id: None,
+                item_id: None,
+            },
+        )
+    })
+    .await
+    .map_err(|e| DomainError::internal(format!("任务异常：{e}")))??;
+    out(json!({ "item": item }))
+}
+
+#[tauri::command(async)]
+pub fn open_external_url(url: String) -> R {
+    let trimmed = url.trim();
+    if !(trimmed.starts_with("http://") || trimmed.starts_with("https://")) {
+        return Err(DomainError::bad("仅支持打开 http/https 链接"));
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let _ = std::process::Command::new("rundll32")
+            .args(["url.dll,FileProtocolHandler", trimmed])
+            .spawn();
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open").arg(trimmed).spawn();
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let _ = std::process::Command::new("xdg-open").arg(trimmed).spawn();
+    }
+    Ok(json!({ "opened": true }))
+}

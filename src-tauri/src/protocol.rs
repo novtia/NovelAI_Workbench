@@ -161,6 +161,34 @@ pub fn handle(svc: &Arc<Services>, req: &Request<Vec<u8>>) -> Response<Body> {
                 Err(_) => json_error(404, "预览不存在"),
             }
         }
+        ["media", "proxy"] => {
+            let query = req.uri().query().unwrap_or("");
+            let mut site_id = String::from("aitag");
+            let mut url = String::new();
+            for kv in query.split('&') {
+                if let Some(v) = kv.strip_prefix("site=") {
+                    site_id = decode(v);
+                } else if let Some(v) = kv.strip_prefix("url=") {
+                    url = decode(v);
+                }
+            }
+            if !(url.starts_with("http://") || url.starts_with("https://")) {
+                return json_error(400, "无效的远程图片地址");
+            }
+            let res = tauri::async_runtime::block_on(
+                svc.media.fetch_remote_bytes(None, &site_id, &url),
+            );
+            match res {
+                Ok((bytes, ct)) => Response::builder()
+                    .status(200)
+                    .header(header::CONTENT_TYPE, ct)
+                    .header(header::CACHE_CONTROL, "public, max-age=86400")
+                    .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+                    .body(Cow::Owned(bytes))
+                    .unwrap_or_else(|_| Response::new(Cow::Borrowed(&[][..]))),
+                Err(e) => json_error(e.status, &e.message),
+            }
+        }
         _ => json_error(404, "未找到"),
     }
 }

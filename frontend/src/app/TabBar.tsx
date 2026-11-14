@@ -9,9 +9,11 @@ export const VIEW_META: Record<ViewId, { label: string; Icon: LucideIcon }> = {
   gallery: { label: "图库", Icon: NAV_ICONS.gallery },
   lottery: { label: "抽奖台", Icon: NAV_ICONS.lottery },
   studio: { label: "生图室", Icon: NAV_ICONS.studio },
+  media: { label: "媒体导航", Icon: NAV_ICONS.media },
   history: { label: "历史", Icon: NAV_ICONS.history },
   settings: { label: "设置", Icon: NAV_ICONS.settings },
   album: { label: "收藏夹", Icon: NAV_ICONS.gallery },
+  web: { label: "网页", Icon: NAV_ICONS.network },
 };
 
 function TabItem({
@@ -34,9 +36,11 @@ function TabItem({
   const title =
     tab.view === "album"
       ? albums?.find((a) => a.id === tab.albumId)?.name || meta.label
-      : tab.view === "gallery"
-        ? albums?.find((a) => a.id === albumId)?.name || meta.label
-        : meta.label;
+      : tab.view === "web"
+        ? tab.webTitle || tab.webUrl || meta.label
+        : tab.view === "gallery"
+          ? albums?.find((a) => a.id === albumId)?.name || meta.label
+          : meta.label;
 
   function onMouseDown(e: MouseEvent) {
     // 中键关闭；默认的滚动光标要拦掉。
