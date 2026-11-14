@@ -70,6 +70,9 @@ import { useTagCounters } from "./tagCounters";
 import { useTabs } from "./tabs";
 import { confirmDialog } from "./confirm";
 import { pushToast } from "./toast";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("studio");
 
 const notified = new Set<string>();
 let draftTimer = 0;
@@ -188,11 +191,16 @@ export function openStudioPop(pop: NonNullable<StudioPop>, trig: HTMLElement, pr
 function startBusy(job?: Job | null) {
   const s = useStudioStore.getState();
   const text = job?.progress?.text || (job?.status === "queued" ? "排队中" : "生成中");
-  s.setBusy(true, job?.id || s.studioJobId, text);
+  const nextId = job?.id || s.studioJobId;
+  if (!s.busy || s.studioJobId !== nextId || s.genProgress !== text) {
+    log.debug("startBusy", { prevBusy: s.busy, prevId: s.studioJobId, nextId, status: job?.status, text });
+  }
+  s.setBusy(true, nextId, text);
 }
 
 function endBusy() {
   const s = useStudioStore.getState();
+  log.debug("endBusy", { prevBusy: s.busy, prevId: s.studioJobId, prevText: s.genProgress });
   s.setBusy(false, "", "");
 }
 
@@ -436,7 +444,10 @@ function syncTabJobs(studio: Job[], all: Job[]) {
     if (jobIsActive(job)) continue;
     applyStudioJob(job);
   }
-  if (!active.length && s.busy && s.studioJobId) endBusy();
+  if (!active.length && s.busy && s.studioJobId) {
+    log.debug("syncTabJobs.clear_busy", { studioJobId: s.studioJobId, totalStudioJobs: studio.length });
+    endBusy();
+  }
 }
 
 /** 工具栏和生图按钮共用的 Anlas 估算（后端按官方公式估算，以余额实际变化为准）。 */
@@ -537,6 +548,14 @@ export function useStudioActions() {
   async function generate(chain = false) {
     const tabId = currentTabId();
     const form = store.form;
+    log.debug("generate.click", {
+      tabId,
+      chain,
+      busy: store.busy,
+      studioJobId: store.studioJobId,
+      genProgress: store.genProgress,
+      loopRun: Boolean(loopRun),
+    });
     if (store.busy) {
       if (!chain || !loopRun || loopRun.tabId !== tabId) return;
       const off = useStudioStore.forTab(tabId).subscribe((s) => {
@@ -632,12 +651,14 @@ export function useStudioActions() {
 
   /** 提交一个生图类任务（生图 / 图生图 / 局部重绘 / 增强 / 放大），结果落回提交它的标签。 */
   async function submitStudioJob(body: Record<string, unknown>, tabId = currentTabId()): Promise<string | null> {
+    log.debug("submitStudioJob.start", { tabId, kind: body.kind ?? "generate" });
     // 提交是异步的，期间用户可能切到别的标签：结果要落回提交它的这个标签。
     runInTab(tabId, () => useStudioStore.getState().setBusy(true, "", "排队中"));
     try {
       const prevClient = body.client && typeof body.client === "object" ? (body.client as Record<string, unknown>) : {};
       // tabId 跟任务一起入库。推送比这次请求返回更早，同步时就能把占位放回这个标签。
       const job = await generationApi.submitJob({ ...body, source: "studio", client: { ...prevClient, tabId } });
+      log.info("submitStudioJob.submitted", { tabId, jobId: job.id, status: job.status });
       setJobTab(job.id, tabId);
       runInTab(tabId, () => {
         notified.delete(job.id);
@@ -649,6 +670,7 @@ export function useStudioActions() {
       await qc.invalidateQueries({ queryKey: queryKeys.jobs });
       return job.id;
     } catch (err) {
+      log.error("submitStudioJob.err", { tabId, err });
       runInTab(tabId, endBusy);
       const msg = err instanceof Error ? err.message : "生图失败";
       pushToast(msg, "warn");

@@ -26,10 +26,47 @@
 .h-card:hover time, .h-card:focus-visible time, .h-card.sel time { opacity: 1; }
 .h-more { text-align: center; color: var(--ink-4); letter-spacing: .16em; padding: 8px 0 20px; font-size: 12px; min-height: 24px; }
 
-/* ---------- 历史记录：多选 ---------- */
-.h-bar { display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 0 40px; border-bottom: 1px solid var(--line); flex: none; }
+/* ---------- 历史记录：顶栏、多选与筛选 ---------- */
+.h-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  min-height: 44px; padding: 6px 40px; border-bottom: 1px solid var(--line); flex: none;
+}
+.h-bar-left, .h-bar-right { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.h-bar-right { margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
 .h-bar .hint { font-size: 12px; color: var(--ink-4); letter-spacing: .08em; }
 .h-bar .sel-count { font-family: var(--mono); font-size: 12px; color: var(--zhu); letter-spacing: .08em; }
+.h-match-count { font-family: var(--mono); font-size: 12px; color: var(--ink-3); letter-spacing: .06em; }
+.h-filter-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.h-filter-chip {
+  display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 4px 0 8px;
+  border: 1px solid var(--line-2); border-radius: 2px; background: var(--paper-3);
+  font-size: 11.5px; color: var(--ink-2); max-width: 180px;
+}
+.h-filter-chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h-filter-chip button {
+  width: 16px; height: 16px; display: grid; place-items: center; border-radius: 2px;
+  color: var(--ink-4); transition: .15s;
+}
+.h-filter-chip button svg { width: 11px; height: 11px; }
+.h-filter-chip button:hover { color: var(--zhu); background: var(--zhu-soft); }
+.h-filter-btn {
+  height: 28px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  border: 1px solid var(--line-2); border-radius: 2px; background: var(--paper-3);
+  font-size: 12px; color: var(--ink-2); letter-spacing: .06em; transition: .2s;
+}
+.h-filter-btn svg { width: 13px; height: 13px; }
+.h-filter-btn:hover { border-color: var(--ink); color: var(--ink); }
+.h-filter-btn.on { border-color: var(--zhu); color: var(--zhu); background: var(--zhu-soft); }
+.h-filter-badge {
+  min-width: 16px; height: 16px; padding: 0 5px; border-radius: 8px;
+  background: var(--zhu); color: var(--on-zhu, #fff); font-family: var(--mono); font-size: 10.5px; font-weight: 600;
+  display: grid; place-items: center; line-height: 1;
+}
+.h-empty-filtered { text-align: center; max-width: 440px; }
+.h-empty-filtered h2 { font-family: var(--brush); font-weight: 400; font-size: 34px; margin: 0 0 12px; letter-spacing: .06em; }
+.h-empty-filtered p { color: var(--ink-3); line-height: 1.9; margin: 0 0 20px; }
+.h-empty-actions { display: flex; justify-content: center; gap: 10px; }
+
 .h-grid { user-select: none; -webkit-user-select: none; }
 .h-card { position: relative; }
 .h-card.sel { transform: translateY(-3px); }
@@ -44,3 +81,55 @@
   border: solid var(--paper-3); border-width: 0 2px 2px 0; transform: rotate(45deg);
 }
 .h-card.sel .h-frame::before { content: ""; position: absolute; inset: 0; background: rgba(180, 40, 24, .12); z-index: 1; pointer-events: none; }
+
+/* ---------- 历史筛选弹窗 ---------- */
+dialog.modal.h-filter-dialog { width: min(560px, calc(100vw - 40px)); max-width: calc(100vw - 40px); }
+dialog.modal.h-filter-dialog form { padding: 24px 28px 22px; }
+.hf-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+dialog.modal.h-filter-dialog h3 { margin: 0; }
+.hf-body { display: flex; flex-direction: column; gap: 16px; max-height: 66vh; overflow: auto; padding-right: 2px; }
+.hf-sec { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.hf-label { font-size: 11px; letter-spacing: .16em; color: var(--ink-3); }
+.hf-search-wrap { position: relative; display: flex; align-items: center; }
+.hf-search-ico { position: absolute; left: 10px; width: 14px; height: 14px; color: var(--ink-4); pointer-events: none; }
+.hf-search-input {
+  width: 100%; height: 34px; padding: 0 32px 0 32px; border: 1px solid var(--line-2); border-radius: 2px;
+  background: var(--paper); font-size: 12.5px; outline: none; transition: border-color .2s;
+}
+.hf-search-input:focus { border-color: var(--zhu); }
+.hf-search-input::-webkit-search-cancel-button { -webkit-appearance: none; }
+.hf-search-clear {
+  position: absolute; right: 6px; width: 22px; height: 22px; display: grid; place-items: center;
+  color: var(--ink-4); border-radius: 2px; transition: .15s;
+}
+.hf-search-clear svg { width: 13px; height: 13px; }
+.hf-search-clear:hover { color: var(--zhu); background: var(--zhu-soft); }
+.hf-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.hf-pills button {
+  height: 28px; padding: 0 11px; border: 1px solid var(--line-2); border-radius: 2px;
+  background: var(--paper); font-size: 12px; color: var(--ink-2); transition: .18s;
+}
+.hf-pills button:hover { border-color: var(--ink); color: var(--ink); }
+.hf-pills button.on { background: var(--ink); border-color: var(--ink); color: var(--paper-3); }
+.hf-dates { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 2px; }
+.hf-dates label { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-3); }
+.hf-dates input[type="date"] {
+  height: 30px; padding: 0 8px; border: 1px solid var(--line-2); border-radius: 2px;
+  background: var(--paper); font-family: var(--mono); font-size: 12px; outline: none;
+}
+.hf-dates input[type="date"]:focus { border-color: var(--zhu); }
+.hf-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.hf-select { width: 100%; height: 32px; background: var(--paper); }
+.hf-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line);
+}
+.hf-stat { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--ink-3); }
+.hf-stat b { font-family: var(--mono); color: var(--zhu); font-weight: 600; }
+.hf-stat small { font-size: 11px; color: var(--ink-4); }
+.hf-actions { display: flex; align-items: center; gap: 8px; flex: none; margin-left: auto; }
+.hf-actions .btn:disabled { opacity: .45; pointer-events: none; }
+
+@media (max-width: 600px) {
+  .hf-grid-2 { grid-template-columns: 1fr; }
+}

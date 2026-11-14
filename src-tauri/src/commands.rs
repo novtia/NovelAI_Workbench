@@ -53,6 +53,22 @@ pub fn health() -> Value {
 }
 
 #[tauri::command]
+pub fn open_devtools(window: tauri::WebviewWindow) {
+    window.open_devtools();
+}
+
+#[tauri::command]
+pub fn logs_snapshot(s: S<'_>) -> Value {
+    json!({"records": s.logger.snapshot()})
+}
+
+#[tauri::command]
+pub fn logs_clear(s: S<'_>) -> Value {
+    s.logger.clear();
+    json!({"ok": true})
+}
+
+#[tauri::command]
 pub async fn integrity_verify(s: S<'_>) -> R {
     let svc = s.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
@@ -204,6 +220,8 @@ pub async fn db_import(app: tauri::AppHandle, s: S<'_>) -> R {
             &emit,
         )?;
         svc.settings.reload()?;
+        svc.logger
+            .set_enabled(svc.settings.value_bool("system", "debugMode", false));
         svc.generation.invalidate_status();
         crate::app::ensure_defaults(&svc)?;
         info["cancelled"] = json!(false);
@@ -222,18 +240,44 @@ pub fn settings_get(s: S<'_>) -> R {
 
 #[tauri::command(async)]
 pub fn settings_put(s: S<'_>, patch: Value) -> R {
-    Ok(s.settings.update(&patch)?)
+    let res = s.settings.update(&patch)?;
+    let debug = s.settings.value_bool("system", "debugMode", false);
+    s.logger.set_enabled(debug);
+    if patch.get("generation").is_some() {
+        let min_sec = s.settings.value_i64("generation", "queueDelayMinSec", 8);
+        let max_sec = s.settings.value_i64("generation", "queueDelayMaxSec", 30);
+        let concurrency = s.settings.value_i64("generation", "concurrency", 1);
+        s.logger.scoped("settings").debug(
+            "settings.generation",
+            json!({
+                "patch": patch.get("generation"),
+                "effective": {
+                    "queueDelayMinSec": min_sec,
+                    "queueDelayMaxSec": max_sec,
+                    "concurrency": concurrency,
+                }
+            }),
+        );
+    }
+    Ok(res)
 }
 
 #[tauri::command(async)]
 pub fn settings_reset(s: S<'_>, section: Option<String>) -> R {
-    Ok(s.settings
-        .reset(section.as_deref().filter(|x| !x.is_empty()))?)
+    let res = s
+        .settings
+        .reset(section.as_deref().filter(|x| !x.is_empty()))?;
+    s.logger
+        .set_enabled(s.settings.value_bool("system", "debugMode", false));
+    Ok(res)
 }
 
 #[tauri::command(async)]
 pub fn settings_import(s: S<'_>, settings: Value) -> R {
-    Ok(s.settings.replace(&settings)?)
+    let res = s.settings.replace(&settings)?;
+    s.logger
+        .set_enabled(s.settings.value_bool("system", "debugMode", false));
+    Ok(res)
 }
 
 #[tauri::command(async)]

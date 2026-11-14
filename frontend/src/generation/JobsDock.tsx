@@ -2,8 +2,11 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import { generationApi } from "@/api";
 import { isSingleArtistAlbum, jobIsActive, jobProgressText, queryKeys } from "@/data";
 import { closeStudioMenus, pushToast, useJobsQuery, useSession, useSettings, useStudioStore } from "@/state";
+import { createLogger } from "@/lib/logger";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Album, Job } from "@/data/types";
+
+const log = createLogger("jobsDock");
 
 function jobTitle(job: Job) {
   if (job.source === "lottery") {
@@ -39,6 +42,15 @@ export function JobsDock() {
     if (has && !hadActive.current && autoOpen) setJobsOpen(true);
     hadActive.current = has;
   }, [active.length, autoOpen, setJobsOpen]);
+
+  const activeSig = active.map((j) => `${j.id}:${j.status}:${j.progress?.text || ""}`).join("|");
+  useEffect(() => {
+    log.debug("active_changed", {
+      count: active.length,
+      jobsOpen,
+      active: active.map((j) => ({ id: j.id, status: j.status, text: j.progress?.text })),
+    });
+  }, [activeSig, jobsOpen]);
 
   useLayoutEffect(() => {
     if (!jobsOpen || !btnRef.current || !popRef.current) return;

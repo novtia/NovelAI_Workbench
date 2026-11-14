@@ -17,6 +17,7 @@ use crate::contexts::settings::projectors::SettingsProjector;
 use crate::contexts::storage;
 use crate::kernel::blobs::BlobStore;
 use crate::kernel::bus::{Kernel, Projector};
+use crate::kernel::logger::AppLogger;
 use crate::kernel::refs::RefsProjector;
 use crate::kernel::store::EventStore;
 use crate::kernel::Res;
@@ -39,6 +40,7 @@ pub fn projectors() -> Vec<Box<dyn Projector>> {
 pub struct Services {
     pub data_dir: PathBuf,
     pub kernel: Arc<Kernel>,
+    pub logger: Arc<AppLogger>,
     pub gallery: Arc<GalleryService>,
     pub lottery: Arc<LotteryService>,
     pub settings: Arc<SettingsService>,
@@ -58,6 +60,7 @@ pub fn build(data_dir: &Path) -> Res<Services> {
     let gallery = Arc::new(GalleryService::new(kernel.clone()));
     let lottery = Arc::new(LotteryService::new(kernel.clone(), gallery.clone()));
     let settings = Arc::new(SettingsService::new(kernel.clone()));
+    let logger = AppLogger::new(settings.value_bool("system", "debugMode", false));
 
     {
         let s = settings.clone();
@@ -118,6 +121,7 @@ pub fn build(data_dir: &Path) -> Res<Services> {
         vault,
         accounts,
         settings.clone(),
+        logger.clone(),
     ));
     {
         let cancel = generation.cancelled_set();
@@ -141,6 +145,7 @@ pub fn build(data_dir: &Path) -> Res<Services> {
     Ok(Services {
         data_dir: data_dir.to_path_buf(),
         kernel,
+        logger,
         gallery,
         lottery,
         settings,

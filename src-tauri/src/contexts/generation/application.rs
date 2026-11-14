@@ -12,6 +12,7 @@ use crate::contexts::settings::application::SettingsService;
 use crate::kernel::blobs::{png_size, Bucket, Slot};
 use crate::kernel::bus::Kernel;
 use crate::kernel::clock::{new_hex, new_id, now_ms};
+use crate::kernel::logger::{AppLogger, ScopedLogger};
 use crate::kernel::purge::{plan_job_items, Purge};
 use crate::kernel::{DomainError, Res};
 use crate::util::{get, py_str, to_int, truthy};
@@ -35,6 +36,8 @@ pub struct GenerationService {
     pub vault: Arc<TokenVault>,
     pub accounts: Arc<AccountStore>,
     pub settings: Arc<SettingsService>,
+    pub logger: Arc<AppLogger>,
+    log: ScopedLogger,
     emitter: RwLock<Option<Emitter>>,
     queue_tx: UnboundedSender<String>,
     queue_rx: Mutex<Option<UnboundedReceiver<String>>>,
@@ -60,8 +63,10 @@ impl GenerationService {
         vault: Arc<TokenVault>,
         accounts: Arc<AccountStore>,
         settings: Arc<SettingsService>,
+        logger: Arc<AppLogger>,
     ) -> Self {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let log = logger.scoped("generation");
         GenerationService {
             k,
             gallery,
@@ -69,6 +74,8 @@ impl GenerationService {
             vault,
             accounts,
             settings,
+            logger,
+            log,
             emitter: RwLock::new(None),
             queue_tx: tx,
             queue_rx: Mutex::new(Some(rx)),
@@ -200,6 +207,10 @@ impl GenerationService {
         }
         let mut why: Vec<String> = Vec::new();
         for acct in list.iter().filter(|a| a.usable()) {
+            self.log.debug(
+                "pick_account.try",
+                json!({"account": acct.name, "id": acct.id, "useFree": acct.use_free, "usePoints": acct.use_points}),
+            );
             // 额度查询最多等 8 秒：查不到就当「额度未知」继续，不能让生图卡在选账号上。
             let live = match tokio::time::timeout(
                 std::time::Duration::from_secs(8),
@@ -208,7 +219,10 @@ impl GenerationService {
             .await
             {
                 Ok(v) => v,
-                Err(_) => json!({"subscription": Value::Null, "error": "额度查询超时"}),
+                Err(_) => {
+                    self.log.warn("pick_account.timeout", json!({"account": acct.name}));
+                    json!({"subscription": Value::Null, "error": "额度查询超时"})
+                }
             };
             let sub = get(&live, "subscription");
             if !sub.is_object() {
@@ -514,7 +528,11 @@ impl GenerationService {
             .commit(&mut job, Some(&format!("job.queue:{job_id}")))?;
         let public = self.get_job(&job_id)?;
         self.emit(json!({"type": "job", "job": public}));
-        let _ = self.queue_tx.send(job_id);
+        let send_ok = self.queue_tx.send(job_id.clone()).is_ok();
+        self.log.debug(
+            "submit_job",
+            json!({"jobId": job_id, "source": source, "kind": kind, "sendOk": send_ok}),
+        );
         public.ok_or_else(|| DomainError::internal("任务创建失败"))
     }
 
@@ -912,10 +930,15 @@ impl GenerationService {
         if job.version() == 0 {
             return Err(DomainError::not_found("任务不存在"));
         }
+        let prev_status = job.status.clone();
         job.cancel(now_ms());
         self.k.commit(&mut job, None)?;
         let public = self.get_job(job_id)?;
         self.emit(json!({"type": "job", "job": public}));
+        self.log.info(
+            "cancel_job",
+            json!({"jobId": job_id, "prevStatus": prev_status, "nextStatus": job.status}),
+        );
         public.ok_or_else(|| DomainError::not_found("任务不存在"))
     }
 

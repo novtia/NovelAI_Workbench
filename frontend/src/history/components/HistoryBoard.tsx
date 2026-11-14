@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { SlidersHorizontal, X } from "lucide-react";
 import { groupByDay, historyShots, type HistoryShot } from "@/data/history";
+import {
+  countActiveHistoryFilters,
+  describeHistoryFilters,
+  filterHistoryShots,
+} from "@/data/historyFilter";
 import { queryKeys } from "@/data/queryKeys";
 import { useScrollMemory } from "@/ui/useScrollMemory";
 import { ensureHistoryLoaded } from "../historyScroll";
@@ -25,6 +31,7 @@ import {
 import { useContextMenu, useRegisterMenu, type MenuItem } from "@/ui/contextMenu";
 import { IconCopy, IconSparkles } from "@/generation/components/icons";
 import { HistoryDetail } from "./HistoryDetail";
+import { HistoryFilterDialog } from "./HistoryFilterDialog";
 
 function clock(ts: number) {
   const d = new Date(ts);
@@ -84,6 +91,10 @@ export function HistoryBoard() {
   const query = useHistoryQuery();
   const qc = useQueryClient();
   const albums = useAlbumsQuery().data || [];
+  const historyFilter = useSession((s) => s.historyFilter);
+  const setHistoryFilter = useSession((s) => s.setHistoryFilter);
+  const resetHistoryFilter = useSession((s) => s.resetHistoryFilter);
+  const [filterOpen, setFilterOpen] = useState(false);
   const [sel, setSel] = useState<Selection>(EMPTY_SELECTION);
   // 详情只由左键单击打开。右键也会改选中，但不能把详情带出来。
   const [detailKey, setDetailKey] = useState<string | null>(null);
@@ -91,21 +102,30 @@ export function HistoryBoard() {
   const [scrollSettled, setScrollSettled] = useState(false);
   const sentinel = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const shots = useMemo(() => historyShots(query.data?.pages.flatMap((page) => page.jobs) || []), [query.data]);
+  const allShots = useMemo(() => historyShots(query.data?.pages.flatMap((page) => page.jobs) || []), [query.data]);
+  const activeCount = countActiveHistoryFilters(historyFilter);
+  const filteredActive = activeCount > 0;
+  const filterChips = useMemo(() => describeHistoryFilters(historyFilter), [historyFilter]);
+  const shots = useMemo(() => filterHistoryShots(allShots, historyFilter), [allShots, historyFilter]);
   const days = useMemo(() => groupByDay(shots), [shots]);
   const order = useMemo(() => shots.map((s) => s.key), [shots]);
   const picked = useMemo(() => pickSelected(shots, sel), [shots, sel]);
   const detailShot =
     detailKey && sel.keys.size === 1 && sel.keys.has(detailKey) ? shots.find((shot) => shot.key === detailKey) || null : null;
 
-  // 刷新、删除后去掉已经不存在的选中项。
+  // 刷新、删除、筛选后去掉已经不存在的选中项。
   useEffect(() => {
     setSel((cur) => prune(cur, order));
   }, [order]);
 
-  // 滚动位置持久化：记下位置和已加载张数。回来时先补齐页数再滚回去。
-  const shotsRef = useRef(shots);
-  shotsRef.current = shots;
+  // 筛选条件变化时回到顶部展示匹配结果；清空筛选后由 useScrollMemory 恢复原滚动位置。
+  useEffect(() => {
+    if (filteredActive && scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [filteredActive, historyFilter]);
+
+  // 滚动位置持久化：记下位置和已加载张数。回来时先补齐页数再滚回去（有筛选时不覆盖原位置）。
+  const allShotsRef = useRef(allShots);
+  allShotsRef.current = allShots;
   const fetchNextRef = useRef(query.fetchNextPage);
   fetchNextRef.current = query.fetchNextPage;
   const active = useSession((s) => s.view === "history");
@@ -113,17 +133,18 @@ export function HistoryBoard() {
     ref: scrollRef,
     storeKey: "history",
     storageKey: "wb.historyScroll",
-    ready: query.isSuccess,
+    ready: query.isSuccess && !filteredActive,
     active,
-    getShown: () => shotsRef.current.length,
+    getShown: () => allShotsRef.current.length,
     prepare: (saved, isCancelled) =>
       ensureHistoryLoaded(() => qc.getQueryData(queryKeys.history), saved.shown, () => fetchNextRef.current(), isCancelled),
     onSettled: setScrollSettled,
   });
 
+  const canPaginate = scrollSettled || filteredActive;
   useEffect(() => {
     const el = sentinel.current;
-    if (!el || !scrollSettled) return;
+    if (!el || !canPaginate) return;
     const io = new IntersectionObserver((entries) => {
       if (entries.some((entry) => entry.isIntersecting) && query.hasNextPage && !query.isFetchingNextPage) {
         void query.fetchNextPage();
@@ -131,7 +152,7 @@ export function HistoryBoard() {
     });
     io.observe(el);
     return () => io.disconnect();
-  }, [query.hasNextPage, query.isFetchingNextPage, query.fetchNextPage, days.length, scrollSettled]);
+  }, [query.hasNextPage, query.isFetchingNextPage, query.fetchNextPage, days.length, canPaginate]);
 
   const clear = useCallback(() => {
     setSel(EMPTY_SELECTION);
@@ -262,16 +283,55 @@ export function HistoryBoard() {
   return (
     <div className="h-main">
       <div className="h-bar">
-        {picked.length ? (
-          <>
-            <span className="sel-count">已选 {picked.length} 张</span>
-            <button className="mini" type="button" onClick={clear}>
-              取消选择
-            </button>
-          </>
-        ) : (
-          <span className="hint">Ctrl 多选 · Shift 连选 · 右键更多操作</span>
-        )}
+        <div className="h-bar-left">
+          {picked.length ? (
+            <>
+              <span className="sel-count">已选 {picked.length} 张</span>
+              <button className="mini" type="button" onClick={clear}>
+                取消选择
+              </button>
+            </>
+          ) : filteredActive ? (
+            <span className="h-match-count">
+              匹配 {shots.length} / 已加载 {allShots.length} 张
+            </span>
+          ) : (
+            <span className="hint">Ctrl 多选 · Shift 连选 · 右键更多操作</span>
+          )}
+        </div>
+        <div className="h-bar-right">
+          {filterChips.length ? (
+            <div className="h-filter-chips" aria-label="当前筛选条件">
+              {filterChips.map((chip) => (
+                <span className="h-filter-chip" key={chip.id}>
+                  <span>{chip.label}</span>
+                  <button
+                    type="button"
+                    title={`移除「${chip.label}」`}
+                    aria-label={`移除「${chip.label}」`}
+                    onClick={() => setHistoryFilter(chip.clear(historyFilter))}
+                  >
+                    <X />
+                  </button>
+                </span>
+              ))}
+              <button className="mini" type="button" onClick={resetHistoryFilter}>
+                清空
+              </button>
+            </div>
+          ) : null}
+          <button
+            className={`h-filter-btn${filteredActive ? " on" : ""}`}
+            type="button"
+            onClick={() => setFilterOpen(true)}
+            aria-haspopup="dialog"
+            aria-expanded={filterOpen}
+          >
+            <SlidersHorizontal />
+            <span>筛选</span>
+            {activeCount > 0 ? <span className="h-filter-badge">{activeCount}</span> : null}
+          </button>
+        </div>
       </div>
       <div
         className="h-scroll"
@@ -285,12 +345,34 @@ export function HistoryBoard() {
         }}
       >
         {query.isLoading && <p className="h-more">正在读取历史…</p>}
-        {query.isError && !shots.length && <p className="h-more">历史记录加载失败</p>}
-        {!query.isLoading && !query.isError && !shots.length && (
+        {query.isError && !allShots.length && <p className="h-more">历史记录加载失败</p>}
+        {!query.isLoading && !query.isError && !allShots.length && (
           <div className="empty">
             <div className="dropzone">
               <h2>还没有生图记录</h2>
               <p>在生图室生成的图片会出现在这里，按日期分开。</p>
+            </div>
+          </div>
+        )}
+        {!query.isLoading && !query.isError && allShots.length > 0 && !shots.length && (
+          <div className="empty">
+            <div className="h-empty-filtered">
+              <h2>{query.isFetchingNextPage ? "正在翻找更早的历史…" : "没有符合筛选条件的记录"}</h2>
+              <p>
+                {query.isFetchingNextPage
+                  ? "已加载的记录中没有匹配项，正在继续读取更早的历史。"
+                  : `已在当前加载的 ${allShots.length} 张记录中筛选，可以调整条件或重置筛选。`}
+              </p>
+              <div className="h-empty-actions">
+                <button className="btn btn-primary" type="button" onClick={resetHistoryFilter}>
+                  重置筛选
+                </button>
+                {query.hasNextPage && !query.isFetchingNextPage ? (
+                  <button className="btn" type="button" onClick={() => void query.fetchNextPage()}>
+                    加载更早记录
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
         )}
@@ -309,10 +391,35 @@ export function HistoryBoard() {
           </section>
         ))}
         <div ref={sentinel} className="h-more">
-          {query.isFetchingNextPage ? "继续加载…" : query.hasNextPage ? "" : shots.length ? "已经到底了" : ""}
+          {query.isFetchingNextPage ? (
+            "继续加载…"
+          ) : query.hasNextPage ? (
+            filteredActive && shots.length ? (
+              <button className="mini" type="button" onClick={() => void query.fetchNextPage()}>
+                加载更早记录
+              </button>
+            ) : (
+              ""
+            )
+          ) : shots.length ? (
+            "已经到底了"
+          ) : (
+            ""
+          )}
         </div>
       </div>
       <HistoryDetail shot={detailShot} onClose={clear} />
+      <HistoryFilterDialog
+        open={filterOpen}
+        value={historyFilter}
+        shots={allShots}
+        hasNextPage={Boolean(query.hasNextPage)}
+        onClose={() => setFilterOpen(false)}
+        onApply={(next) => {
+          setHistoryFilter(next);
+          setFilterOpen(false);
+        }}
+      />
     </div>
   );
 }

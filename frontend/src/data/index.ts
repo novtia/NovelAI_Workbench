@@ -173,3 +173,26 @@ export {
   storedDrawShots,
   triggerRect,
 } from "./lottery";
+export {
+  EMPTY_HISTORY_FILTER,
+  DATE_PRESET_LABELS,
+  TYPE_FILTER_LABELS,
+  ASPECT_FILTER_LABELS,
+  MODEL_FILTER_LABELS,
+  MODE_FILTER_LABELS,
+  shotMatchesFilter,
+  filterHistoryShots,
+  countActiveHistoryFilters,
+  hasActiveHistoryFilter,
+  describeHistoryFilters,
+  collectHistorySamplers,
+} from "./historyFilter";
+export type {
+  HistoryDatePreset,
+  HistoryModelFilter,
+  HistoryModeFilter,
+  HistoryAspectFilter,
+  HistoryTypeFilter,
+  HistoryFilter,
+  ActiveHistoryFilterChip,
+} from "./historyFilter";

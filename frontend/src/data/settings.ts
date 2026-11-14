@@ -109,6 +109,8 @@ export type Settings = {
   system: {
     ssePingSec: number;
     importConcurrency: number;
+    debugMode: boolean;
+    autoOpenDevtools: boolean;
   };
 };
 
@@ -217,6 +219,8 @@ export const DEFAULT_SETTINGS: Settings = {
   system: {
     ssePingSec: 15,
     importConcurrency: 2,
+    debugMode: false,
+    autoOpenDevtools: false,
   },
 };
 

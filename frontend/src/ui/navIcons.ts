@@ -1,5 +1,6 @@
 import {
   Brush,
+  Cpu,
   Database,
   FlaskConical,
   Globe,
@@ -43,8 +44,10 @@ export const NAV_ICONS = {
   account: WalletCards,
   /** 设置分区：网络代理 */
   network: Globe,
-  /** 设置分区：数据与系统 */
-  system: Database,
+  /** 设置分区：系统 */
+  system: Cpu,
+  /** 设置分区：数据维护 */
+  data: Database,
 } satisfies Record<string, LucideIcon>;
 
 export type NavIconId = keyof typeof NAV_ICONS;

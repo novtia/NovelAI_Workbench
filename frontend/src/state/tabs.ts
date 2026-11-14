@@ -7,7 +7,7 @@ export type ViewId = "gallery" | "lottery" | "studio" | "history" | "settings" |
 export type Tab = { id: string; view: ViewId; albumId?: string };
 
 export const TABS_KEY = "wb.tabs";
-const VIEW_IDS: ViewId[] = ["gallery", "lottery", "studio", "settings", "album"];
+const VIEW_IDS: ViewId[] = ["gallery", "lottery", "studio", "history", "settings", "album"];
 
 export function isViewId(v: unknown): v is ViewId {
   return typeof v === "string" && (VIEW_IDS as string[]).includes(v);

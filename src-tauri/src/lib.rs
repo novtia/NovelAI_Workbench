@@ -81,12 +81,30 @@ pub fn run() {
                     let _ = handle.emit("jobs-event", util::to_client(payload));
                 }));
             }
+            {
+                let handle = app.handle().clone();
+                services.logger.set_emitter(Arc::new(move |record| {
+                    let _ = handle.emit("app-log", record);
+                }));
+            }
             contexts::generation::worker::start_workers(services.generation.clone());
+            let debug_mode = services.settings.value_bool("system", "debugMode", false);
+            let auto_open = services
+                .settings
+                .value_bool("system", "autoOpenDevtools", false);
             app.manage(services);
+            if debug_mode && auto_open {
+                if let Some(win) = app.get_webview_window("main") {
+                    win.open_devtools();
+                }
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             commands::health,
+            commands::open_devtools,
+            commands::logs_snapshot,
+            commands::logs_clear,
             commands::integrity_verify,
             commands::integrity_rebuild,
             commands::integrity_backup,

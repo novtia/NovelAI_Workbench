@@ -1,4 +1,5 @@
 import { galleryApi } from "@/api";
+import { EMPTY_HISTORY_FILTER, type HistoryFilter } from "@/data/historyFilter";
 import { createTabScopedStore, activeTab } from "./scoped";
 import { tabView, useTabs, type ViewId } from "./tabs";
 
@@ -23,6 +24,7 @@ type SessionState = {
   /** 画师串抽屉是否打开，只放内存，刷新后默认关闭。 */
   basketOpen: boolean;
   query: string;
+  historyFilter: HistoryFilter;
   dialog: AlbumDialogState | null;
   setView: (view: ViewId) => void;
   setAlbumId: (id: string) => void;
@@ -33,6 +35,8 @@ type SessionState = {
   setBasketOpen: (open: boolean) => void;
   toggleBasket: () => void;
   setQuery: (query: string) => void;
+  setHistoryFilter: (filter: HistoryFilter) => void;
+  resetHistoryFilter: () => void;
   openCreateDialog: () => void;
   openRenameDialog: (albumId: string, name: string) => void;
   setDialogName: (name: string) => void;
@@ -60,6 +64,7 @@ export const useSession = createTabScopedStore<SessionState>((tabId) => (set, ge
   openId: null,
   basketOpen: false,
   query: "",
+  historyFilter: EMPTY_HISTORY_FILTER,
   dialog: null,
   setView: (view) => {
     // 标签栏里的视图是唯一来源，store 里的 view 只是镜像。
@@ -92,6 +97,8 @@ export const useSession = createTabScopedStore<SessionState>((tabId) => (set, ge
   setBasketOpen: (basketOpen) => set({ basketOpen }),
   toggleBasket: () => set((s) => ({ basketOpen: !s.basketOpen })),
   setQuery: (query) => set({ query }),
+  setHistoryFilter: (historyFilter) => set({ historyFilter }),
+  resetHistoryFilter: () => set({ historyFilter: EMPTY_HISTORY_FILTER }),
   openCreateDialog: () => set({ dialog: { mode: "create", name: "" } }),
   openRenameDialog: (albumId, name) => set({ dialog: { mode: "rename", albumId, name } }),
   setDialogName: (name) => set((s) => (s.dialog ? { dialog: { ...s.dialog, name } } : s)),

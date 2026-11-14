@@ -293,6 +293,8 @@ pub static SCHEMA: Lazy<Vec<(&'static str, Section)>> = Lazy::new(|| {
             vec![
                 ("ssePingSec", int(15, 5, 60)),
                 ("importConcurrency", int(2, 1, 6)),
+                ("debugMode", bool_(false)),
+                ("autoOpenDevtools", bool_(false)),
             ],
         ),
     ]

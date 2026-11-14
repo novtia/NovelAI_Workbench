@@ -1,5 +1,8 @@
 import { call, callRaw } from "./client";
 import type { AnlasEstimate, Job, NaiAccount, NaiAccountPatch, NaiAccountsData, ParamSet, StudioForm, TokenStatus } from "@/data/types";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("api:generation");
 
 export async function tokenStatus() {
   return call<TokenStatus>("nai_status");
@@ -51,8 +54,15 @@ export async function deleteParamSet(id: string) {
 }
 
 export async function submitJob(body: Record<string, unknown>) {
-  const data = await call<{ job: Job }>("nai_submit_job", { body });
-  return data.job;
+  log.debug("submitJob.req", { source: body.source, kind: body.kind, client: body.client });
+  try {
+    const data = await call<{ job: Job }>("nai_submit_job", { body });
+    log.info("submitJob.res", { id: data.job?.id, status: data.job?.status, text: data.job?.progress?.text });
+    return data.job;
+  } catch (err) {
+    log.error("submitJob.err", err);
+    throw err;
+  }
 }
 
 export async function estimateCost(body: Record<string, unknown>) {
@@ -67,8 +77,15 @@ export async function uploadBlob(blob: Blob) {
 }
 
 export async function cancelJob(id: string) {
-  const data = await call<{ job: Job }>("nai_cancel_job", { id });
-  return data.job;
+  log.info("cancelJob.req", { id });
+  try {
+    const data = await call<{ job: Job }>("nai_cancel_job", { id });
+    log.info("cancelJob.res", { id: data.job?.id, status: data.job?.status });
+    return data.job;
+  } catch (err) {
+    log.error("cancelJob.err", { id, err });
+    throw err;
+  }
 }
 
 export async function listJobs() {

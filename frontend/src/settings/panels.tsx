@@ -81,7 +81,7 @@ function InfoGrid({ info }: { info: SystemInfo }) {
 
 const LOCAL_KEYS = [LS_DRAFT, LS_IMPORT_OPTS, LS_SELECTED_SET, "wb.testRuns"];
 
-export function SystemPanel() {
+export function DataMaintenancePanel() {
   const qc = useQueryClient();
   const settings = useSettingsStore((s) => s.settings);
   const reset = useSettingsStore((s) => s.reset);

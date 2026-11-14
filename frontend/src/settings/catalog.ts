@@ -27,6 +27,8 @@ export type SettingItem = {
   note?: string;
 };
 
+export type SettingsPageId = SectionId | "data";
+
 export type SettingGroup = { title: string; items: SettingItem[]; custom?: "accounts" | "lotteryApply" };
 
 export type SectionMeta = {
@@ -34,8 +36,12 @@ export type SectionMeta = {
   title: string;
   desc: string;
   groups: SettingGroup[];
-  /** 该分区末尾附加的自定义面板 */
-  extra?: "system";
+};
+
+export const DATA_PAGE = {
+  id: "data" as const,
+  title: "数据维护",
+  desc: "存储分布、整理存储、完整性校验、备份迁移与设置导入导出。",
 };
 
 /** 画师测试选了生图预设时，自定义参数不生效，置灰。 */
@@ -768,12 +774,11 @@ export const SECTIONS: SectionMeta[] = [
   },
   {
     id: "system",
-    title: "数据与系统",
-    desc: "存储信息、完整性、备份、导入导出设置。",
-    extra: "system",
+    title: "系统",
+    desc: "运行概览、传输调度、调试控制台与实时日志。",
     groups: [
       {
-        title: "高级",
+        title: "运行与传输",
         items: [
           {
             section: "system",
@@ -789,6 +794,28 @@ export const SECTIONS: SectionMeta[] = [
             label: "后台任务推送心跳",
             hint: "任务事件流的空闲心跳间隔，反向代理会断长连接时调小。立即生效（新连接）。",
             control: { kind: "slider", min: 5, max: 60, step: 1, unit: "秒" },
+          },
+        ],
+      },
+      {
+        title: "调试与控制台",
+        items: [
+          {
+            section: "system",
+            key: "debugMode",
+            label: "启用调试模式",
+            hint: "开启后允许打开前端 DevTools 控制台（F12 / Ctrl+Shift+I），并实时采集与打印前后端各模块日志。",
+            keywords: "debug log 控制台 调试 日志 devtools",
+            control: { kind: "switch" },
+          },
+          {
+            section: "system",
+            key: "autoOpenDevtools",
+            label: "启动时自动打开控制台",
+            hint: "仅在调试模式开启时生效；下次启动应用自动弹出 DevTools。",
+            keywords: "devtools 启动 控制台 自动打开",
+            disabledWhen: (s) => !s.system.debugMode,
+            control: { kind: "switch" },
           },
         ],
       },

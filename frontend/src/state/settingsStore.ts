@@ -13,7 +13,10 @@ import {
 } from "@/data/settings";
 import { setControlsDefaultsProvider } from "@/data/lottery";
 import { setFormDefaultsProvider } from "@/data/studio";
+import { createLogger, setDebugEnabled } from "@/lib/logger";
 import { applySettingsToDom } from "@/ui/applySettings";
+
+const log = createLogger("settings");
 
 const SAVE_DELAY_MS = 320;
 
@@ -54,18 +57,33 @@ let inflight: Promise<unknown> = Promise.resolve();
 export const useSettingsStore = create<SettingsState>((set, get) => {
   function flush() {
     timer = null;
-    if (!get().ready) return;
+    if (!get().ready) {
+      log.debug("flush.skip_not_ready", pending);
+      return;
+    }
     const patch = pending;
     pending = {};
     if (!Object.keys(patch).length) return;
+    if (patch.generation || patch.system) {
+      log.debug("flush.putSettings", { generation: patch.generation, system: patch.system });
+    }
     inflight = inflight
       .then(() => settingsApi.putSettings(patch))
       .then((res) => {
+        if (patch.generation || patch.system) {
+          log.debug("flush.ok", {
+            queueDelayMinSec: res.settings?.generation?.queueDelayMinSec,
+            queueDelayMaxSec: res.settings?.generation?.queueDelayMaxSec,
+            concurrency: res.settings?.generation?.concurrency,
+            debugMode: res.settings?.system?.debugMode,
+          });
+        }
         // 期间又有新修改时不覆盖本地，避免滑块来回跳
         if (!Object.keys(pending).length) set({ settings: mergeSettings(res.settings), saveError: null });
         else set({ saveError: null });
       })
       .catch((err) => {
+        log.error("flush.err", err);
         set({ saveError: err instanceof Error ? err.message : "设置保存失败" });
       });
   }
@@ -140,12 +158,14 @@ setControlsDefaultsProvider(() => {
   return { min, max, draws, target, wmin, wmax, jitter, boost };
 });
 
-// 设置变化时：写本地缓存（首屏防闪烁）并落到 DOM
+// 设置变化时：写本地缓存（首屏防闪烁）、同步日志开关并落到 DOM
 useSettingsStore.subscribe((state, prev) => {
   if (state.settings === prev.settings) return;
   saveCache(state.settings);
+  setDebugEnabled(state.settings.system.debugMode);
   applySettingsToDom(state.settings);
 });
+setDebugEnabled(useSettingsStore.getState().settings.system.debugMode);
 applySettingsToDom(useSettingsStore.getState().settings);
 
 if (typeof matchMedia === "function") {
